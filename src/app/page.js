@@ -348,7 +348,7 @@ const PageContent = () => {
     const headers = [
       "Name", "Code", "PhotoURL", "ASC", "PartnerName", "Month", "Year",
       "ExamScore", "MonthlyRNPS", "TrainingAttendance", "RRR_Ratio",
-      "SSR_Ratio", "IQCSkipRatio", "OQCFailRatio", "CorePartsUsed", "MultiPartUsed"
+      "SSR_Ratio", "IQCSkipRatio", "OQCFailRatio", "CorePartsUsed", "MultiPartUsed", "Product"
     ];
     const csvContent = "data:text/csv;charset=utf-8," + headers.join(",");
     const encodedUri = encodeURI(csvContent);
