@@ -14,6 +14,7 @@ import {
   X,
   Save,
   Edit2,
+  Eye,
   Download,
   Upload,
   Calendar,
@@ -24,7 +25,7 @@ import {
   Camera
 } from 'lucide-react';
 import { INITIAL_ENGINEERS, calculateTCS, getTier, getTierColor } from '../constants';
-import { getEngineers, saveEngineer as saveEngineerToDb, deleteEngineer, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb } from '../services/firestoreService';
+import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb } from '../services/firestoreService';
 import { uploadPhoto } from '../services/storageService';
 
 // --- Sub-components ---
@@ -81,10 +82,11 @@ const Page = () => {
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
 
+  const [noEngineers, setNoEngineers] = useState(false);
   const [editingEng, setEditingEng] = useState(null);
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [newAdminData, setNewAdminData] = useState({ username: '', password: '', name: '' });
-
+  const [fetchedHiddenEngineers, setFetchedHiddenEngineers] = useState([]);
   const fileInputRef = useRef(null);
 
   // Initial Load
@@ -93,13 +95,18 @@ const Page = () => {
       setIsLoading(true);
       try {
         const fetchedEngineers = await getEngineers();
+        const fetchedHiddenEngineers = await getHiddenEngineers();
         const fetchedAdmins = await getAdmins();
 
         if (fetchedEngineers.length > 0) {
           setEngineers(fetchedEngineers);
         } else {
-          setEngineers(INITIAL_ENGINEERS);
-          // Optionally seed DB here
+          setNoEngineers(true);
+        }
+        if (fetchedHiddenEngineers.length > 0) {
+          setFetchedHiddenEngineers(fetchedHiddenEngineers);
+        } else {
+          setFetchedHiddenEngineers([]);
         }
 
         if (fetchedAdmins.length > 0) {
@@ -174,7 +181,8 @@ const Page = () => {
       setEditingEng({
         ...editingEng,
         photoUrl: previewUrl,
-        pendingFile: file
+        pendingFile: file,
+        hidden: false
       });
     }
   };
@@ -277,6 +285,38 @@ const Page = () => {
     }
   };
 
+  const deleteEngineerHandler = async (id) => {
+    if (window.confirm("Are you sure you want to archive this engineer record? The data will be hidden but preserved.")) {
+      try {
+        await archiveEngineer(id);
+        const archivedEng = engineers.find(e => e.id === id);
+        setEngineers(prev => prev.filter(e => e.id !== id));
+        if (archivedEng) {
+          setFetchedHiddenEngineers(prev => [...prev, { ...archivedEng, hidden: true }]);
+        }
+      } catch (error) {
+        console.error("Error deleting engineer:", error);
+        alert("Failed to archive engineer record.");
+      }
+    }
+  };
+
+  const restoreEngineerHandler = async (id) => {
+    if (window.confirm("Are you sure you want to restore this engineer?")) {
+      try {
+        await saveEngineerToDb({ id, hidden: false });
+        const restoredEng = fetchedHiddenEngineers.find(e => e.id === id);
+        setFetchedHiddenEngineers(prev => prev.filter(e => e.id !== id));
+        if (restoredEng) {
+          setEngineers(prev => [...prev, { ...restoredEng, hidden: false }]);
+        }
+      } catch (error) {
+        console.error("Error restoring engineer:", error);
+        alert("Failed to restore engineer.");
+      }
+    }
+  };
+
   const downloadCSVTemplate = () => {
     const headers = [
       "Name", "Code", "PhotoURL", "ASC", "PartnerName", "Month", "Year",
@@ -303,7 +343,7 @@ const Page = () => {
         const uploadedRecords = rows.slice(1).map((row, index) => {
           const cols = row.split(",").map(c => c.trim());
           const eng = {
-            id: (Date.now() + index).toString(),
+            id: '',
             name: cols[0] || "Unknown",
             code: cols[1]?.toUpperCase() || `TEMP-${index}`,
             photoUrl: cols[2] || "https://picsum.photos/200",
@@ -320,6 +360,7 @@ const Page = () => {
             oqcFirstTimeFailRatio: parseFloat(cols[13]) || 0,
             corePartsUsed: parseFloat(cols[14]) || 0,
             multiPartsUsed: parseFloat(cols[15]) || 0,
+            product: cols[16] || "N/A",
           };
           eng.tcsScore = calculateTCS(eng);
           eng.tier = getTier(eng.tcsScore);
@@ -331,14 +372,17 @@ const Page = () => {
           // Note: This might be slow if sequential. 
           // For now, let's just loop and await, or Promise.all
           try {
-            const promises = uploadedRecords.map(rec => saveEngineerToDb(rec));
-            await Promise.all(promises);
+            const promises = uploadedRecords.map(async (rec) => {
+              const savedId = await saveEngineerToDb(rec);
+              return { ...rec, id: savedId };
+            });
+            const savedRecords = await Promise.all(promises);
 
             // Update local state by refetching or merging
             // Merging for responsiveness
             setEngineers(prev => {
               const map = new Map(prev.map(e => [e.code.toUpperCase(), e]));
-              uploadedRecords.forEach(rec => {
+              savedRecords.forEach(rec => {
                 map.set(rec.code.toUpperCase(), rec);
               });
               return Array.from(map.values());
@@ -563,8 +607,47 @@ const Page = () => {
               </div>
             </div>
 
+            <div className="flex items-center justify-end gap-2 mb-4">
+              <button onClick={() => setNoEngineers(!noEngineers)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">
+                <Eye className="w-4 h-4" />
+                {noEngineers ? "Hide Archived" : "Show Archived"}
+              </button>
+              {fetchedHiddenEngineers.length > 0 && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600 bg-zinc-900 px-2 py-1 rounded-full">
+                  {fetchedHiddenEngineers.length}
+                </span>
+              )}
+            </div>
+
+            {noEngineers && (
+              fetchedHiddenEngineers.map(eng => (
+                <div key={eng.id} className="bg-red-900/10 p-5 rounded-3xl border border-red-900/20 flex items-center justify-between group hover:border-red-500/30 transition-all duration-300 shadow-lg opacity-75 hover:opacity-100">
+                  <div className="flex items-center gap-5">
+                    <div className="relative">
+                      <img src={eng.photoUrl} className="w-14 h-14 rounded-2xl object-cover grayscale brightness-50" alt={eng.name} />
+                    </div>
+                    <div>
+                      <p className="text-base font-black tracking-tight text-white/50 uppercase line-throughDecoration">{eng.name}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[10px] text-zinc-600 font-mono font-black tracking-widest uppercase">{eng.code}</span>
+                        <span className="text-[8px] font-black uppercase px-2.5 py-1 rounded-full bg-red-900/20 text-red-500 border border-red-900/30">ARCHIVED</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => restoreEngineerHandler(eng.id)} className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-green-600 text-zinc-400 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest">
+                    <Upload className="w-3 h-3" /> Restore
+                  </button>
+                </div>
+              ))
+            )}
+
+
             <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar p-2">
-              {sortedEngineers.map(eng => (
+              {sortedEngineers.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-zinc-500">No engineers found</p>
+                </div>
+              ) : sortedEngineers.map(eng => (
                 <div key={eng.id} className="bg-zinc-900/40 p-5 rounded-3xl border border-zinc-800/50 flex items-center justify-between group hover:border-zinc-500/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg">
                   <div className="flex items-center gap-5">
                     <div className="relative">
@@ -584,12 +667,18 @@ const Page = () => {
                       <p className="text-xl font-black text-blue-500 tracking-tighter">{eng.tcsScore}</p>
                       <p className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">{eng.month} {eng.year}</p>
                     </div>
-                    <button onClick={() => setEditingEng(eng)} className="p-3.5 bg-zinc-800 rounded-2xl hover:bg-zinc-700 hover:text-white transition-all shadow-inner">
-                      <Edit2 className="w-4 h-4 text-zinc-400" />
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingEng(eng)} className="p-3.5 bg-zinc-800 rounded-2xl hover:bg-zinc-700 hover:text-white transition-all shadow-inner">
+                        <Edit2 className="w-4 h-4 text-zinc-400" />
+                      </button>
+                      <button onClick={() => deleteEngineerHandler(eng.id)} className="p-3.5 bg-zinc-800 rounded-2xl hover:bg-red-900/20 hover:text-red-500 transition-all shadow-inner group/delete">
+                        <Trash2 className="w-4 h-4 text-zinc-400 group-hover/delete:text-red-500 transition-colors" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ))}
+              ))
+              }
             </div>
           </div>
         )}
