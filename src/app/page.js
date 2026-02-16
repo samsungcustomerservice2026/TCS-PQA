@@ -149,7 +149,7 @@ const PageContent = () => {
       setSelectedEngineer(found);
       setView('ENGINEER_PROFILE');
     } else {
-      message.error("Engineer Code not found. Please verify your credentials.");
+      message.error("Engineer Code not found.");
     }
   };
 
