@@ -32,29 +32,38 @@ import { uploadPhoto } from '../services/storageService';
 // --- Sub-components ---
 
 const Header = ({ onHome }) => (
-  <header className="sticky top-0 z-[100] px-4 py-4 md:px-12 md:py-6 bg-black/90 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
-    <div className="max-w-[1400px] mx-auto flex flex-col items-center gap-4 md:gap-0">
+  <header className="sticky top-0 z-[100] px-6 py-4 md:px-12 md:py-6 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
+    <div className="max-w-[1400px] mx-auto">
       {/* Logos Row */}
-      <div className="w-full flex items-center justify-between">
-        <div
-          className="flex items-center cursor-pointer group"
-          onClick={onHome}
-        >
-          <div className="relative">
-            <div className="absolute -inset-4 bg-white/5 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700" />
-            <img src="./sam_logo.png" alt="Logo" className="h-5 md:h-12 w-auto object-contain brightness-110 group-hover:scale-110 transition-transform duration-500 relative z-10" />
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col items-start gap-3">
+          <div
+            className="flex items-center cursor-pointer group"
+            onClick={onHome}
+          >
+            <div className="relative">
+              <div className="absolute -inset-4 bg-white/5 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700" />
+              <img src="./sam_logo.png" alt="Logo" className="h-8 md:h-12 w-auto object-contain brightness-110 group-hover:scale-110 transition-transform duration-500 relative z-10" />
+            </div>
+          </div>
+
+          {/* Tagline - Mobile Only */}
+          <div className="md:hidden">
+            <p className="text-[8px] uppercase tracking-[0.2em] text-zinc-500 font-black">
+              "Earn Your Tier • Own Your Title"
+            </p>
           </div>
         </div>
 
         <div className="flex items-center group">
-          <img src="./fawzy-logo.png" alt="Logo" className="h-9 md:h-32 w-auto object-contain brightness-110 group-hover:scale-105 transition-transform duration-500 relative z-10" />
+          <img src="./fawzy-logo.png" alt="Logo" className="h-16 md:h-32 w-auto object-contain brightness-110 group-hover:scale-105 transition-transform duration-500 relative z-10" />
         </div>
       </div>
 
-      {/* Tagline - Bottom Center */}
-      <div className="flex justify-center md:-mt-10 relative z-0 pointer-events-none">
+      {/* Tagline - Desktop Center */}
+      <div className="hidden md:flex justify-center -mt-10 relative z-0 pointer-events-none">
         <div className="pointer-events-auto px-5 py-1.5 rounded-full">
-          <p className="text-[10px] md:text-[15px] uppercase tracking-[0.2em] md:tracking-[0.5em] text-zinc-400 text-center font-black leading-none">
+          <p className="text-[15px] uppercase tracking-[0.5em] text-zinc-400 text-center font-black">
             "Earn Your Tier • Own Your Title"
           </p>
         </div>
