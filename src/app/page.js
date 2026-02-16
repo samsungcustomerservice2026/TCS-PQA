@@ -89,6 +89,7 @@ const PageContent = () => {
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [newAdminData, setNewAdminData] = useState({ username: '', password: '', name: '' });
   const [fetchedHiddenEngineers, setFetchedHiddenEngineers] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   // Initial Load
@@ -190,38 +191,38 @@ const PageContent = () => {
   };
 
   const saveEngineer = async (updated) => {
-    const newScore = calculateTCS(updated);
-    const newTier = getTier(newScore);
-
-    let finalPhotoUrl = updated.photoUrl;
-
-    // If a new file is pending upload
-    if (updated.pendingFile) {
-      try {
-        const url = await uploadPhoto(updated.pendingFile);
-        if (url) {
-          finalPhotoUrl = url;
-        }
-      } catch (error) {
-        console.error("Failed to upload photo:", error);
-        message.warning("Failed to upload photo. Changes will be saved without new photo.");
-      }
-    }
-
-    const finalEng = {
-      ...updated,
-      tcsScore: newScore,
-      tier: newTier,
-      photoUrl: finalPhotoUrl
-    };
-
-    // Remove temporary file object before saving to DB
-    delete finalEng.pendingFile;
+    setIsSaving(true);
+    const hide = message.loading("Saving engineer data...", 0);
 
     try {
-      // Optimistic update
-      // (Wait, we need the ID from DB if it's new. So pure optimistic is tricky if we don't have ID yet)
-      // But we can update local state after DB confirm.
+      const newScore = calculateTCS(updated);
+      const newTier = getTier(newScore);
+
+      let finalPhotoUrl = updated.photoUrl;
+
+      // If a new file is pending upload
+      if (updated.pendingFile) {
+        try {
+          // Save directly in /engineers folder with CODE_timestamp filename
+          const url = await uploadPhoto(updated.pendingFile, 'engineers', updated.code.toUpperCase() || 'unknown');
+          if (url) {
+            finalPhotoUrl = url;
+          }
+        } catch (error) {
+          console.error("Failed to upload photo:", error);
+          message.warning("Failed to upload photo. Changes will be saved without new photo.");
+        }
+      }
+
+      const finalEng = {
+        ...updated,
+        tcsScore: newScore,
+        tier: newTier,
+        photoUrl: finalPhotoUrl
+      };
+
+      // Remove temporary file object before saving to DB
+      delete finalEng.pendingFile;
 
       // Generate a temporary ID if missing for local logic
       if (!finalEng.id) finalEng.id = Date.now().toString();
@@ -229,19 +230,23 @@ const PageContent = () => {
       const savedId = await saveEngineerToDb(finalEng);
 
       setEngineers(prev => {
-        const existingIdx = prev.findIndex(e => e.code.toUpperCase() === finalEng.code.toUpperCase());
+        const existingIdx = prev.findIndex(e => e.id === finalEng.id || (e.code && e.code.toUpperCase() === finalEng.code.toUpperCase()));
         if (existingIdx !== -1) {
           const next = [...prev];
-          next[existingIdx] = { ...finalEng, id: prev[existingIdx].id }; // Keep existing ID (should be same)
+          next[existingIdx] = { ...finalEng, id: prev[existingIdx].id }; // Keep existing ID
           return next;
         }
         return [...prev, { ...finalEng, id: savedId || finalEng.id }];
       });
 
       setEditingEng(null);
+      message.success("Engineer record committed successfully");
     } catch (error) {
       console.error("Error saving engineer:", error);
       message.error("Error saving engineer. Check console.");
+    } finally {
+      setIsSaving(false);
+      hide();
     }
   };
 
@@ -975,8 +980,21 @@ const PageContent = () => {
                   </div>
                 </div>
 
-                <button onClick={() => saveEngineer(editingEng)} className="w-full bg-blue-600 py-6 rounded-3xl font-black text-lg flex items-center justify-center gap-4 hover:bg-blue-500 transition-all active:scale-[0.98] uppercase tracking-[0.3em] shadow-3xl shadow-blue-900/40">
-                  <Save className="w-6 h-6" /> Commit Record
+                <button
+                  onClick={() => saveEngineer(editingEng)}
+                  disabled={isSaving}
+                  className={`w-full py-6 rounded-3xl font-black text-lg flex items-center justify-center gap-4 transition-all uppercase tracking-[0.3em] shadow-3xl ${isSaving ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-50 hover:bg-blue-500 active:scale-[0.98] shadow-blue-900/40'}`}
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
+                      SECURELY SAVING...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-6 h-6" /> Commit Record
+                    </>
+                  )}
                 </button>
               </div>
             </div>
