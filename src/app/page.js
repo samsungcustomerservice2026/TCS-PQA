@@ -53,8 +53,8 @@ const Header = ({ onHome }) => (
 
       {/* Tagline - Bottom Center */}
       <div className="flex justify-center md:-mt-10 relative z-0 pointer-events-none">
-        <div className="pointer-events-auto px-6 py-2 rounded-full bg-white/5 border border-white/5 backdrop-blur-sm shadow-2xl">
-          <p className="text-[7px] md:text-[10px] uppercase tracking-[0.3em] md:tracking-[0.5em] text-zinc-400 text-center font-black">
+        <div className="pointer-events-auto px-6 py-2 rounded-full">
+          <p className="text-[7px] md:text-[15px] uppercase tracking-[0.3em] md:tracking-[0.5em] text-zinc-400 text-center font-black">
             "Earn Your Tier • Own Your Title"
           </p>
         </div>
@@ -482,7 +482,7 @@ const PageContent = () => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                   </span>
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Next-Gen TCS Ecosystem</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Next-Gen TCS</p>
                 </div>
                 <h2 className="text-4xl md:text-7xl font-black tracking-tighter text-white">
                   Beyond<span className="text-blue-600"> Standards</span><br />Above<span className="text-blue-600"> Average</span>
@@ -505,8 +505,8 @@ const PageContent = () => {
                       </div>
                     </div>
                     <div className="text-center">
-                      <h4 className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-1">{topThree[1].tier}</h4>
                       <h3 className="text-lg font-black text-white uppercase tracking-tight truncate w-32">{topThree[1].name}</h3>
+                      <h4 className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-1">{topThree[1].tier}</h4>
                       <div className="mt-3 py-2 px-6 rounded-full bg-zinc-900 border border-zinc-800 group-hover:border-zinc-500 transition-colors shadow-xl">
                         <span className="text-xl font-black text-white">{topThree[1].tcsScore}</span>
                       </div>
@@ -549,8 +549,8 @@ const PageContent = () => {
                       </div>
                     </div>
                     <div className="text-center">
-                      <h4 className="text-orange-900/50 text-[10px] font-black uppercase tracking-widest mb-1">{topThree[2].tier}</h4>
                       <h3 className="text-lg font-black text-zinc-400 group-hover:text-white transition-colors uppercase tracking-tight truncate w-32">{topThree[2].name}</h3>
+                      <h4 className="text-orange-900/50 text-[10px] font-black uppercase tracking-widest mb-1">{topThree[2].tier}</h4>
                       <div className="mt-3 py-2 px-5 rounded-full bg-zinc-900/50 border border-zinc-800/50 group-hover:border-orange-900/40 transition-colors">
                         <span className="text-lg font-black text-zinc-500 group-hover:text-orange-700 transition-colors">{topThree[2].tcsScore}</span>
                       </div>
