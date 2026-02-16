@@ -46,19 +46,20 @@ export const getTierColor = (tier) => {
 };
 
 export const calculateTCS = (eng) => {
-    const trainingScore = eng.trainingAttendance || 0;
+    const n = (v) => parseFloat(v) || 0;
+    const trainingScore = n(eng.trainingAttendance);
 
-    const rrrPerf = Math.max(0, 100 - (eng.repeatedRepairRatio || 0));
-    const ssrPerf = Math.max(0, 100 - (eng.sameSymptomRedoRatio || 0));
-    const iqcPerf = Math.max(0, 100 - (eng.iqcSkipRatio || 0));
-    const oqcPerf = Math.max(0, 100 - (eng.oqcFirstTimeFailRatio || 0));
-    const corePartsPerf = Math.max(0, 100 - (eng.corePartsUsed || 0));
-    const multiPartsPerf = Math.max(0, 100 - (eng.multiPartsUsed || 0));
+    const rrrPerf = Math.max(0, 100 - n(eng.repeatedRepairRatio));
+    const ssrPerf = Math.max(0, 100 - n(eng.sameSymptomRedoRatio));
+    const iqcPerf = Math.max(0, 100 - n(eng.iqcSkipRatio));
+    const oqcPerf = Math.max(0, 100 - n(eng.oqcFirstTimeFailRatio));
+    const corePartsPerf = Math.max(0, 100 - n(eng.corePartsUsed));
+    const multiPartsPerf = Math.max(0, 100 - n(eng.multiPartsUsed));
 
     const engEvalSubtotal = (trainingScore + rrrPerf + ssrPerf + iqcPerf + oqcPerf + corePartsPerf + multiPartsPerf) / 7;
 
-    const examSubtotal = eng.examScore || 0;
-    const rnpsSubtotal = eng.monthlyRNPS || 0;
+    const examSubtotal = n(eng.examScore);
+    const rnpsSubtotal = n(eng.monthlyRNPS);
 
     const finalScore = (engEvalSubtotal * 0.5) + (examSubtotal * 0.3) + (rnpsSubtotal * 0.2);
 

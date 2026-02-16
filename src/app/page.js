@@ -484,7 +484,7 @@ const PageContent = () => {
                   </span>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Next-Gen TCS Ecosystem</p>
                 </div>
-                <h2 className="text-5xl md:text-7xl font-black tracking-tighter text-white">
+                <h2 className="text-4xl md:text-7xl font-black tracking-tighter text-white">
                   Beyond<span className="text-blue-600"> Standards</span><br />Above<span className="text-blue-600"> Average</span>
                 </h2>
                 <p className="text-zinc-500 text-sm md:text-base font-medium max-w-md mx-auto">
@@ -493,10 +493,10 @@ const PageContent = () => {
               </div>
 
               {/* Minimalist Podium v3 */}
-              <div className="relative flex flex-col md:flex-row justify-center items-center md:items-end gap-16 md:gap-4 max-w-5xl mx-auto pt-10">
+              <div className="relative flex flex-col md:flex-row justify-center items-center md:items-end gap-12 md:gap-4 max-w-5xl mx-auto pt-10">
                 {/* Second Place */}
                 {topThree[1] && (
-                  <div className="group relative flex flex-col items-center animate-in slide-in-from-left-8 duration-700 delay-200">
+                  <div className="group relative flex flex-col items-center animate-in slide-in-from-left-8 duration-700 delay-200 order-2 md:order-1">
                     <div className="relative z-10 w-24 h-24 md:w-32 md:h-32 mb-6">
                       <div className="absolute inset-0 rounded-full bg-zinc-700/20 blur-2xl group-hover:bg-zinc-700/40 transition-all" />
                       <img src={topThree[1].photoUrl} className="relative z-10 w-full h-full rounded-full object-cover border-2 border-zinc-700 grayscale hover:grayscale-0 transition-all duration-500" alt={topThree[1].name} />
@@ -516,7 +516,7 @@ const PageContent = () => {
 
                 {/* First Place */}
                 {topThree[0] && (
-                  <div className="group relative flex flex-col items-center z-20 -mt-10 md:scale-125 animate-in zoom-in-95 duration-1000">
+                  <div className="group relative flex flex-col items-center z-20 mb-4 md:mb-0 md:-mt-10 scale-110 md:scale-125 animate-in zoom-in-95 duration-1000 order-1 md:order-2">
                     <div className="relative w-32 h-32 md:w-40 md:h-40 mb-8 p-1.5 rounded-full bg-gradient-to-tr from-yellow-500/40 via-transparent to-yellow-500/10">
                       <div className="absolute inset-0 rounded-full bg-yellow-500/5 blur-3xl group-hover:bg-yellow-500/10 transition-all" />
                       <img src={topThree[0].photoUrl} className="relative z-10 w-full h-full rounded-full object-cover border-4 border-yellow-500 shadow-2xl" alt={topThree[0].name} />
@@ -525,11 +525,11 @@ const PageContent = () => {
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="flex items-center justify-center gap-2 mb-1">
-                        <Award className="w-5 h-5 text-yellow-500" />
-                        <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tighter truncate w-40">{topThree[0].name}</h3>
-                      </div>
-                      <h4 className="text-yellow-600/60 text-[10px] font-black uppercase tracking-[0.4em] mb-4">Supreme Tier</h4>
+                      <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tighter truncate max-w-[240px] mx-auto mb-1">
+                        <Award className="w-5 h-5 inline-block align-middle mr-1" />
+                        <span className="align-middle">{topThree[0].name}</span>
+                      </h3>
+                      <h4 className="text-yellow-600/60 text-[10px] font-black uppercase tracking-[0.4em] mb-4">{topThree[0].tier}</h4>
                       <div className="py-4 px-10 rounded-3xl bg-yellow-500/5 backdrop-blur-md border border-yellow-500/20 shadow-2xl relative overflow-hidden group/btn hover:scale-105 transition-transform">
                         <div className="absolute inset-0 bg-yellow-500/10 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-500" />
                         <span className="relative z-10 text-4xl font-black text-yellow-500 tracking-tighter">{topThree[0].tcsScore}</span>
@@ -540,7 +540,7 @@ const PageContent = () => {
 
                 {/* Third Place */}
                 {topThree[2] && (
-                  <div className="group relative flex flex-col items-center animate-in slide-in-from-right-8 duration-700 delay-300">
+                  <div className="group relative flex flex-col items-center animate-in slide-in-from-right-8 duration-700 delay-300 order-3 md:order-3">
                     <div className="relative z-10 w-24 h-24 md:w-28 md:h-28 mb-6">
                       <div className="absolute inset-0 rounded-full bg-orange-950/20 blur-2xl group-hover:bg-orange-950/40 transition-all" />
                       <img src={topThree[2].photoUrl} className="relative z-10 w-full h-full rounded-full object-cover border-2 border-orange-900/50 grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" alt={topThree[2].name} />
@@ -564,15 +564,15 @@ const PageContent = () => {
             <section className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto px-4 pb-20">
               <button
                 onClick={() => setView('ENGINEER_LOOKUP')}
-                className="group relative h-80 overflow-hidden rounded-[3rem] bg-zinc-900/50 border border-white/5 hover:border-blue-500/20 transition-all duration-500 p-10 flex flex-col justify-between"
+                className="group relative h-64 md:h-80 overflow-hidden rounded-[3rem] bg-zinc-900/50 border border-white/5 hover:border-blue-500/20 transition-all duration-500 p-8 md:p-10 flex flex-col justify-between"
               >
                 <div className="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative z-10 text-left">
-                  <div className="w-16 h-16 bg-blue-500 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
-                    <Search className="w-8 h-8" />
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-500 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20 group-hover:scale-110 transition-transform duration-500">
+                    <Search className="w-6 h-6 md:w-8 md:h-8" />
                   </div>
-                  <h3 className="text-3xl font-black tracking-tighter text-white mt-8 uppercase">Capability<br /><span className="text-blue-500">Audit</span></h3>
-                  <p className="text-zinc-500 text-sm font-medium mt-4 max-w-[200px]">Verify your standing in the global hierarchy.</p>
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter text-white mt-6 md:mt-8 uppercase">Capability<br /><span className="text-blue-500">Audit</span></h3>
+                  <p className="text-zinc-500 text-xs md:text-sm font-medium mt-3 md:mt-4 max-w-[200px]">Verify your standing in the global hierarchy.</p>
                 </div>
                 <div className="relative z-10 self-end flex items-center gap-3 text-blue-500 font-black text-[10px] uppercase tracking-[0.2em] group-hover:gap-5 transition-all">
                   Access Portal <ChevronRight className="w-4 h-4" />
@@ -581,14 +581,14 @@ const PageContent = () => {
 
               <button
                 onClick={() => setView(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN')}
-                className="group relative h-80 overflow-hidden rounded-[3rem] bg-white text-black hover:bg-zinc-200 transition-all duration-500 p-10 flex flex-col justify-between"
+                className="group relative h-64 md:h-80 overflow-hidden rounded-[3rem] bg-white text-black hover:bg-zinc-200 transition-all duration-500 p-8 md:p-10 flex flex-col justify-between"
               >
                 <div className="relative z-10 text-left">
-                  <div className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-500">
-                    <ShieldCheck className="w-8 h-8" />
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-black text-white rounded-2xl flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-500">
+                    <ShieldCheck className="w-6 h-6 md:w-8 md:h-8" />
                   </div>
-                  <h3 className="text-3xl font-black tracking-tighter mt-8 uppercase leading-none">Management<br />Node</h3>
-                  <p className="text-zinc-600 text-sm font-medium mt-4 max-w-[200px]">Unauthorized access is strictly monitored.</p>
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter mt-6 md:mt-8 uppercase leading-none">Management<br />Node</h3>
+                  <p className="text-zinc-600 text-xs md:text-sm font-medium mt-3 md:mt-4 max-w-[200px]">Unauthorized access is strictly monitored.</p>
                 </div>
                 <div className="relative z-10 self-end flex items-center gap-3 font-black text-[10px] uppercase tracking-[0.2em] group-hover:gap-5 transition-all">
                   Initialize Login <LogOut className="w-4 h-4 rotate-180" />
@@ -636,14 +636,14 @@ const PageContent = () => {
                       value={searchCode}
                       onChange={(e) => setSearchCode(e.target.value.toUpperCase())}
                       placeholder="PROTO_XYZ_000"
-                      className="w-full bg-black border border-white/5 rounded-3xl p-8 text-center text-4xl font-black tracking-[0.4em] focus:border-blue-500 transition-all outline-none placeholder:text-zinc-900 text-white shadow-inner"
+                      className="w-full bg-black border border-white/5 rounded-3xl p-6 md:p-8 text-center text-2xl md:text-4xl font-black tracking-[0.2em] md:tracking-[0.4em] focus:border-blue-500 transition-all outline-none placeholder:text-zinc-900 text-white shadow-inner"
                     />
                     <div className="absolute -bottom-px left-1/2 -translate-x-1/2 w-0 h-[2px] bg-blue-500 group-focus-within:w-1/2 transition-all duration-700" />
                   </div>
 
                   <button
                     onClick={handleSearch}
-                    className="w-full bg-white text-black py-8 rounded-3xl font-black text-sm uppercase tracking-[0.4em] hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-2xl"
+                    className="w-full bg-white text-black py-6 md:py-8 rounded-3xl font-black text-sm uppercase tracking-[0.4em] hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-2xl"
                   >
                     Search
                   </button>
@@ -745,7 +745,7 @@ const PageContent = () => {
 
             {/* Quick Management Suite */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="md:col-span-2 glass-card rounded-[3rem] p-10 flex flex-col justify-between">
+              <div className="md:col-span-2 glass-card rounded-[3rem] p-6 md:p-10 flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-12">
                   <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Operations Unit</h3>
                   <button onClick={() => setView('PROFILE_MGMT')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">Manage Accounts</button>
@@ -754,9 +754,9 @@ const PageContent = () => {
                   <button
                     onClick={() => setEditingEng({
                       id: '', name: '', code: '', photoUrl: 'https://picsum.photos/200', asc: '', partnerName: '', month: 'March', year: '2026',
-                      examScore: 0, monthlyRNPS: 0, trainingAttendance: 0, repeatedRepairRatio: 0, sameSymptomRedoRatio: 0,
-                      iqcSkipRatio: 0, oqcFirstTimeFailRatio: 0, corePartsUsed: 0, multiPartsUsed: 0,
-                      lastQEvaluation: 0, tcsScore: 0, tier: 'Bronze'
+                      examScore: '', monthlyRNPS: '', trainingAttendance: '', repeatedRepairRatio: '', sameSymptomRedoRatio: '',
+                      iqcSkipRatio: '', oqcFirstTimeFailRatio: '', corePartsUsed: '', multiPartsUsed: '',
+                      lastQEvaluation: '', tcsScore: 0, tier: 'Bronze'
                     })}
                     className="flex-1 bg-white text-black px-8 py-6 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-200 transition-all shadow-2xl"
                   >
@@ -828,38 +828,38 @@ const PageContent = () => {
                 {sortedEngineers.length === 0 ? (
                   <div className="p-24 text-center text-zinc-700 italic font-black uppercase tracking-[0.3em]">No registry entries detected.</div>
                 ) : sortedEngineers.map(eng => (
-                  <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-8 flex items-center justify-between group">
-                    <div className="flex items-center gap-8">
-                      <div className="w-16 h-16 relative">
+                  <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-4 md:p-8 flex items-center justify-between group">
+                    <div className="flex items-center gap-4 md:gap-8">
+                      <div className="w-12 h-12 md:w-16 md:h-16 relative flex-shrink-0">
                         <img src={eng.photoUrl} className="w-full h-full rounded-2xl object-cover grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80" alt={eng.name} />
                         <div className={`absolute -top-2 -left-2 w-5 h-5 rounded-full border-4 border-black ${getTierColor(eng.tier)}`} />
                       </div>
-                      <div className="flex flex-col">
-                        <h4 className="text-lg font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors uppercase">{eng.name}</h4>
+                      <div className="flex flex-col min-w-0">
+                        <h4 className="text-sm md:text-lg font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors uppercase truncate">{eng.name}</h4>
                         <div className="flex items-center gap-4 mt-1">
-                          <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">{eng.code}</span>
-                          <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1 bg-zinc-900 border border-white/5 rounded-full ${getTierColor(eng.tier)}`}>{eng.tier} Specialist</span>
+                          <span className="text-[8px] md:text-[10px] font-black text-zinc-600 uppercase tracking-widest">{eng.code}</span>
+                          <span className={`text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] px-2 md:px-3 py-1 bg-zinc-900 border border-white/5 rounded-full ${getTierColor(eng.tier)}`}>{eng.tier} Specialist</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-12">
+                    <div className="flex items-center gap-4 md:gap-12 flex-shrink-0">
                       <div className="text-right flex flex-col items-end">
-                        <span className="text-2xl font-black text-white tracking-widest italic">{eng.tcsScore}</span>
+                        <span className="text-lg md:text-2xl font-black text-white tracking-widest italic">{eng.tcsScore}</span>
                         <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">Registry Index</span>
                       </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setEditingEng(eng)}
-                          className="p-4 bg-zinc-900 text-zinc-500 rounded-2xl hover:bg-white hover:text-black transition-all shadow-xl"
+                          className="p-3 md:p-4 bg-zinc-900 text-zinc-500 rounded-xl md:rounded-2xl hover:bg-white hover:text-black transition-all shadow-xl"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <Edit2 className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                         <button
                           onClick={() => deleteEngineerHandler(eng.id)}
-                          className="p-4 bg-zinc-900 text-zinc-500 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-xl"
+                          className="p-3 md:p-4 bg-zinc-900 text-zinc-500 rounded-xl md:rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-xl"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                       </div>
                     </div>
@@ -983,8 +983,8 @@ const PageContent = () => {
               <div className="flex flex-col items-center md:items-start gap-8">
                 <div className="relative group">
                   <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
-                  <img src={selectedEngineer.photoUrl} className="relative z-10 w-48 h-48 rounded-[3.5rem] object-cover border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
-                  <div className={`absolute -bottom-4 -right-4 w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black shadow-2xl border-4 border-black z-20 ${getTierColor(selectedEngineer.tier)}`}>
+                  <img src={selectedEngineer.photoUrl} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-cover border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
+                  <div className={`absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black shadow-2xl border-4 border-black z-20 ${getTierColor(selectedEngineer.tier)}`}>
                     {selectedEngineer.tier[0]}
                   </div>
                 </div>
@@ -993,7 +993,7 @@ const PageContent = () => {
                     <div className="h-[1px] w-8 bg-blue-500" />
                     <span className="text-[10px] font-black uppercase tracking-[0.5em] text-blue-500">Personnel Dossier</span>
                   </div>
-                  <h2 className="text-5xl font-black tracking-tighter text-white uppercase italic">{selectedEngineer.name}</h2>
+                  <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white uppercase italic">{selectedEngineer.name}</h2>
                   <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.6em]">{selectedEngineer.code}</p>
                 </div>
               </div>
@@ -1077,37 +1077,59 @@ const PageContent = () => {
 
         {/* Upsert Modal (Manual Entry) */}
         {editingEng && (
-          <div className="fixed inset-0 bg-black/95 backdrop-blur-3xl z-[100] flex items-center justify-center p-6 sm:p-12 overflow-y-auto custom-scrollbar">
-            <div className="bg-zinc-950 border border-white/10 w-full max-w-4xl rounded-[4rem] p-12 md:p-20 shadow-3xl relative my-auto">
+          <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[100] flex items-start justify-center p-4 sm:p-12 overflow-y-auto custom-scrollbar pt-12">
+            <div className="bg-zinc-950 border border-white/10 w-full max-w-5xl rounded-[3rem] md:rounded-[4rem] p-8 md:p-16 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative my-auto overflow-hidden">
+              {/* Decorative scanline effect */}
+              <div className="absolute inset-0 bg-grid opacity-[0.02] pointer-events-none" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
+
               <button
                 onClick={() => setEditingEng(null)}
-                className="absolute top-10 right-10 p-6 bg-zinc-900 rounded-full hover:bg-white hover:text-black transition-all shadow-3xl rotate-0 hover:rotate-90"
+                className="absolute top-8 right-8 p-4 bg-zinc-900 text-white rounded-2xl hover:bg-white hover:text-black transition-all shadow-3xl z-[110] group"
               >
-                <X className="w-8 h-8" />
+                <X className="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
               </button>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-20">
-                <div className="lg:col-span-4 flex flex-col items-center space-y-12">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-20 pt-8 md:pt-0">
+                <div className="lg:col-span-4 flex flex-col items-center lg:items-start space-y-8 md:space-y-12 relative z-10">
                   <div className="relative group">
                     <div className="absolute -inset-8 bg-blue-600/10 blur-[80px] rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700" />
                     <div
-                      className="relative w-56 h-56 rounded-[4rem] border-4 border-zinc-800 overflow-hidden cursor-pointer shadow-3xl transition-all hover:border-blue-500 overflow-hidden group"
+                      className="relative w-32 h-32 md:w-64 md:h-64 rounded-[2.5rem] md:rounded-[4rem] border-4 border-zinc-800 overflow-hidden cursor-pointer shadow-3xl transition-all hover:border-blue-500 group"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      <img src={editingEng.photoUrl} className="w-full h-full object-cover grayscale-50 group-hover:grayscale-0 transition-all" alt="Profile" />
-                      <div className="absolute inset-0 bg-blue-600/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm">
+                      <img src={editingEng.photoUrl} className="w-full h-full object-cover grayscale-50 group-hover:grayscale-0 transition-all duration-700 scale-110 group-hover:scale-100" alt="Profile" />
+                      <div className="absolute inset-0 bg-blue-600/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-md">
                         <Camera className="w-10 h-10 text-white mb-2" />
-                        <span className="text-[10px] font-black uppercase text-white tracking-[0.3em]">Update Capture</span>
+                        <span className="text-[10px] font-black uppercase text-white tracking-[0.4em]">Update Capture</span>
                       </div>
                     </div>
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
                   </div>
-                  <div className="text-center space-y-4">
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="h-[2px] w-8 bg-blue-500" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.5em] text-blue-500">Record Control</span>
+
+                  <div className="space-y-4 md:space-y-6 w-full text-center lg:text-left">
+                    <div className="flex items-center justify-center lg:justify-start gap-4">
+                      <div className="h-[2px] w-8 md:w-12 bg-blue-500" />
+                      <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.6em] text-blue-500">Node Provision</span>
                     </div>
-                    <h2 className="text-3xl font-black text-white uppercase italic leading-none">{editingEng.id ? 'Modify Data' : 'New Provision'}</h2>
+                    <div className="space-y-2">
+                      <h2 className="text-2xl md:text-4xl font-black text-white uppercase italic leading-none tracking-tighter">
+                        {editingEng.id ? 'UPDATE' : 'GENERATE'}<br />
+                        <span className="text-blue-500">PROTOCOL</span>
+                      </h2>
+                      <p className="text-zinc-600 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">{editingEng.id ? 'Editing existing registry entry' : 'Initializing new personnel node'}</p>
+                    </div>
+
+                    <div className="pt-4 md:pt-8 space-y-3 md:space-y-4 max-w-[200px] mx-auto lg:mx-0">
+                      <div className="flex items-center justify-between text-[8px] md:text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5 pb-2">
+                        <span>Status</span>
+                        <span className="text-green-500 font-black">ONLINE</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[8px] md:text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5 pb-2">
+                        <span>Encryption</span>
+                        <span className="text-white font-black">ACTIVE</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1115,45 +1137,46 @@ const PageContent = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Full Operational Name</label>
-                      <input className="w-full bg-black border border-white/5 rounded-2xl p-6 text-base font-bold text-white focus:border-blue-500 outline-none shadow-inner" value={editingEng.name} onChange={e => setEditingEng({ ...editingEng, name: e.target.value })} />
+                      <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.name} onChange={e => setEditingEng({ ...editingEng, name: e.target.value })} />
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Engineer Protocol Code</label>
-                      <input className="w-full bg-black border border-white/5 rounded-2xl p-6 text-base font-bold text-white focus:border-blue-500 outline-none shadow-inner" value={editingEng.code} onChange={e => setEditingEng({ ...editingEng, code: e.target.value.toUpperCase() })} />
+                      <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none uppercase placeholder:text-zinc-800" placeholder="SAM-2026-X" value={editingEng.code} onChange={e => setEditingEng({ ...editingEng, code: e.target.value.toUpperCase() })} />
                     </div>
                     <div className="space-y-3 md:col-span-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Active Audit Period</label>
-                      <div className="flex gap-4">
-                        <input className="flex-1 bg-black border border-white/5 rounded-2xl p-6 text-base font-bold text-white focus:border-blue-500 outline-none shadow-inner" value={editingEng.month} onChange={e => setEditingEng({ ...editingEng, month: e.target.value })} placeholder="Month" />
-                        <input className="w-40 bg-black border border-white/5 rounded-2xl p-6 text-base font-bold text-white focus:border-blue-500 outline-none shadow-inner" value={editingEng.year} onChange={e => setEditingEng({ ...editingEng, year: e.target.value })} placeholder="Year" />
+                      <div className="flex flex-col md:flex-row justify-center gap-4 md:gap-8 items-center">
+                        <input className="w-full md:flex-1 bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.month} onChange={e => setEditingEng({ ...editingEng, month: e.target.value })} placeholder="Month" />
+                        <input className="w-full md:w-40 bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.year} onChange={e => setEditingEng({ ...editingEng, year: e.target.value })} placeholder="Year" />
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-zinc-900/50 p-10 rounded-[3rem] border border-white/5 space-y-10">
-                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] border-b border-white/5 pb-6">Capability Metrics Allocation</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+                  <div className="bg-zinc-900/30 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-white/5 space-y-10 glass-card">
+                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] border-b border-white/5 pb-6">Performance Matrix Allocation</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                       <div className="space-y-4">
-                        <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest ml-1">Exam Score (30%)</label>
-                        <input type="number" className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 outline-none" value={editingEng.examScore} onChange={e => setEditingEng({ ...editingEng, examScore: parseFloat(e.target.value) || 0 })} />
+                        <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest ml-1">Exam Score</label>
+                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.examScore} onChange={e => setEditingEng({ ...editingEng, examScore: e.target.value })} />
                       </div>
                       <div className="space-y-4">
-                        <label className="text-[10px] font-black text-yellow-500 uppercase tracking-widest ml-1">RNPS Score (20%)</label>
-                        <input type="number" className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 outline-none" value={editingEng.monthlyRNPS} onChange={e => setEditingEng({ ...editingEng, monthlyRNPS: parseFloat(e.target.value) || 0 })} />
+                        <label className="text-[10px] font-black text-yellow-500 uppercase tracking-widest ml-1">RNPS Score</label>
+                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.monthlyRNPS} onChange={e => setEditingEng({ ...editingEng, monthlyRNPS: e.target.value })} />
                       </div>
                       <div className="space-y-4 md:col-span-2">
-                        <label className="text-[10px] font-black text-green-500 uppercase tracking-widest ml-1">Training Attendance (50% Pillar Part A)</label>
-                        <input type="number" step="0.1" className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 outline-none" value={editingEng.trainingAttendance} onChange={e => setEditingEng({ ...editingEng, trainingAttendance: parseFloat(e.target.value) || 0 })} />
+                        <label className="text-[10px] font-black text-green-500 uppercase tracking-widest ml-1">Training Attendance</label>
+                        <input type="number" step="0.1" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.trainingAttendance} onChange={e => setEditingEng({ ...editingEng, trainingAttendance: e.target.value })} />
                       </div>
+                      {/* Dynamic Metrics */}
                       {[
-                        { k: 'repeatedRepairRatio', l: 'RRR % (-)', c: 'text-red-500' },
-                        { k: 'sameSymptomRedoRatio', l: 'SSR % (-)', c: 'text-red-500' },
-                        { k: 'iqcSkipRatio', l: 'IQC Non-Comp (-)', c: 'text-red-500' },
-                        { k: 'oqcFirstTimeFailRatio', l: 'OQC Fail Rate (-)', c: 'text-red-500' },
+                        { k: 'repeatedRepairRatio', l: 'RRR', c: 'text-red-500' },
+                        { k: 'sameSymptomRedoRatio', l: 'SSR', c: 'text-red-500' },
+                        { k: 'iqcSkipRatio', l: 'IQC Non-Comp', c: 'text-red-500' },
+                        { k: 'oqcFirstTimeFailRatio', l: 'OQC Fail Rate', c: 'text-red-500' },
                       ].map(item => (
                         <div key={item.k} className="space-y-4">
                           <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${item.c}`}>{item.l}</label>
-                          <input type="number" step="0.1" className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 outline-none" value={editingEng[item.k]} onChange={e => setEditingEng({ ...editingEng, [item.k]: parseFloat(e.target.value) || 0 })} />
+                          <input type="number" step="0.1" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng[item.k]} onChange={e => setEditingEng({ ...editingEng, [item.k]: e.target.value })} />
                         </div>
                       ))}
                     </div>
@@ -1162,9 +1185,9 @@ const PageContent = () => {
                   <button
                     onClick={() => saveEngineer(editingEng)}
                     disabled={isSaving}
-                    className="w-full bg-white text-black py-8 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] hover:bg-zinc-200 transition-all shadow-[0_20px_50px_rgba(255,255,255,0.1)] flex items-center justify-center gap-4"
+                    className="w-full bg-white text-black py-8 rounded-[2rem] font-black text-[11px] md:text-sm uppercase tracking-[0.4em] hover:bg-blue-600 hover:text-white transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center gap-4 group"
                   >
-                    {isSaving ? <div className="w-6 h-6 border-4 border-zinc-200 border-t-black rounded-full animate-spin" /> : <Save className="w-6 h-6" />}
+                    {isSaving ? <div className="w-6 h-6 border-4 border-zinc-200 border-t-black rounded-full animate-spin" /> : <Save className="w-6 h-6 group-hover:scale-110 transition-transform" />}
                     {isSaving ? 'Synchronizing Node...' : 'Commit Protocol Entry'}
                   </button>
                 </div>
