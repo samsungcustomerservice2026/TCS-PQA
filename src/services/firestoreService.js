@@ -71,3 +71,15 @@ export const saveAdmin = async (admin) => {
 export const deleteAdmin = async (id) => {
     await deleteDoc(doc(db, ADMINS_COLLECTION, id));
 };
+
+// Feedback
+const FEEDBACK_COLLECTION = 'feedback';
+
+export const saveFeedback = async (feedbackData) => {
+    const docRef = await addDoc(collection(db, FEEDBACK_COLLECTION), {
+        ...feedbackData,
+        createdAt: new Date().toISOString(),
+    });
+    return docRef.id;
+};
+
