@@ -2679,9 +2679,18 @@ const PageContent = () => {
                 <button
                   onClick={async () => {
                     if (!feedbackText.trim()) { message.warning('Please write your feedback.'); return; }
+                    const trimmedCode = feedbackCode.trim().toUpperCase();
+                    if (!trimmedCode) { message.warning('Please enter an engineer code.'); return; }
+
+                    const codeExists = engineers.some(eng => eng.code?.trim().toUpperCase() === trimmedCode);
+                    if (!codeExists) {
+                      message.error('Unrecognized engineer code. Access denied.');
+                      return;
+                    }
+
                     setIsSendingFeedback(true);
                     try {
-                      await saveFeedbackToDb({ engineerCode: feedbackCode, message: feedbackText, rating: feedbackRating });
+                      await saveFeedbackToDb({ engineerCode: trimmedCode, message: feedbackText, rating: feedbackRating });
                       setFeedbackSent(true);
                     } catch (e) { console.error(e); message.error('Failed to submit feedback.'); }
                     finally { setIsSendingFeedback(false); }
