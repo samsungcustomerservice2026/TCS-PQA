@@ -12,9 +12,9 @@ const LOGS_COL = collection(db, 'logs', 'activity', 'records');
  *   details  - optional key-value object
  *   severity - 'info' | 'warning' | 'error'  (default: 'info')
  */
-export const writeLog = async ({ type, actor = 'system', action, details = {}, severity = 'info' }) => {
+export const writeLog = async ({ type, actor = 'system', action, details = {}, severity = 'info', ip = null, location = null }) => {
     try {
-        await addDoc(LOGS_COL, {
+        const entry = {
             type,
             actor,
             action,
@@ -22,7 +22,10 @@ export const writeLog = async ({ type, actor = 'system', action, details = {}, s
             severity,
             timestamp: serverTimestamp(),
             userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 120) : '',
-        });
+        };
+        if (ip) entry.ip = ip;
+        if (location) entry.location = location;
+        await addDoc(LOGS_COL, entry);
     } catch (e) {
         // Silently fail — never break the app for a log write
         console.warn('AuditLog write failed:', e);

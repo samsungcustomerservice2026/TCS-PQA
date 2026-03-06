@@ -239,11 +239,23 @@ const PageContent = () => {
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(null);
 
   // Feedback form state
-  const [feedbackName, setFeedbackName] = useState('');
+  const [feedbackCode, setFeedbackCode] = useState('');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+
+  // Activity log panel toggle
+  const [showActivityLog, setShowActivityLog] = useState(false);
+
+  // Engineer self-service photo auth
+  const [showPhotoAuth, setShowPhotoAuth] = useState(false);
+  const [photoAuthCode, setPhotoAuthCode] = useState('');
+  const [photoAuthStep, setPhotoAuthStep] = useState('idle'); // 'idle' | 'auth' | 'upload' | 'done'
+  const [selfPhotoFile, setSelfPhotoFile] = useState(null);
+  const [selfPhotoUploading, setSelfPhotoUploading] = useState(false);
+  const selfPhotoInputRef = useRef(null);
 
   // Analytics
   const [sessionStart, setSessionStart] = useState(null);
@@ -569,7 +581,18 @@ const PageContent = () => {
     setView('ENGINEER_PROFILE');
   };
 
-  const handleAdminLogin = () => {
+  const handleAdminLogin = async () => {
+    // Fetch IP + location before processing login
+    let ipInfo = { ip: null, location: null };
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      if (res.ok) {
+        const data = await res.json();
+        ipInfo.ip = data.ip || null;
+        ipInfo.location = [data.city, data.country_name].filter(Boolean).join(', ') || null;
+      }
+    } catch { /* silently ignore — don't block login */ }
+
     const foundAdmin = admins.find(a =>
       a.username === loginUser && a.passwordB64 === window.btoa(loginPass)
     );
@@ -583,11 +606,11 @@ const PageContent = () => {
       setIsLogged(true);
       setView('ADMIN_DASHBOARD');
       recordAdminLogin();
-      writeLog({ type: 'ADMIN_LOGIN', actor: foundAdmin.username, action: 'Admin logged in', details: { name: foundAdmin.name }, severity: 'info' });
+      writeLog({ type: 'ADMIN_LOGIN', actor: foundAdmin.username, action: 'Admin logged in', details: { name: foundAdmin.name }, severity: 'info', ip: ipInfo.ip, location: ipInfo.location });
       getAnalyticsSummary().then(data => setAnalyticsSummary(data));
     } else {
       message.error("User or Password are wrong");
-      writeLog({ type: 'FAILED_LOGIN', actor: loginUser || 'unknown', action: 'Failed admin login attempt', severity: 'warning' });
+      writeLog({ type: 'FAILED_LOGIN', actor: loginUser || 'unknown', action: 'Failed admin login attempt', severity: 'warning', ip: ipInfo.ip, location: ipInfo.location });
     }
   };
 
@@ -1286,8 +1309,8 @@ const PageContent = () => {
                 </div>
               </div>
 
-              {/* Compact Action Bar — all 4 actions in one row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Action Bar — 6 actions in 3x2 grid */}
+              <div className="grid grid-cols-3 gap-3">
                 {/* Add Engineer */}
                 <button
                   onClick={() => setEditingEng({
@@ -1325,6 +1348,27 @@ const PageContent = () => {
                 >
                   <Settings className="w-5 h-5" />
                   Manage Accounts
+                </button>
+
+                {/* TCS Guide */}
+                <button
+                  onClick={() => setView('TCS_INFO')}
+                  className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
+                >
+                  <BookOpen className="w-5 h-5" />
+                  TCS Guide
+                </button>
+
+                {/* Actions Log toggle */}
+                <button
+                  onClick={() => { setShowActivityLog(v => !v); if (!showActivityLog) loadLogs(); }}
+                  className={`flex flex-col items-center gap-2 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all border ${showActivityLog
+                    ? 'bg-emerald-600/10 border-emerald-500/30 text-emerald-400'
+                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    }`}
+                >
+                  <Activity className="w-5 h-5" />
+                  Actions Log
                 </button>
               </div>
 
@@ -1409,8 +1453,8 @@ const PageContent = () => {
                 );
               })()}
 
-              {/* Activity Log Panel */}
-              {(() => {
+              {/* Collapsible Activity Log Panel */}
+              {showActivityLog && (() => {
                 const SEVERITY_STYLES = {
                   info: 'bg-zinc-800 text-zinc-300 border-zinc-700',
                   warning: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
@@ -1425,10 +1469,10 @@ const PageContent = () => {
                   VISITOR_EVENT: 'text-purple-400',
                 };
                 return (
-                  <div className="glass-card rounded-[2.5rem] p-8 space-y-5 border border-white/5">
+                  <div className="glass-card rounded-[2.5rem] p-8 space-y-5 border border-emerald-500/20 animate-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-                      <Activity className="w-4 h-4 text-zinc-400" />
-                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Activity Log</h3>
+                      <Activity className="w-4 h-4 text-emerald-400" />
+                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Actions Log</h3>
                       <span className="ml-auto text-[8px] font-black text-zinc-700 uppercase tracking-widest">Last 100 events</span>
                       <button
                         onClick={loadLogs}
@@ -1437,6 +1481,12 @@ const PageContent = () => {
                       >
                         <RefreshCw className={`w-3 h-3 ${logsLoading ? 'animate-spin' : ''}`} />
                         {logsLoading ? 'Loading…' : 'Refresh'}
+                      </button>
+                      <button
+                        onClick={() => setShowActivityLog(false)}
+                        className="p-1.5 bg-zinc-800 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-700 transition-all"
+                      >
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
 
@@ -1454,6 +1504,11 @@ const PageContent = () => {
                               {log.details && Object.keys(log.details).length > 0 && (
                                 <p className="text-[9px] text-zinc-500 mt-0.5 truncate">
                                   {Object.entries(log.details).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                                </p>
+                              )}
+                              {(log.ip || log.location) && (
+                                <p className="text-[8px] text-blue-400/70 mt-0.5">
+                                  IP: {log.ip || 'unknown'}{log.location ? ` · ${log.location}` : ''}
                                 </p>
                               )}
                             </div>
@@ -1678,6 +1733,14 @@ const PageContent = () => {
                       <img src={TIER_META[selectedEngineer.tier]?.img || TIER_META.Bronze.img} alt={selectedEngineer.tier} className="w-7 h-7 md:w-9 md:h-9 object-contain" />
                     </div>
                   </div>
+                  {/* Self-service photo update */}
+                  <button
+                    onClick={() => { setShowPhotoAuth(true); setPhotoAuthCode(''); setPhotoAuthStep('idle'); setSelfPhotoFile(null); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-400 hover:border-blue-500/30 transition-all"
+                  >
+                    <Camera className="w-3 h-3" />
+                    Update My Photo
+                  </button>
                   <div className="text-center md:text-left space-y-2">
                     <div className="flex items-center justify-center md:justify-start gap-3">
                       <div className="h-[1px] w-8 bg-blue-500" />
@@ -2560,31 +2623,182 @@ const PageContent = () => {
         </div> {/* close animated wrapper key={view} */}
       </main>
 
+      {/* Floating Feedback Button */}
+      <button
+        onClick={() => { setShowFeedbackModal(true); setFeedbackSent(false); setFeedbackText(''); setFeedbackCode(''); setFeedbackRating(0); }}
+        className="fixed bottom-28 right-5 z-50 w-12 h-12 bg-purple-600 hover:bg-purple-500 rounded-2xl shadow-2xl shadow-purple-900/60 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+        title="Send Feedback"
+      >
+        <MessageSquare className="w-5 h-5 text-white" />
+      </button>
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+          <div className="bg-zinc-950 border border-white/10 rounded-[3rem] w-full max-w-lg p-8 space-y-6 shadow-[0_0_80px_rgba(0,0,0,0.8)] relative animate-in fade-in zoom-in-95 duration-300">
+            <button onClick={() => setShowFeedbackModal(false)} className="absolute top-6 right-6 p-2 bg-zinc-800 text-white rounded-xl hover:bg-white hover:text-black transition-all">
+              <X className="w-4 h-4" />
+            </button>
+            {feedbackSent ? (
+              <div className="flex flex-col items-center text-center space-y-4 py-8">
+                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/30">
+                  <CheckCircle className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Thank You!</h3>
+                <p className="text-zinc-400 text-sm">Your feedback has been received.</p>
+                <button onClick={() => setShowFeedbackModal(false)} className="px-8 py-3 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-zinc-200 transition-all">Close</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <MessageSquare className="w-5 h-5 text-purple-400" />
+                  <h2 className="text-base font-black text-white uppercase tracking-widest">Send Feedback</h2>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Engineer Code</label>
+                  <input type="text" value={feedbackCode} onChange={e => setFeedbackCode(e.target.value.toUpperCase())} placeholder="e.g. SAM-2026-001"
+                    className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm focus:border-purple-500 transition-all outline-none font-bold text-white shadow-inner" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Rate TCS Overall</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button key={star} onClick={() => setFeedbackRating(star)}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${star <= feedbackRating ? 'bg-yellow-400/20 border border-yellow-400 text-yellow-400' : 'bg-zinc-900 border border-white/5 text-zinc-600 hover:text-yellow-400'}`}>
+                        <Star className="w-5 h-5" fill={star <= feedbackRating ? 'currentColor' : 'none'} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Your Message</label>
+                  <textarea value={feedbackText} onChange={e => setFeedbackText(e.target.value)} rows={4}
+                    placeholder="Share your thoughts or suggestions..."
+                    className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm focus:border-purple-500 transition-all outline-none font-medium text-white shadow-inner resize-none" />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!feedbackText.trim()) { message.warning('Please write your feedback.'); return; }
+                    setIsSendingFeedback(true);
+                    try {
+                      await saveFeedbackToDb({ engineerCode: feedbackCode, message: feedbackText, rating: feedbackRating });
+                      setFeedbackSent(true);
+                    } catch (e) { console.error(e); message.error('Failed to submit feedback.'); }
+                    finally { setIsSendingFeedback(false); }
+                  }}
+                  disabled={isSendingFeedback}
+                  className="w-full bg-purple-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-[0.3em] hover:bg-purple-500 transition-all flex items-center justify-center gap-3"
+                >
+                  {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
+                  {isSendingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Engineer Photo Auth Modal */}
+      {showPhotoAuth && selectedEngineer && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl">
+          <div className="bg-zinc-950 border border-white/10 rounded-[3rem] w-full max-w-sm p-8 space-y-6 shadow-[0_0_80px_rgba(0,0,0,0.8)] relative animate-in fade-in zoom-in-95 duration-300">
+            <button onClick={() => { setShowPhotoAuth(false); setPhotoAuthCode(''); setPhotoAuthStep('idle'); setSelfPhotoFile(null); }}
+              className="absolute top-6 right-6 p-2 bg-zinc-800 text-white rounded-xl hover:bg-white hover:text-black transition-all">
+              <X className="w-4 h-4" />
+            </button>
+            {photoAuthStep === 'done' ? (
+              <div className="flex flex-col items-center text-center space-y-4 py-8">
+                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/30">
+                  <CheckCircle className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-lg font-black text-white uppercase">Photo Updated!</h3>
+                <button onClick={() => { setShowPhotoAuth(false); setPhotoAuthCode(''); setPhotoAuthStep('idle'); setSelfPhotoFile(null); }}
+                  className="px-8 py-3 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-zinc-200 transition-all">Done</button>
+              </div>
+            ) : (
+              <>
+                <div className="text-center space-y-2 pt-2">
+                  <div className="w-14 h-14 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 mx-auto">
+                    <Camera className="w-7 h-7 text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Update Photo</h3>
+                  <p className="text-zinc-500 text-xs">{photoAuthStep === 'upload' ? 'Choose your new profile photo' : 'Confirm your engineer code to continue'}</p>
+                </div>
+                {photoAuthStep !== 'upload' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Your Engineer Code</label>
+                    <input type="text" value={photoAuthCode} onChange={e => setPhotoAuthCode(e.target.value.toUpperCase())}
+                      placeholder="Enter your engineer code"
+                      className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm focus:border-blue-500 transition-all outline-none font-bold text-white shadow-inner uppercase tracking-widest text-center" />
+                  </div>
+                )}
+                {photoAuthStep === 'upload' ? (
+                  <div className="space-y-4">
+                    <label className="flex flex-col items-center gap-3 cursor-pointer border-2 border-dashed border-blue-500/30 rounded-2xl p-8 hover:border-blue-500/60 transition-all">
+                      <Camera className="w-8 h-8 text-blue-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{selfPhotoFile ? selfPhotoFile.name : 'Choose Photo'}</span>
+                      <input ref={selfPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setSelfPhotoFile(f); }} />
+                    </label>
+                    {/* Photo guidelines */}
+                    <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-4 space-y-1.5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-yellow-400 mb-2">Photo Requirements</p>
+                      <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> Wearing official Samsung uniform</p>
+                      <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> Face centered and looking at the camera</p>
+                      <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> No sunglasses or face coverings</p>
+                    </div>
+                    <button disabled={!selfPhotoFile || selfPhotoUploading}
+                      onClick={async () => {
+                        if (!selfPhotoFile) return;
+                        setSelfPhotoUploading(true);
+                        try {
+                          const url = await uploadPhoto(selfPhotoFile, 'engineers', selectedEngineer.code.toUpperCase());
+                          if (url) {
+                            const updated = { ...selectedEngineer, photoUrl: url };
+                            await saveEngineerToDb(updated);
+                            setSelectedEngineer(updated);
+                            setEngineers(prev => prev.map(e => e.id === updated.id ? updated : e));
+                          }
+                          setPhotoAuthStep('done');
+                        } catch (err) { console.error(err); message.error('Photo upload failed.'); }
+                        finally { setSelfPhotoUploading(false); }
+                      }}
+                      className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                    >
+                      {selfPhotoUploading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+                      {selfPhotoUploading ? 'Uploading...' : 'Save Photo'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (photoAuthCode.trim().toUpperCase() === selectedEngineer.code.trim().toUpperCase()) {
+                        setPhotoAuthStep('upload');
+                      } else {
+                        message.error('Engineer code does not match. Access denied.');
+                      }
+                    }}
+                    className="w-full bg-white text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
+                  >Verify Code</button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )
+      }
+
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-4 px-6 flex justify-around items-center shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
         {/* Dashboard */}
         <button onClick={() => setView('HOME')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'HOME' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <BarChart3 className={`w-5 h-5 ${view === 'HOME' ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''}`} />
           <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
         </button>
-        {/* Guide */}
-        <button onClick={() => setView('TCS_INFO')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'TCS_INFO' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
-          <BookOpen className={`w-5 h-5 ${view === 'TCS_INFO' ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''}`} />
-          <span className="text-[8px] font-black uppercase tracking-tight">Guide</span>
-        </button>
-        {/* Search — center, slightly larger */}
+        {/* Search — center, elevated */}
         <button onClick={() => setView('ENGINEER_LOOKUP')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 relative ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>
-          <div className={`-mt-6 w-14 h-14 rounded-[1.25rem] flex items-center justify-center shadow-xl transition-all duration-200 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view)
-            ? 'bg-blue-600 shadow-blue-500/40 scale-110'
-            : 'bg-zinc-800 hover:bg-zinc-700'
-            }`}>
+          <div className={`-mt-6 w-14 h-14 rounded-[1.25rem] flex items-center justify-center shadow-xl transition-all duration-200 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'bg-blue-600 shadow-blue-500/40 scale-110' : 'bg-zinc-800 hover:bg-zinc-700'}`}>
             <Search className="w-6 h-6" />
           </div>
           <span className="text-[8px] font-black uppercase tracking-tight mt-0.5">Search</span>
-        </button>
-        {/* Feedback */}
-        <button onClick={() => { setFeedbackSent(false); setFeedbackText(''); setFeedbackRating(0); setView('FEEDBACK'); }} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'FEEDBACK' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
-          <MessageSquare className={`w-5 h-5 ${view === 'FEEDBACK' ? 'text-purple-500 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : ''}`} />
-          <span className="text-[8px] font-black uppercase tracking-tight">Feedback</span>
         </button>
         {/* Secure */}
         <button onClick={() => setView(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT'].includes(view) ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
@@ -2593,7 +2807,7 @@ const PageContent = () => {
         </button>
       </nav>
 
-    </div>
+    </div >
   );
 };
 const Page = () => {
