@@ -1,51 +1,78 @@
-# 🚀 Next-Gen TCS Ecosystem
+# 🚀 TCS — Technical Capability System
 
-A premium, high-performance **Engineer Technical Capability Score (TCS) Management System** built with **Next.js 16** and **Firebase**. This platform is designed to rank, audit, and manage technical excellence within a global network of engineers.
+A premium, data-driven **Engineer Performance and Ranking Platform** built with **Next.js 16** and **Firebase**. This system gamifies the technical excellence of field service engineers by dynamically measuring their monthly and quarterly KPIs, translating them into a unified **Technical Capability Score (TCS)**, and assigning them prestigious **Tiers**.
+
+ *"Precision Defines Rank. Earn Your Tier • Own Your Title."*
 
 ---
 
 ## 🌟 What is this project?
-The **TCS Ecosystem** is a centralized hub for tracking and visualizing engineer performance metrics. It moves beyond standard databases to provide a dynamic, real-time leaderboard ("The Podium") and a secure administrative command center. It implements a sophisticated scoring algorithm to calculate a **Technical Capability Score (TCS)** based on various KPIs, assigning engineers to tiers ranging from **Bronze** to **Supreme**.
+The **TCS Ecosystem** replaces subjective engineer evaluations with a transparent, visually stunning, and competitive performance hub. By tracking core metrics—operational KPIs, Customer Satisfaction (DRNPS), and technical Exam Scores—it ranks engineers on a public leaderboard and gives them a personal dashboard to trace their historical growth.
 
-## 🛠️ What it does
-- **Public Capability Audit**: Allows engineers to verify their standing and view their detailed performance profile using unique identification codes.
-- **Dynamic Leaderboard**: Visualizes the top three performers on a premium "Podium" and lists all engineers in a high-impact registry.
-- **Secure Management Node**: A protected admin dashboard for:
-    - **Manual Provisioning**: Adding and editing engineer records with real-time validation.
-    - **Bulk Operations**: Bulk uploading engineer data via CSV templates.
-    - **Asset Management**: Integrated image uploading to Firebase Storage for profile photos.
-    - **Data Archiving**: Hiding and restoring engineer records without losing historical data.
-- **Automated Tiering**: Real-time calculation of TCS scores and dynamic tier assignment based on KPIs like Exam Score, RNPS, RRR, and SSR.
+## 🛠️ Core Features
 
-## 🏗️ Tech Stack
-- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
-- **Frontend Logic**: [React 19](https://react.dev/)
-- **Real-time Database**: [Firebase Firestore](https://firebase.google.com/docs/firestore)
+### 🏆 The Hall of Fame (Leaderboard)
+- **Top 10 Podium**: Displays the absolute best engineers for any given Month or Quarter.
+- **Visual Prestige**: Custom tier graphics (Bronze to Masters) and engineer profile photos.
+- **Dynamic Periods**: Toggle smoothly between **Monthly** and aggregated **Quarterly** rankings.
+
+### 🔍 Engineer Self-Lookup
+- Engineers log in via a unique Employee Code to view their private performance report.
+- Shows historical timeline navigation to see past months/quarters.
+- Granular breakdown of the score: **KPIs (Max 50)**, **DRNPS (Max 30)**, and **Exam (Max 20)**.
+
+### 🛡️ Secure Admin Portal
+- **Session Management**: Secure login with 2-hour persistent sessions via `localStorage`.
+- **Bulk Provisioning**: Add records manually or bulk-import via robust **CSV Parsing**.
+- **Archive System**: Soft-delete ("Archive") engineer records without losing historical data, with a 1-click restore function.
+- **Asset Uploads**: Direct integration with Firebase Storage to upload engineer photos.
+
+### 📊 Live Analytics & Audit Logs
+- **Separated Traffic Analytics**: Tracks public **Visitor** sessions (duration, daily hits) completely separately from **Admin** activity.
+- **Activity Log Viewer**: A dedicated, color-coded audit log tracking admin logins, record modifications, system errors, and unhandled promise rejections directly to Firestore.
+
+### 🎖️ The 6-Tier Gamification System
+TCS Scores (0-100) automatically map to physical/digital tiers:
+- 🥉 **Bronze** (0–49)
+- 🥈 **Silver** (50–59)
+- 🥇 **Gold** (60–69)
+- 💎 **Platinum** (70–79)
+- 💠 **Diamond** (80–89)
+- 👑 **Masters** (90–100)
+
+---
+
+## 🏗️ Technology Stack
+- **Frontend Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
+- **UI & Styling**: [React 19](https://react.dev/), [Tailwind CSS 4](https://tailwindcss.com/)
+- **Component Library**: [Ant Design](https://ant.design/) & [Lucide React Icons](https://lucide.dev/)
+- **Backend / Database**: [Firebase Firestore](https://firebase.google.com/docs/firestore) (NoSQL)
 - **File Storage**: [Firebase Storage](https://firebase.google.com/docs/storage)
-- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-- **UI Components**: [Ant Design 6](https://ant.design/) (Modals, Notifications, Flexible Themes)
-- **Icons**: [Lucide React](https://lucide.dev/)
+- **SEO Ready**: Configured metadata, Open Graph tags, robots.txt, and sitemap.xml.
+
+---
 
 ## 📂 Project Structure
 ```text
 /src
-  /app           # Next.js App Router (Layouts, Pages, Components)
-  /services      # Modular Firebase Logic (Firestore, Storage)
+  /app           # Next.js App Router (Layouts, Pages, SEO Meta)
+  /services      # Firebase Logic (firestoreService, storageService, analyticsService, auditLogService)
   /firebase.js   # Centralized Firebase Configuration
-  /constants.js  # TCS Scoring Algorithm & Global Constants
-/public          # Static Assets (Logos, CSV Templates)
+  /constants.js  # TCS Scoring Algorithm, Tier Definitions, & Global State
+/public          # Static Assets (Robots, Sitemap, Favicon, CSV Templates)
+/scripts         # Utilities (e.g. Word/Powerpoint generators)
 ```
 
 ## 🚀 Installation & Setup
 
 ### 1. Prerequisites
 - Node.js (Latest LTS recommended)
-- Firebase Project
+- Firebase Project with Firestore & Storage enabled
 
 ### 2. Clone and Install
 ```bash
 git clone <repository-url>
-cd next-version
+cd fawzy-project
 npm install
 ```
 
@@ -61,20 +88,15 @@ const firebaseConfig = {
     appId: "YOUR_APP_ID"
 };
 ```
-*Note: For production, it is recommended to use Environment Variables (`.env.local`).*
+*Note: For production deployments on Vercel/Netlify, inject these as Environment Variables (`.env.local`).*
 
 ### 4. Run Locally
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to access the system.
-
-## 📊 Features at a Glance
-- ✅ **Real-time Synchronization**: Changes are reflected instantly across the network.
-- ✅ **Premium UI/UX**: Dark-mode aesthetic with glassmorphism and smooth animations.
-- ✅ **Responsive Design**: Optimized for both mobile auditing and desktop management.
-- ✅ **Secure Authentication**: Base64-hashed token-based admin access.
-- ✅ **Flexible Data Entry**: Support for both granular manual updates and high-volume CSV imports.
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
-*"Precision Defines Rank. Earn Your Tier • Own Your Title."*
+
+## 📈 ROI & Value Delivered
+TCS replaces disjointed management spreadsheets, eliminates manual scoring errors, and drives an estimated **10x-30x ROI** through time savings and performance gamification.
