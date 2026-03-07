@@ -69,4 +69,228 @@
   .animate-marquee {
     animation: marquee 30s linear infinite;
   }
+
+  /* ─── 3D Rank Reveal Animations ─────────────────────────────── */
+  .perspective-1200 {
+    perspective: 1200px;
+  }
+
+  /* Make tier emblem logos seamlessly blend with black background */
+  .tier-emblem-blend {
+    mix-blend-mode: screen;
+    filter: contrast(1.25) brightness(1.1);
+  }
+
+  /* Stage 1: emblem spins in from behind (Y-axis) with scale */
+  @keyframes rankSpin3D {
+    0% {
+      transform: rotateY(180deg) scale(0.3);
+      opacity: 0;
+      filter: blur(12px);
+    }
+
+    50% {
+      transform: rotateY(-15deg) scale(1.15);
+      opacity: 1;
+      filter: blur(0px);
+    }
+
+    70% {
+      transform: rotateY(8deg) scale(0.95);
+    }
+
+    85% {
+      transform: rotateY(-3deg) scale(1.03);
+    }
+
+    100% {
+      transform: rotateY(0deg) scale(1);
+      opacity: 1;
+      filter: blur(0px);
+    }
+  }
+
+  .animate-rank-spin-3d {
+    animation: rankSpin3D 1.4s cubic-bezier(0.21, 1.02, 0.34, 1) forwards;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+  }
+
+  /* Stage 2: idle float after spin completes */
+  @keyframes rankFloat {
+
+    0%,
+    100% {
+      transform: translateY(0px) rotateY(0deg);
+    }
+
+    33% {
+      transform: translateY(-8px) rotateY(5deg);
+    }
+
+    66% {
+      transform: translateY(-4px) rotateY(-3deg);
+    }
+  }
+
+  .animate-rank-float {
+    animation: rankFloat 4s ease-in-out infinite;
+    transform-style: preserve-3d;
+  }
+
+  /* Glow aura pulse behind emblem */
+  @keyframes glowPulse {
+
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.5;
+    }
+
+    50% {
+      transform: scale(1.3);
+      opacity: 0.9;
+    }
+  }
+
+  .animate-glow-pulse {
+    animation: glowPulse 2.5s ease-in-out infinite;
+  }
+
+  /* Radial burst on reveal */
+  @keyframes radialBurst {
+    0% {
+      transform: scale(0);
+      opacity: 0.8;
+    }
+
+    60% {
+      opacity: 0.4;
+    }
+
+    100% {
+      transform: scale(3);
+      opacity: 0;
+    }
+  }
+
+  .animate-radial-burst {
+    animation: radialBurst 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  /* Tier title slide-up */
+  @keyframes tierTitleReveal {
+    0% {
+      transform: translateY(30px);
+      opacity: 0;
+      filter: blur(6px);
+    }
+
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  .animate-tier-title {
+    animation: tierTitleReveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.9s forwards;
+    opacity: 0;
+  }
+
+  /* Particle orbit */
+  @keyframes particleOrbit {
+    0% {
+      transform: rotate(0deg) translateX(var(--orbit-radius, 80px)) rotate(0deg);
+      opacity: 0;
+    }
+
+    10% {
+      opacity: 1;
+    }
+
+    90% {
+      opacity: 1;
+    }
+
+    100% {
+      transform: rotate(360deg) translateX(var(--orbit-radius, 80px)) rotate(-360deg);
+      opacity: 0;
+    }
+  }
+
+  .animate-particle-orbit {
+    animation: particleOrbit var(--orbit-duration, 3s) linear infinite;
+  }
+
+  /* Shimmer sweep on score text */
+  @keyframes shimmerSweep {
+    0% {
+      background-position: -200% center;
+    }
+
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .animate-shimmer {
+    background-size: 200% auto;
+    animation: shimmerSweep 3s linear infinite;
+  }
+
+  /* Score counter scale bounce */
+  @keyframes scoreBounce {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+    }
+
+    60% {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+
+    80% {
+      transform: scale(0.95);
+    }
+
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .animate-score-bounce {
+    animation: scoreBounce 0.7s cubic-bezier(0.22, 1, 0.36, 1) 1.2s forwards;
+    opacity: 0;
+  }
+
+  /* Ring expand */
+  @keyframes ringExpand {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+      border-width: 3px;
+    }
+
+    50% {
+      opacity: 0.6;
+      border-width: 2px;
+    }
+
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+      border-width: 1px;
+    }
+  }
+
+  .animate-ring-expand {
+    animation: ringExpand 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .animate-ring-expand-delay {
+    animation: ringExpand 1.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards;
+    opacity: 0;
+  }
 }

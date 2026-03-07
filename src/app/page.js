@@ -83,9 +83,134 @@ const TierBadge = ({ tier, size = 'md' }) => {
   const imgSize = size === 'lg' ? 'w-6 h-6' : size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
   return (
     <span className={`inline-flex items-center ${sizeClass} rounded-full border ${meta.border} ${meta.text} bg-black/40 font-black uppercase tracking-wider shadow-lg ${meta.glow}`}>
-      <img src={meta.img} alt={tier} className={`${imgSize} object-contain`} />
+      <img src={meta.img} alt={tier} className={`${imgSize} object-contain tier-emblem-blend`} />
       {tier}
     </span>
+  );
+};
+
+// ─── 3D Rank Reveal Component ─────────────────────────────────────────────────
+const TIER_GLOW_COLORS = {
+  Masters: { from: 'rgba(168, 85, 247, 0.6)', to: 'rgba(192, 132, 252, 0.3)', ring: 'border-purple-500', particle: 'bg-purple-400', text: 'text-purple-300', gradient: 'from-purple-600 via-purple-400 to-fuchsia-300' },
+  Diamond: { from: 'rgba(96, 165, 250, 0.6)', to: 'rgba(147, 197, 253, 0.3)', ring: 'border-blue-400', particle: 'bg-blue-400', text: 'text-blue-200', gradient: 'from-blue-500 via-cyan-400 to-sky-200' },
+  Platinum: { from: 'rgba(212, 212, 216, 0.6)', to: 'rgba(228, 228, 231, 0.3)', ring: 'border-zinc-300', particle: 'bg-zinc-300', text: 'text-zinc-100', gradient: 'from-zinc-300 via-zinc-100 to-white' },
+  Gold: { from: 'rgba(234, 179, 8, 0.6)', to: 'rgba(250, 204, 21, 0.3)', ring: 'border-yellow-500', particle: 'bg-yellow-400', text: 'text-yellow-300', gradient: 'from-yellow-500 via-amber-400 to-orange-300' },
+  Silver: { from: 'rgba(161, 161, 170, 0.5)', to: 'rgba(212, 212, 216, 0.2)', ring: 'border-zinc-400', particle: 'bg-zinc-400', text: 'text-zinc-300', gradient: 'from-zinc-400 via-zinc-300 to-zinc-200' },
+  Bronze: { from: 'rgba(194, 65, 12, 0.5)', to: 'rgba(251, 146, 60, 0.3)', ring: 'border-orange-600', particle: 'bg-orange-400', text: 'text-orange-400', gradient: 'from-orange-600 via-amber-500 to-yellow-400' },
+};
+
+const RankReveal3D = ({ tier, score, name, onDismiss }) => {
+  const glowColors = TIER_GLOW_COLORS[tier] || TIER_GLOW_COLORS.Bronze;
+  const meta = TIER_META[tier] || TIER_META.Bronze;
+  const [phase, setPhase] = React.useState('reveal'); // 'reveal' | 'idle'
+  const [visible, setVisible] = React.useState(true);
+
+  React.useEffect(() => {
+    // After the spin completes, switch to idle float
+    const spinTimer = setTimeout(() => setPhase('idle'), 1500);
+    // Auto-dismiss after 5 seconds
+    const dismissTimer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => onDismiss?.(), 500);
+    }, 5000);
+    return () => { clearTimeout(spinTimer); clearTimeout(dismissTimer); };
+  }, []);
+
+  const handleTap = () => {
+    setVisible(false);
+    setTimeout(() => onDismiss?.(), 500);
+  };
+
+  // Generate 8 orbiting particles
+  const particles = Array.from({ length: 8 }, (_, i) => ({
+    id: i,
+    delay: `${i * 0.35}s`,
+    radius: `${65 + (i % 3) * 25}px`,
+    duration: `${2.5 + (i % 3) * 0.8}s`,
+    size: i % 2 === 0 ? 'w-1.5 h-1.5' : 'w-1 h-1',
+  }));
+
+  return (
+    <div
+      className={`fixed inset-0 z-[200] flex items-center justify-center cursor-pointer transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      onClick={handleTap}
+      style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.98) 100%)' }}
+    >
+      {/* Subtle background grid */}
+      <div className="absolute inset-0 bg-grid opacity-20" />
+
+      {/* Central reveal stage */}
+      <div className="relative flex flex-col items-center gap-10 perspective-1200">
+
+        {/* Expanding rings */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className={`absolute w-40 h-40 rounded-full border-2 ${glowColors.ring} animate-ring-expand`} />
+          <div className={`absolute w-40 h-40 rounded-full border-2 ${glowColors.ring} animate-ring-expand-delay`} />
+        </div>
+
+        {/* Radial burst */}
+        <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+          <div
+            className="w-32 h-32 rounded-full animate-radial-burst"
+            style={{ background: `radial-gradient(circle, ${glowColors.from} 0%, transparent 70%)` }}
+          />
+        </div>
+
+        {/* Glow aura */}
+        <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -55%)' }}>
+          <div
+            className="w-56 h-56 rounded-full animate-glow-pulse blur-3xl"
+            style={{ background: `radial-gradient(circle, ${glowColors.from} 0%, ${glowColors.to} 50%, transparent 80%)` }}
+          />
+        </div>
+
+        {/* Orbiting particles */}
+        <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -55%)' }}>
+          {particles.map(p => (
+            <div
+              key={p.id}
+              className={`absolute ${p.size} ${glowColors.particle} rounded-full shadow-lg animate-particle-orbit`}
+              style={{
+                '--orbit-radius': p.radius,
+                '--orbit-duration': p.duration,
+                animationDelay: p.delay,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* The tier emblem — 3D spin then float */}
+        <div className={phase === 'reveal' ? 'animate-rank-spin-3d' : 'animate-rank-float'}>
+          <img
+            src={meta.img}
+            alt={tier}
+            className="w-36 h-36 md:w-48 md:h-48 object-contain drop-shadow-[0_0_40px_rgba(255,255,255,0.2)] relative z-10 tier-emblem-blend"
+          />
+        </div>
+
+        {/* Tier name */}
+        <div className="animate-tier-title text-center space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-600">You have earned</p>
+          <h2 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter bg-gradient-to-r ${glowColors.gradient} bg-clip-text text-transparent animate-shimmer`}
+            style={{ backgroundImage: `linear-gradient(110deg, ${glowColors.from}, white 30%, ${glowColors.from} 50%, white 70%, ${glowColors.from})` }}
+          >
+            {tier}
+          </h2>
+          <p className={`text-xs font-black uppercase tracking-[0.4em] ${glowColors.text}`}>{name}</p>
+        </div>
+
+        {/* Score counter */}
+        <div className="animate-score-bounce text-center">
+          <span className="text-7xl md:text-8xl font-black text-white italic tracking-tighter drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+            {score}
+          </span>
+          <p className="text-[9px] font-black uppercase tracking-[0.5em] text-zinc-600 mt-2">TCS Score</p>
+        </div>
+
+        {/* Tap to continue hint */}
+        <p className="text-[8px] font-black uppercase tracking-[0.5em] text-zinc-800 animate-pulse mt-8">Tap anywhere to continue</p>
+      </div>
+    </div>
   );
 };
 
@@ -256,6 +381,9 @@ const PageContent = () => {
   const [selfPhotoFile, setSelfPhotoFile] = useState(null);
   const [selfPhotoUploading, setSelfPhotoUploading] = useState(false);
   const selfPhotoInputRef = useRef(null);
+
+  // Rank reveal state
+  const [showRankReveal, setShowRankReveal] = useState(false);
 
   // Analytics
   const [sessionStart, setSessionStart] = useState(null);
@@ -578,6 +706,8 @@ const PageContent = () => {
     // Compute the newest quarter for this engineer as default
     const newestQKey = `${getQuarter(newestRecord.month)}-${newestRecord.year}`;
     setSelectedProfileQuarter(newestQKey);
+    // Trigger 3D rank reveal animation
+    setShowRankReveal(true);
     setView('ENGINEER_PROFILE');
   };
 
@@ -1050,7 +1180,7 @@ const PageContent = () => {
                       return (
                         <div key={eng.id} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
                           <div className="relative flex-shrink-0 w-14 h-14">
-                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-14 h-14 object-contain" />
+                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-14 h-14 object-contain tier-emblem-blend" />
                           </div>
                           <img src={eng.photoUrl} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
@@ -1114,7 +1244,7 @@ const PageContent = () => {
                       return (
                         <div key={eng.id + effectiveQuarterKey} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
                           <div className="relative flex-shrink-0 w-14 h-14">
-                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-14 h-14 object-contain" />
+                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-14 h-14 object-contain tier-emblem-blend" />
                           </div>
                           <img src={eng.photoUrl} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
@@ -1576,7 +1706,7 @@ const PageContent = () => {
                         <div className="w-10 h-10 md:w-14 md:h-14 relative flex-shrink-0">
                           <img src={eng.photoUrl} className="w-full h-full rounded-xl md:rounded-2xl object-cover grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80" alt={eng.name} />
                           <div className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black bg-black flex items-center justify-center">
-                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-4 h-4 object-contain" />
+                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-4 h-4 object-contain tier-emblem-blend" />
                           </div>
                         </div>
                         <div className="flex flex-col min-w-0">
@@ -1722,343 +1852,354 @@ const PageContent = () => {
           )}
 
           {view === 'ENGINEER_PROFILE' && selectedEngineer && (
-            <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
-              {/* Dossier Header */}
-              <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-12 border-b border-white/5 pb-16">
-                <div className="flex flex-col items-center md:items-start gap-8">
-                  <div className="relative group">
-                    <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
-                    <img src={selectedEngineer.photoUrl} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-cover border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
-                    <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
-                      <img src={TIER_META[selectedEngineer.tier]?.img || TIER_META.Bronze.img} alt={selectedEngineer.tier} className="w-7 h-7 md:w-9 md:h-9 object-contain" />
+            <>
+              {/* 3D Rank Reveal Overlay */}
+              {showRankReveal && (
+                <RankReveal3D
+                  tier={selectedEngineer.tier}
+                  score={selectedEngineer.tcsScore}
+                  name={selectedEngineer.name}
+                  onDismiss={() => setShowRankReveal(false)}
+                />
+              )}
+              <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
+                {/* Dossier Header */}
+                <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-12 border-b border-white/5 pb-16">
+                  <div className="flex flex-col items-center md:items-start gap-8">
+                    <div className="relative group">
+                      <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
+                      <img src={selectedEngineer.photoUrl} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-cover border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
+                      <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
+                        <img src={TIER_META[selectedEngineer.tier]?.img || TIER_META.Bronze.img} alt={selectedEngineer.tier} className="w-7 h-7 md:w-9 md:h-9 object-contain tier-emblem-blend" />
+                      </div>
+                    </div>
+                    {/* Self-service photo update */}
+                    <button
+                      onClick={() => { setShowPhotoAuth(true); setPhotoAuthCode(''); setPhotoAuthStep('idle'); setSelfPhotoFile(null); }}
+                      className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-400 hover:border-blue-500/30 transition-all"
+                    >
+                      <Camera className="w-3 h-3" />
+                      Update My Photo
+                    </button>
+                    <div className="text-center md:text-left space-y-2">
+                      <div className="flex items-center justify-center md:justify-start gap-3">
+                        <div className="h-[1px] w-8 bg-blue-500" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.5em] text-blue-500">Personnel Dossier</span>
+                      </div>
+                      <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white uppercase italic">{selectedEngineer.name}</h2>
+                      <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.6em]">{selectedEngineer.code}</p>
                     </div>
                   </div>
-                  {/* Self-service photo update */}
-                  <button
-                    onClick={() => { setShowPhotoAuth(true); setPhotoAuthCode(''); setPhotoAuthStep('idle'); setSelfPhotoFile(null); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-400 hover:border-blue-500/30 transition-all"
-                  >
-                    <Camera className="w-3 h-3" />
-                    Update My Photo
-                  </button>
-                  <div className="text-center md:text-left space-y-2">
-                    <div className="flex items-center justify-center md:justify-start gap-3">
-                      <div className="h-[1px] w-8 bg-blue-500" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.5em] text-blue-500">Personnel Dossier</span>
+
+                  <div className="flex flex-col items-end gap-4">
+                    <div className="glass-card px-10 py-6 rounded-3xl flex flex-col items-end border-blue-500/20 shadow-2xl">
+                      <span className="text-6xl font-black text-white italic tracking-tighter">{selectedEngineer.tcsScore}</span>
+                      <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Aggregate Capability Index</span>
                     </div>
-                    <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white uppercase italic">{selectedEngineer.name}</h2>
-                    <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.6em]">{selectedEngineer.code}</p>
+                    <button
+                      onClick={() => setView('ENGINEER_LOOKUP')}
+                      className="flex items-center gap-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-white transition-all"
+                    >
+                      <ChevronRight className="w-4 h-4 rotate-180" /> Back to Registry
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-4">
-                  <div className="glass-card px-10 py-6 rounded-3xl flex flex-col items-end border-blue-500/20 shadow-2xl">
-                    <span className="text-6xl font-black text-white italic tracking-tighter">{selectedEngineer.tcsScore}</span>
-                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Aggregate Capability Index</span>
-                  </div>
-                  <button
-                    onClick={() => setView('ENGINEER_LOOKUP')}
-                    className="flex items-center gap-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-white transition-all"
-                  >
-                    <ChevronRight className="w-4 h-4 rotate-180" /> Back to Registry
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Period Selector ─────────────────────────────────── */}
-              {(() => {
-                // Build list of all monthly & quarterly periods for this engineer
-                // Deduplicate by month+year — keep highest score record per period
-                const allEngRecords = engineers
-                  .filter(e => e.code?.toUpperCase() === selectedEngineer.code?.toUpperCase())
-                  .sort((a, b) => {
+                {/* ── Period Selector ─────────────────────────────────── */}
+                {(() => {
+                  // Build list of all monthly & quarterly periods for this engineer
+                  // Deduplicate by month+year — keep highest score record per period
+                  const allEngRecords = engineers
+                    .filter(e => e.code?.toUpperCase() === selectedEngineer.code?.toUpperCase())
+                    .sort((a, b) => {
+                      const ya = parseInt(a.year), yb = parseInt(b.year);
+                      if (ya !== yb) return ya - yb; // oldest year first
+                      return getMonthIndex(a.month) - getMonthIndex(b.month); // Jan → Dec
+                    });
+                  // One record per month-year combo (keep highest TCS score)
+                  const dedupByMonth = {};
+                  allEngRecords.forEach(r => {
+                    const k = `${r.month?.toLowerCase()}-${r.year}`;
+                    if (!dedupByMonth[k] || r.tcsScore > dedupByMonth[k].tcsScore) dedupByMonth[k] = r;
+                  });
+                  const engRecords = Object.values(dedupByMonth).sort((a, b) => {
                     const ya = parseInt(a.year), yb = parseInt(b.year);
                     if (ya !== yb) return ya - yb; // oldest year first
                     return getMonthIndex(a.month) - getMonthIndex(b.month); // Jan → Dec
                   });
-                // One record per month-year combo (keep highest TCS score)
-                const dedupByMonth = {};
-                allEngRecords.forEach(r => {
-                  const k = `${r.month?.toLowerCase()}-${r.year}`;
-                  if (!dedupByMonth[k] || r.tcsScore > dedupByMonth[k].tcsScore) dedupByMonth[k] = r;
-                });
-                const engRecords = Object.values(dedupByMonth).sort((a, b) => {
-                  const ya = parseInt(a.year), yb = parseInt(b.year);
-                  if (ya !== yb) return ya - yb; // oldest year first
-                  return getMonthIndex(a.month) - getMonthIndex(b.month); // Jan → Dec
-                });
-                const monthPeriods = engRecords.map(r => ({ key: `${r.month}-${r.year}`, label: `${r.month} ${r.year}` }));
-                const quarterPeriods = [...new Map(
-                  engRecords
-                    .filter(r => getQuarter(r.month) !== null)
-                    .map(r => {
-                      const q = getQuarter(r.month);
-                      const qk = `${q}-${r.year}`;
-                      return [qk, { key: qk, label: `${q} · ${r.year}` }];
-                    })
-                ).values()];
+                  const monthPeriods = engRecords.map(r => ({ key: `${r.month}-${r.year}`, label: `${r.month} ${r.year}` }));
+                  const quarterPeriods = [...new Map(
+                    engRecords
+                      .filter(r => getQuarter(r.month) !== null)
+                      .map(r => {
+                        const q = getQuarter(r.month);
+                        const qk = `${q}-${r.year}`;
+                        return [qk, { key: qk, label: `${q} · ${r.year}` }];
+                      })
+                  ).values()];
 
 
-                // Effective display record
-                const effMonthKey = selectedProfileMonth || monthPeriods[0]?.key;
-                const [effM, effY] = (effMonthKey || '').split('-');
-                const effRecord = engRecords.find(
-                  r => r.month?.toLowerCase() === effM?.toLowerCase() && r.year === effY
-                ) || selectedEngineer;
+                  // Effective display record
+                  const effMonthKey = selectedProfileMonth || monthPeriods[0]?.key;
+                  const [effM, effY] = (effMonthKey || '').split('-');
+                  const effRecord = engRecords.find(
+                    r => r.month?.toLowerCase() === effM?.toLowerCase() && r.year === effY
+                  ) || selectedEngineer;
 
-                const effQKey = selectedProfileQuarter || quarterPeriods[0]?.key;
+                  const effQKey = selectedProfileQuarter || quarterPeriods[0]?.key;
 
-                // Quarterly average for this engineer in the selected quarter
-                const [effQ, effQY] = (effQKey || '').split('-');
-                const qRecords = engRecords.filter(
-                  r => getQuarter(r.month) === effQ && r.year === effQY
-                );
-                const qAvgScore = qRecords.length > 0
-                  ? parseFloat((qRecords.reduce((s, r) => s + r.tcsScore, 0) / qRecords.length).toFixed(1))
-                  : 0;
-                const qAvgDrnps = qRecords.length > 0
-                  ? parseFloat((qRecords.reduce((s, r) => s + calculateDRNPS(r.promoters, r.detractors), 0) / qRecords.length).toFixed(1))
-                  : 0;
-                const qAvgExam = qRecords.length > 0
-                  ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.examScore || 0), 0) / qRecords.length).toFixed(1))
-                  : 0;
+                  // Quarterly average for this engineer in the selected quarter
+                  const [effQ, effQY] = (effQKey || '').split('-');
+                  const qRecords = engRecords.filter(
+                    r => getQuarter(r.month) === effQ && r.year === effQY
+                  );
+                  const qAvgScore = qRecords.length > 0
+                    ? parseFloat((qRecords.reduce((s, r) => s + r.tcsScore, 0) / qRecords.length).toFixed(1))
+                    : 0;
+                  const qAvgDrnps = qRecords.length > 0
+                    ? parseFloat((qRecords.reduce((s, r) => s + calculateDRNPS(r.promoters, r.detractors), 0) / qRecords.length).toFixed(1))
+                    : 0;
+                  const qAvgExam = qRecords.length > 0
+                    ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.examScore || 0), 0) / qRecords.length).toFixed(1))
+                    : 0;
 
-                // The record whose data drives the performance bars
-                const dispRecord = profileViewMode === 'QUARTERLY' ? (qRecords[0] || selectedEngineer) : effRecord;
-                const dispScore = profileViewMode === 'QUARTERLY' ? qAvgScore : effRecord.tcsScore;
-                const dispDrnps = profileViewMode === 'QUARTERLY' ? qAvgDrnps : calculateDRNPS(effRecord.promoters, effRecord.detractors);
-                const dispExam = profileViewMode === 'QUARTERLY' ? qAvgExam : parseFloat(effRecord.examScore || 0);
+                  // The record whose data drives the performance bars
+                  const dispRecord = profileViewMode === 'QUARTERLY' ? (qRecords[0] || selectedEngineer) : effRecord;
+                  const dispScore = profileViewMode === 'QUARTERLY' ? qAvgScore : effRecord.tcsScore;
+                  const dispDrnps = profileViewMode === 'QUARTERLY' ? qAvgDrnps : calculateDRNPS(effRecord.promoters, effRecord.detractors);
+                  const dispExam = profileViewMode === 'QUARTERLY' ? qAvgExam : parseFloat(effRecord.examScore || 0);
 
-                // Weighted component pts
-                const kpiPts = parseFloat(((dispScore - Math.min(20, (dispExam / 100) * 20) - Math.min(30, (dispDrnps / 100) * 30))).toFixed(1));
-                const examPts = parseFloat(Math.min(20, (dispExam / 100) * 20).toFixed(1));
-                const drnpsPts = parseFloat(Math.min(30, (dispDrnps / 100) * 30).toFixed(1));
+                  // Weighted component pts
+                  const kpiPts = parseFloat(((dispScore - Math.min(20, (dispExam / 100) * 20) - Math.min(30, (dispDrnps / 100) * 30))).toFixed(1));
+                  const examPts = parseFloat(Math.min(20, (dispExam / 100) * 20).toFixed(1));
+                  const drnpsPts = parseFloat(Math.min(30, (dispDrnps / 100) * 30).toFixed(1));
 
-                return (
-                  <div className="space-y-8">
-                    {/* Period toggle */}
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="inline-flex bg-zinc-900 border border-white/10 rounded-2xl p-1 gap-1">
-                        {['MONTHLY', 'QUARTERLY'].map(mode => (
-                          <button
-                            key={mode}
-                            onClick={() => setProfileViewMode(mode)}
-                            className={`px-6 py-2(5) rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${profileViewMode === mode
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                              : 'text-zinc-500 hover:text-white'
-                              }`}
-                          >
-                            {mode === 'MONTHLY' ? '📅 Monthly' : '📊 Quarterly'}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Month or Quarter picker */}
-                      {profileViewMode === 'MONTHLY' ? (
-                        <div className="flex items-center gap-3 flex-wrap justify-center">
-                          {monthPeriods.map(p => (
+                  return (
+                    <div className="space-y-8">
+                      {/* Period toggle */}
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="inline-flex bg-zinc-900 border border-white/10 rounded-2xl p-1 gap-1">
+                          {['MONTHLY', 'QUARTERLY'].map(mode => (
                             <button
-                              key={p.key}
-                              onClick={() => {
-                                setSelectedProfileMonth(p.key);
-                                const [m, y] = p.key.split('-');
-                                const rec = engRecords.find(r => r.month?.toLowerCase() === m?.toLowerCase() && r.year === y);
-                                if (rec) setSelectedEngineer(rec);
-                              }}
-                              className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${p.key === effMonthKey
-                                ? 'bg-yellow-400/10 border-yellow-400/50 text-yellow-300'
-                                : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'
+                              key={mode}
+                              onClick={() => setProfileViewMode(mode)}
+                              className={`px-6 py-2(5) rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${profileViewMode === mode
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                : 'text-zinc-500 hover:text-white'
                                 }`}
                             >
-                              {p.label}
+                              {mode === 'MONTHLY' ? '📅 Monthly' : '📊 Quarterly'}
                             </button>
                           ))}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-3 flex-wrap justify-center">
-                          {quarterPeriods.map(p => (
-                            <button
-                              key={p.key}
-                              onClick={() => setSelectedProfileQuarter(p.key)}
-                              className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${p.key === effQKey
-                                ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
-                                : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'
-                                }`}
-                            >
-                              {p.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Score breakdown + TCS total */}
-                    <div className="glass-card rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center gap-8 border-blue-500/10">
-                      {/* Big TCS total */}
-                      <div className="flex flex-col items-center md:border-r border-white/5 md:pr-8 flex-shrink-0">
-                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                          {profileViewMode === 'QUARTERLY' ? `Avg TCS — ${effQKey?.replace('-', ' ')}` : `TCS Score — ${effMonthKey?.replace('-', ' ')}`}
-                        </span>
-                        <span className="text-6xl font-black text-white italic tracking-tighter">{dispScore}</span>
-                        <TierBadge tier={getTier(dispScore)} size="lg" />
-                      </div>
-
-                      {/* Three weighted components */}
-                      <div className="flex-1 grid grid-cols-3 gap-4 w-full">
-                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                          <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">KPIs</span>
-                          <span className="text-3xl font-black text-emerald-300 italic">{kpiPts > 0 ? kpiPts.toFixed(1) : '—'}</span>
-                        </div>
-                        <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                          <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest mb-1">DRNPS</span>
-                          <span className="text-3xl font-black text-purple-300 italic">{drnpsPts.toFixed(1)}</span>
-                        </div>
-                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                          <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Exam</span>
-                          <span className="text-3xl font-black text-blue-300 italic">{examPts.toFixed(1)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Capability Metrics Matrix */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                      <div className="glass-card rounded-[3rem] p-10 space-y-8 md:col-span-2">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-6">
-                          <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] flex items-center gap-3">
-                            <Activity className="w-4 h-4 text-blue-500" /> Performance Analysis
-                          </h3>
-                          <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest">
-                            Ref: CY-{dispRecord.year}/{dispRecord.month?.slice(0, 3).toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="space-y-10 py-4">
-                          {/* Primary metrics */}
-                          <div className="space-y-5">
-                            <p className="text-[8px] font-black text-blue-400 uppercase tracking-[0.4em]">Score Components</p>
-                            <MetricBar label="Exam Score" value={dispExam} max={100} suffix=" pts" target={90} />
-                            <MetricBar label="DRNPS" value={parseFloat(dispDrnps.toFixed(1))} max={100} suffix=" pts" target={80} />
+                        {/* Month or Quarter picker */}
+                        {profileViewMode === 'MONTHLY' ? (
+                          <div className="flex items-center gap-3 flex-wrap justify-center">
+                            {monthPeriods.map(p => (
+                              <button
+                                key={p.key}
+                                onClick={() => {
+                                  setSelectedProfileMonth(p.key);
+                                  const [m, y] = p.key.split('-');
+                                  const rec = engRecords.find(r => r.month?.toLowerCase() === m?.toLowerCase() && r.year === y);
+                                  if (rec) setSelectedEngineer(rec);
+                                }}
+                                className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${p.key === effMonthKey
+                                  ? 'bg-yellow-400/10 border-yellow-400/50 text-yellow-300'
+                                  : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'
+                                  }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
                           </div>
-
-                          {/* KPI metrics */}
-                          <div className="border-t border-white/5 pt-8 space-y-5">
-                            <p className="text-[8px] font-black text-yellow-400 uppercase tracking-[0.4em]">KPI Breakdown (50% of Total)</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
-                              <MetricBar label="Training Attendance" value={parseFloat(dispRecord.trainingAttendance || 0)} max={100} suffix="%" target={100} />
-                              <MetricBar label="OQC Pass Rate" value={parseFloat(dispRecord.oqcPassRate || 0)} max={100} suffix="%" target={85} />
-                              <MetricBar label="Maintenance Mode" value={parseFloat(dispRecord.maintenanceModeRatio || 0)} max={100} suffix="%" target={65} />
-                              <MetricBar label="REDO Ratio" value={parseFloat(dispRecord.redoRatio || 0)} max={3} suffix="%" target={0.7} inverse />
-                              <MetricBar label="IQC Skip Ratio" value={parseFloat(dispRecord.iqcSkipRatio || 0)} max={50} suffix="%" target={25} inverse />
-                              <MetricBar label="Core Parts PBA" value={parseFloat(dispRecord.corePartsPBA || 0)} max={80} suffix="%" target={30} inverse />
-                              <MetricBar label="Core Parts Octa" value={parseFloat(dispRecord.corePartsOcta || 0)} max={80} suffix="%" target={40} inverse />
-                              <MetricBar label="Multi Parts Ratio" value={parseFloat(dispRecord.multiPartsRatio || 0)} max={5} suffix="%" target={1} inverse />
-                            </div>
+                        ) : (
+                          <div className="flex items-center gap-3 flex-wrap justify-center">
+                            {quarterPeriods.map(p => (
+                              <button
+                                key={p.key}
+                                onClick={() => setSelectedProfileQuarter(p.key)}
+                                className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${p.key === effQKey
+                                  ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                                  : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'
+                                  }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
                           </div>
-                        </div>
-                      </div>
-
-
-                      <div className="space-y-8">
-                        {/* Global Rank Card */}
-                        <div className="bg-zinc-900 border border-white/5 rounded-[3rem] p-10 flex flex-col items-center text-center">
-                          <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mb-8 border border-blue-600/20">
-                            <Layers className="w-8 h-8" />
-                          </div>
-                          <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-4">Global Network Rank</h4>
-                          <span className="text-5xl font-black text-white italic tracking-tighter mb-2">#{sortedEngineers.findIndex(e => e.id === selectedEngineer.id) + 1}</span>
-                          <p className="text-zinc-600 text-[10px] font-medium uppercase tracking-widest">Top {Math.round(((sortedEngineers.findIndex(e => e.id === selectedEngineer.id) + 1) / engineers.length) * 100)}% of global talent</p>
-                        </div>
-
-                        {/* Audit Metadata + Tier */}
-                        <div className="glass-card rounded-[3rem] p-10">
-                          <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-10">Audit Metadata</h4>
-                          <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-zinc-600 uppercase">Cycle</span>
-                              <span className="text-xs font-black text-white uppercase">{selectedEngineer.month} {selectedEngineer.year}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-zinc-600 uppercase">Quarter</span>
-                              <span className="text-xs font-black text-yellow-400 uppercase">{getQuarter(selectedEngineer.month)} · {selectedEngineer.year}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-zinc-600 uppercase">Tier Status</span>
-                              <TierBadge tier={selectedEngineer.tier} size="sm" />
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-zinc-600 uppercase">Auth Code</span>
-                              <span className="text-[10px] font-mono text-zinc-400">TCS-{selectedEngineer.code}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* History Button */}
-                        {engineerHistory.length > 0 && (
-                          <button
-                            onClick={() => setView('ENGINEER_HISTORY')}
-                            className="w-full flex items-center justify-center gap-3 px-6 py-5 bg-zinc-900 border border-white/5 rounded-[2rem] text-[10px] font-black text-zinc-400 uppercase tracking-widest hover:bg-blue-600/10 hover:border-blue-500/30 hover:text-blue-400 transition-all"
-                          >
-                            <Clock className="w-4 h-4" /> View History ({engineerHistory.length} months)
-                          </button>
                         )}
                       </div>
+
+                      {/* Score breakdown + TCS total */}
+                      <div className="glass-card rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center gap-8 border-blue-500/10">
+                        {/* Big TCS total */}
+                        <div className="flex flex-col items-center md:border-r border-white/5 md:pr-8 flex-shrink-0">
+                          <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                            {profileViewMode === 'QUARTERLY' ? `Avg TCS — ${effQKey?.replace('-', ' ')}` : `TCS Score — ${effMonthKey?.replace('-', ' ')}`}
+                          </span>
+                          <span className="text-6xl font-black text-white italic tracking-tighter">{dispScore}</span>
+                          <TierBadge tier={getTier(dispScore)} size="lg" />
+                        </div>
+
+                        {/* Three weighted components */}
+                        <div className="flex-1 grid grid-cols-3 gap-4 w-full">
+                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">KPIs</span>
+                            <span className="text-3xl font-black text-emerald-300 italic">{kpiPts > 0 ? kpiPts.toFixed(1) : '—'}</span>
+                          </div>
+                          <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                            <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest mb-1">DRNPS</span>
+                            <span className="text-3xl font-black text-purple-300 italic">{drnpsPts.toFixed(1)}</span>
+                          </div>
+                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Exam</span>
+                            <span className="text-3xl font-black text-blue-300 italic">{examPts.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Capability Metrics Matrix */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="glass-card rounded-[3rem] p-10 space-y-8 md:col-span-2">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-6">
+                            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] flex items-center gap-3">
+                              <Activity className="w-4 h-4 text-blue-500" /> Performance Analysis
+                            </h3>
+                            <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest">
+                              Ref: CY-{dispRecord.year}/{dispRecord.month?.slice(0, 3).toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div className="space-y-10 py-4">
+                            {/* Primary metrics */}
+                            <div className="space-y-5">
+                              <p className="text-[8px] font-black text-blue-400 uppercase tracking-[0.4em]">Score Components</p>
+                              <MetricBar label="Exam Score" value={dispExam} max={100} suffix=" pts" target={90} />
+                              <MetricBar label="DRNPS" value={parseFloat(dispDrnps.toFixed(1))} max={100} suffix=" pts" target={80} />
+                            </div>
+
+                            {/* KPI metrics */}
+                            <div className="border-t border-white/5 pt-8 space-y-5">
+                              <p className="text-[8px] font-black text-yellow-400 uppercase tracking-[0.4em]">KPI Breakdown (50% of Total)</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
+                                <MetricBar label="Training Attendance" value={parseFloat(dispRecord.trainingAttendance || 0)} max={100} suffix="%" target={100} />
+                                <MetricBar label="OQC Pass Rate" value={parseFloat(dispRecord.oqcPassRate || 0)} max={100} suffix="%" target={85} />
+                                <MetricBar label="Maintenance Mode" value={parseFloat(dispRecord.maintenanceModeRatio || 0)} max={100} suffix="%" target={65} />
+                                <MetricBar label="REDO Ratio" value={parseFloat(dispRecord.redoRatio || 0)} max={3} suffix="%" target={0.7} inverse />
+                                <MetricBar label="IQC Skip Ratio" value={parseFloat(dispRecord.iqcSkipRatio || 0)} max={50} suffix="%" target={25} inverse />
+                                <MetricBar label="Core Parts PBA" value={parseFloat(dispRecord.corePartsPBA || 0)} max={80} suffix="%" target={30} inverse />
+                                <MetricBar label="Core Parts Octa" value={parseFloat(dispRecord.corePartsOcta || 0)} max={80} suffix="%" target={40} inverse />
+                                <MetricBar label="Multi Parts Ratio" value={parseFloat(dispRecord.multiPartsRatio || 0)} max={5} suffix="%" target={1} inverse />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+
+                        <div className="space-y-8">
+                          {/* Global Rank Card */}
+                          <div className="bg-zinc-900 border border-white/5 rounded-[3rem] p-10 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mb-8 border border-blue-600/20">
+                              <Layers className="w-8 h-8" />
+                            </div>
+                            <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-4">Global Network Rank</h4>
+                            <span className="text-5xl font-black text-white italic tracking-tighter mb-2">#{sortedEngineers.findIndex(e => e.id === selectedEngineer.id) + 1}</span>
+                            <p className="text-zinc-600 text-[10px] font-medium uppercase tracking-widest">Top {Math.round(((sortedEngineers.findIndex(e => e.id === selectedEngineer.id) + 1) / engineers.length) * 100)}% of global talent</p>
+                          </div>
+
+                          {/* Audit Metadata + Tier */}
+                          <div className="glass-card rounded-[3rem] p-10">
+                            <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-10">Audit Metadata</h4>
+                            <div className="space-y-6">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Cycle</span>
+                                <span className="text-xs font-black text-white uppercase">{selectedEngineer.month} {selectedEngineer.year}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Quarter</span>
+                                <span className="text-xs font-black text-yellow-400 uppercase">{getQuarter(selectedEngineer.month)} · {selectedEngineer.year}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Tier Status</span>
+                                <TierBadge tier={selectedEngineer.tier} size="sm" />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Auth Code</span>
+                                <span className="text-[10px] font-mono text-zinc-400">TCS-{selectedEngineer.code}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* History Button */}
+                          {engineerHistory.length > 0 && (
+                            <button
+                              onClick={() => setView('ENGINEER_HISTORY')}
+                              className="w-full flex items-center justify-center gap-3 px-6 py-5 bg-zinc-900 border border-white/5 rounded-[2rem] text-[10px] font-black text-zinc-400 uppercase tracking-widest hover:bg-blue-600/10 hover:border-blue-500/30 hover:text-blue-400 transition-all"
+                            >
+                              <Clock className="w-4 h-4" /> View History ({engineerHistory.length} months)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                  );
+                })()}
+
+
+
+                {/* Rankings Summary */}
+                {engineerSummaryRanks && (
+                  <div className="glass-card rounded-[3rem] p-10 space-y-6">
+                    <div className="flex items-center gap-3 border-b border-white/5 pb-6">
+                      <TrendingUp className="w-4 h-4 text-yellow-400" />
+                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Rankings Summary</h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Monthly Rank */}
+                      <div className="bg-zinc-900/60 rounded-[2rem] p-8 flex items-center gap-6 border border-white/5">
+                        <div className="flex-shrink-0 w-16 h-16 bg-blue-600/10 rounded-2xl border border-blue-500/20 flex items-center justify-center">
+                          <Calendar className="w-7 h-7 text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Monthly Rank — {engineerSummaryRanks.month} {engineerSummaryRanks.year}</p>
+                          <p className="text-3xl font-black text-white italic">
+                            #{engineerSummaryRanks.monthRank}
+                            <span className="text-sm text-zinc-600 ml-2 font-bold not-italic">of {engineerSummaryRanks.monthTotal}</span>
+                          </p>
+                          <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest mt-1">
+                            Top {engineerSummaryRanks.monthTotal > 0 ? Math.round((engineerSummaryRanks.monthRank / engineerSummaryRanks.monthTotal) * 100) : 0}% this month
+                          </p>
+                        </div>
+                      </div>
+                      {/* Quarterly Rank */}
+                      <div className="bg-zinc-900/60 rounded-[2rem] p-8 flex items-center gap-6 border border-white/5">
+                        <div className="flex-shrink-0 w-16 h-16 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 flex items-center justify-center">
+                          <TrendingUp className="w-7 h-7 text-yellow-400" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Quarterly Rank — {engineerSummaryRanks.quarter} {engineerSummaryRanks.year}</p>
+                          <p className="text-3xl font-black text-white italic">
+                            #{engineerSummaryRanks.qRank}
+                            <span className="text-sm text-zinc-600 ml-2 font-bold not-italic">of {engineerSummaryRanks.qTotal}</span>
+                          </p>
+                          <p className="text-[9px] text-yellow-400 font-black uppercase tracking-widest mt-1">
+                            Top {engineerSummaryRanks.qTotal > 0 ? Math.round((engineerSummaryRanks.qRank / engineerSummaryRanks.qTotal) * 100) : 0}% this quarter
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
 
-                );
-              })()}
-
-
-
-              {/* Rankings Summary */}
-              {engineerSummaryRanks && (
-                <div className="glass-card rounded-[3rem] p-10 space-y-6">
-                  <div className="flex items-center gap-3 border-b border-white/5 pb-6">
-                    <TrendingUp className="w-4 h-4 text-yellow-400" />
-                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Rankings Summary</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Monthly Rank */}
-                    <div className="bg-zinc-900/60 rounded-[2rem] p-8 flex items-center gap-6 border border-white/5">
-                      <div className="flex-shrink-0 w-16 h-16 bg-blue-600/10 rounded-2xl border border-blue-500/20 flex items-center justify-center">
-                        <Calendar className="w-7 h-7 text-blue-400" />
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Monthly Rank — {engineerSummaryRanks.month} {engineerSummaryRanks.year}</p>
-                        <p className="text-3xl font-black text-white italic">
-                          #{engineerSummaryRanks.monthRank}
-                          <span className="text-sm text-zinc-600 ml-2 font-bold not-italic">of {engineerSummaryRanks.monthTotal}</span>
-                        </p>
-                        <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest mt-1">
-                          Top {engineerSummaryRanks.monthTotal > 0 ? Math.round((engineerSummaryRanks.monthRank / engineerSummaryRanks.monthTotal) * 100) : 0}% this month
-                        </p>
-                      </div>
-                    </div>
-                    {/* Quarterly Rank */}
-                    <div className="bg-zinc-900/60 rounded-[2rem] p-8 flex items-center gap-6 border border-white/5">
-                      <div className="flex-shrink-0 w-16 h-16 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 flex items-center justify-center">
-                        <TrendingUp className="w-7 h-7 text-yellow-400" />
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Quarterly Rank — {engineerSummaryRanks.quarter} {engineerSummaryRanks.year}</p>
-                        <p className="text-3xl font-black text-white italic">
-                          #{engineerSummaryRanks.qRank}
-                          <span className="text-sm text-zinc-600 ml-2 font-bold not-italic">of {engineerSummaryRanks.qTotal}</span>
-                        </p>
-                        <p className="text-[9px] text-yellow-400 font-black uppercase tracking-widest mt-1">
-                          Top {engineerSummaryRanks.qTotal > 0 ? Math.round((engineerSummaryRanks.qRank / engineerSummaryRanks.qTotal) * 100) : 0}% this quarter
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                {/* Compliance Watermark */}
+                <div className="pt-12 text-center opacity-20 select-none pointer-events-none">
+                  <p className="text-[8px] font-black uppercase tracking-[1em] text-zinc-500">Official TCS Certification Document • Unauthorized reproduction prohibited</p>
                 </div>
-              )}
-
-              {/* Compliance Watermark */}
-              <div className="pt-12 text-center opacity-20 select-none pointer-events-none">
-                <p className="text-[8px] font-black uppercase tracking-[1em] text-zinc-500">Official TCS Certification Document • Unauthorized reproduction prohibited</p>
               </div>
-            </div>
+            </>
           )}
 
           {/* ─── ENGINEER HISTORY VIEW ──────────────────────────────────────────────── */}
