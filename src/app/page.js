@@ -731,8 +731,9 @@ const PageContent = () => {
 
 
   const handleSearch = () => {
-    if (!searchCode.trim()) {
-      message.warning("Please enter a code to verify.");
+    const trimmed = searchCode.trim();
+    if (!trimmed) {
+      message.warning("Please enter a code or name to verify.");
       return;
     }
 
@@ -741,17 +742,26 @@ const PageContent = () => {
       return;
     }
 
-    // Find all records matching this code - strip spaces completely for matching
-    const matchingRecords = engineers.filter(
-      e => String(e.code || '').replace(/\s+/g, '').toUpperCase() === searchCode.replace(/\s+/g, '').toUpperCase()
+    const cleanSearch = trimmed.replace(/\s+/g, '').toUpperCase();
+
+    // 1. Try exact code match (space/case insensitive)
+    let matchingRecords = engineers.filter(
+      e => String(e.code || '').replace(/\s+/g, '').toUpperCase() === cleanSearch
     );
 
+    // 2. If no code match, try name match
     if (matchingRecords.length === 0) {
-      message.error(`${appMode?.startsWith('PQA') ? 'Service Center' : 'Engineer'} Code "${searchCode}" not found.`);
+      matchingRecords = engineers.filter(
+        e => String(e.name || '').replace(/\s+/g, '').toUpperCase().includes(cleanSearch)
+      );
+    }
+
+    if (matchingRecords.length === 0) {
+      message.error(`${isPqaMode ? 'Service Center' : 'Engineer'} "${trimmed}" not found in current records.`);
       return;
     }
 
-    // Sort records newest first
+    // Sort matching records to get the newest one
     const sorted = [...matchingRecords].sort((a, b) => {
       const ya = parseInt(a.year) || 0, yb = parseInt(b.year) || 0;
       if (yb !== ya) return yb - ya;
@@ -760,15 +770,17 @@ const PageContent = () => {
 
     const newestRecord = sorted[0];
     setSelectedEngineer(newestRecord);
-    // Initialize the profile period selectors to the newest month
+    
+    // Setup period defaults for profile view
     setSelectedProfileMonth(`${newestRecord.month}-${newestRecord.year}`);
     setProfileViewMode('MONTHLY');
-    // Compute the newest quarter for this engineer as default
-    const newestQKey = `${getQuarter(newestRecord.month)}-${newestRecord.year}`;
-    setSelectedProfileQuarter(newestQKey);
-    // Trigger 3D rank reveal animation
-    setShowRankReveal(true);
+    const qKey = `${getQuarter(newestRecord.month)}-${newestRecord.year}`;
+    setSelectedProfileQuarter(qKey);
+    
+    // Execute transition
     setView('ENGINEER_PROFILE');
+    setShowRankReveal(true);
+    message.success(`Dossier found: ${newestRecord.name}`);
   };
 
   const handleAdminLogin = async () => {
@@ -1712,6 +1724,7 @@ const PageContent = () => {
                         type="text"
                         value={searchCode}
                         onChange={(e) => setSearchCode(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         placeholder="PROTO_XYZ_000"
                         className="w-full bg-black border border-white/5 rounded-3xl p-6 md:p-8 text-center text-2xl md:text-4xl font-black tracking-[0.2em] md:tracking-[0.4em] focus:border-blue-500 transition-all outline-none placeholder:text-zinc-900 text-white shadow-inner"
                       />
@@ -2333,22 +2346,30 @@ const PageContent = () => {
                         </div>
                         <div className="flex items-center gap-3">
                           {currentUser?.role === 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => {
-                                const newAccess = prompt(`Change access for ${admin.username}?\nOptions: TCS_ONLY, PQA_ONLY, ALL`, admin.access || 'TCS_ONLY');
-                                if (newAccess && ['TCS_ONLY', 'PQA_ONLY', 'ALL'].includes(newAccess.toUpperCase())) {
-                                  const updated = { ...admin, access: newAccess.toUpperCase() };
-                                  saveAdminToDb(updated).then(() => {
-                                    setAdmins(prev => prev.map(a => a.id === admin.id ? updated : a));
-                                    message.success("Authority Provisioned Successfully");
-                                  });
-                                }
-                              }}
-                              className="p-5 bg-zinc-800 text-zinc-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-xl"
-                              title="Edit Authority"
-                            >
-                              <Shield className="w-5 h-5" />
-                            </button>
+                            <div className="relative group/auth">
+                               <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center pointer-events-none border border-blue-500/20">
+                                 <Shield className="w-4 h-4 text-blue-500" />
+                               </div>
+                               <select
+                                 value={admin.access || 'TCS_ONLY'}
+                                 onChange={(e) => {
+                                   const newAccess = e.target.value;
+                                   const updated = { ...admin, access: newAccess };
+                                   saveAdminToDb(updated).then(() => {
+                                      setAdmins(prev => prev.map(a => a.id === admin.id ? updated : a));
+                                      message.success(`Access updated for ${admin.username}`);
+                                   });
+                                 }}
+                                 className="bg-zinc-900 text-zinc-300 text-[10px] font-black uppercase tracking-widest pl-14 pr-10 py-4 rounded-2xl border border-white/10 hover:border-blue-500/50 hover:bg-zinc-800 focus:ring-2 focus:ring-blue-500/30 transition-all appearance-none cursor-pointer shadow-lg min-w-[160px]"
+                               >
+                                 <option value="TCS_ONLY">TCS Only</option>
+                                 <option value="PQA_ONLY">PQA Only</option>
+                                 <option value="ALL">Full Authority</option>
+                               </select>
+                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                 <ChevronRight className="w-3 h-3 text-zinc-600 rotate-90" />
+                               </div>
+                            </div>
                           )}
                           {admin.id !== '1' && (
                             <button
