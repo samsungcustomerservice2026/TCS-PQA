@@ -338,6 +338,7 @@ const PageContent = () => {
   const { message, modal, notification } = App.useApp();
   const [view, setView] = useState('APP_SELECTION');
   const [appMode, setAppMode] = useState(null); // 'TCS' | 'PQA_MX' | 'PQA_CE'
+  const isPqaMode = appMode?.startsWith('PQA');
   const [engineers, setEngineers] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [currentUser, setCurrentUser] = useState(() => {
