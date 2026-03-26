@@ -728,20 +728,33 @@ const PageContent = () => {
 
 
   const handleSearch = () => {
-    // Find all records matching this code
-    const matchingRecords = engineers.filter(
-      e => e.code.trim().toUpperCase() === searchCode.trim().toUpperCase()
-    );
-    if (matchingRecords.length === 0) {
-      message.error("Engineer Code not found.");
+    if (!searchCode.trim()) {
+      message.warning("Please enter a code to verify.");
       return;
     }
+
+    if (engineers.length === 0) {
+      message.error(`No data loaded for ${appMode}. Please check admin portal.`);
+      return;
+    }
+
+    // Find all records matching this code
+    const matchingRecords = engineers.filter(
+      e => String(e.code || '').trim().toUpperCase() === searchCode.trim().toUpperCase()
+    );
+
+    if (matchingRecords.length === 0) {
+      message.error(`${appMode?.startsWith('PQA') ? 'Service Center' : 'Engineer'} Code "${searchCode}" not found.`);
+      return;
+    }
+
     // Sort records newest first
     const sorted = [...matchingRecords].sort((a, b) => {
-      const ya = parseInt(a.year), yb = parseInt(b.year);
+      const ya = parseInt(a.year) || 0, yb = parseInt(b.year) || 0;
       if (yb !== ya) return yb - ya;
-      return getMonthIndex(b.month) - getMonthIndex(a.month);
+      return (getMonthIndex(b.month) || 0) - (getMonthIndex(a.month) || 0);
     });
+
     const newestRecord = sorted[0];
     setSelectedEngineer(newestRecord);
     // Initialize the profile period selectors to the newest month
@@ -1094,9 +1107,10 @@ const PageContent = () => {
 
   const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
+    if (!file) return;
+
     // Reset the input so re-uploading the same file retriggers onChange
     e.target.value = '';
-    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -1106,103 +1120,153 @@ const PageContent = () => {
       const isPqaMode = appMode === 'PQA_MX' || appMode === 'PQA_CE';
       const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
 
-      // Pick the first sheet always for the parsing
+      // Pick the first sheet
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-      const uploadedRecords = rows.slice(1).filter(row => row.length > 0).map((row, index) => {
-        let eng;
+      let uploadedRecords = [];
+
+      // --- Detect Format ---
+      // We check if row 2 (index 1) has month headers like "Jan-26" or "Feb-26"
+      const headerRow2 = rows[1] || [];
+      const hasHorizontalMonths = headerRow2.some(cell => String(cell).includes('-2'));
+
+      if (isPqaMode && hasHorizontalMonths) {
+        // --- HORIZONTAL PQA FORMAT PARSER ---
+        const dataStartRow = 4; // Data usually starts at row 5 (index 4)
         
-        if (isPqaMode) {
-          eng = {
-            id: '',
-            region: String(row[0] || "Unknown"),
-            code: String(row[1] || `TEMP-${index}`).toUpperCase(),
-            name: String(row[2] || "Unknown"),
-            photoUrl: String(row[3] || "https://picsum.photos/200"),
-            partnerName: String(row[4] || "N/A"),
-            month: String(row[5] || "Active Month"),
-            year: String(row[6] || new Date().getFullYear().toString()),
-            ltp: parseFloat(row[7]) || 0,
-            exLtp: parseFloat(row[8]) || 0,
-            redo: parseFloat(row[9]) || 0,
-            ssr: parseFloat(row[10]) || 0,
-            dRnps: parseFloat(row[11]) || 0,
-            ofs: parseFloat(row[12]) || 0,
-            rCxe: parseFloat(row[13]) || 0,
-            sdr: parseFloat(row[14]) || 0,
-            audit: parseFloat(row[15]) || 0,
-            pr: parseFloat(row[16]) || 0,
-          };
-          eng.tcsScore = calculatePQAScore(eng);
-        } else {
-          eng = {
-            id: '',
-            name: String(row[0] || "Unknown"),
-            code: String(row[1] || `TEMP-${index}`).toUpperCase(),
-            photoUrl: String(row[2] || "https://picsum.photos/200"),
-            asc: String(row[3] || "N/A"),
-            partnerName: String(row[4] || "N/A"),
-            month: String(row[5] || "Active Month"),
-            year: String(row[6] || new Date().getFullYear().toString()),
-            redoRatio: parseFloat(row[7]) || 0,
-            iqcSkipRatio: parseFloat(row[8]) || 0,
-            maintenanceModeRatio: parseFloat(row[9]) || 0,
-            oqcPassRate: parseFloat(row[10]) || 0,
-            trainingAttendance: parseFloat(row[11]) || 0,
-            corePartsPBA: parseFloat(row[12]) || 0,
-            corePartsOcta: parseFloat(row[13]) || 0,
-            multiPartsRatio: parseFloat(row[14]) || 0,
-            examScore: parseFloat(row[15]) || 0,
-            promoters: parseFloat(row[16]) || 0,
-            detractors: parseFloat(row[17]) || 0,
-          };
-          eng.tcsScore = calculateTCS(eng);
+        for (let i = dataStartRow; i < rows.length; i++) {
+          const row = rows[i];
+          const region = String(row[0] || '').trim();
+          const pCode = String(row[2] || '').trim(); // ASC Code is index 2
+          const pName = String(row[3] || '').trim(); // ASC Name is index 3
+          
+          if (!pCode || pCode.toLowerCase() === 'asc code') continue;
+
+          // Scan Row 2 for month blocks
+          for (let j = 0; j < headerRow2.length; j++) {
+            const cellVal = String(headerRow2[j]);
+            if (cellVal.includes('-2')) {
+              // Found a month header (e.g., "Jan-26")
+              const [mName, yShort] = cellVal.split('-');
+              const year = yShort?.length === 2 ? `20${yShort}` : (yShort || new Date().getFullYear().toString());
+
+              // Metrics are in 10 consecutive columns starting at j
+              const ltp = parseFloat(row[j]) || 0;
+              const exLtp = parseFloat(row[j+1]) || 0;
+              const redo = parseFloat(row[j+2]) || 0;
+              const ssr = parseFloat(row[j+3]) || 0;
+              const drnps = parseFloat(row[j+4]) || 0;
+              const ofs = parseFloat(row[j+5]) || 0;
+              const rcxe = parseFloat(row[j+6]) || 0;
+              const sdr = parseFloat(row[j+7]) || 0;
+              const audit = parseFloat(row[j+8]) || 0;
+              const pr = parseFloat(row[j+9]) || 0;
+
+              // If any metric exists, create record
+              if (ltp !== 0 || redo !== 0 || drnps !== 0 || ofs !== 0) {
+                const pqaRecord = {
+                  id: '',
+                  region,
+                  code: pCode.toUpperCase(),
+                  name: pName,
+                  photoUrl: "https://picsum.photos/200",
+                  partnerName: "N/A",
+                  month: mName,
+                  year: year,
+                  ltp, exLtp, redo, ssr, dRnps: drnps, ofs, rCxe: rcxe, sdr, audit, pr
+                };
+                pqaRecord.tcsScore = calculatePQAScore(pqaRecord);
+                pqaRecord.tier = getTier(pqaRecord.tcsScore);
+                uploadedRecords.push(pqaRecord);
+              }
+            }
+          }
         }
-        
-        eng.tier = getTier(eng.tcsScore);
-        return eng;
-      });
-
-      if (uploadedRecords.length === 0) return;
-
-      // ── Duplicate month check ──────────────────────────────────────────────
-      const duplicates = uploadedRecords.filter(rec =>
-        engineers.some(e =>
-          e.code?.toUpperCase() === rec.code?.toUpperCase() &&
-          e.month?.toLowerCase() === rec.month?.toLowerCase() &&
-          e.year === rec.year
-        )
-      );
-
-      if (duplicates.length > 0) {
-        const names = duplicates.map(d => `${d.name} (${d.month} ${d.year})`).join('\n');
-        const proceed = window.confirm(
-          `⚠️ The following records already exist for that month:\n\n${names}\n\nClick OK to UPDATE existing records, or Cancel to abort the upload.`
-        );
-        if (!proceed) return;
-
-        // For each duplicate, carry over the existing id so we overwrite it
-        duplicates.forEach(rec => {
-          const existing = engineers.find(e =>
-            e.code?.toUpperCase() === rec.code?.toUpperCase() &&
-            e.month?.toLowerCase() === rec.month?.toLowerCase() &&
-            e.year === rec.year
-          );
-          if (existing) rec.id = existing.id;
+      } else {
+        // --- STANDARD VERTICAL FORMAT PARSER ---
+        uploadedRecords = rows.slice(1).filter(row => row.length > 0).map((row, index) => {
+          let eng;
+          if (isPqaMode) {
+            eng = {
+              id: '',
+              region: String(row[0] || "Unknown"),
+              code: String(row[1] || `TEMP-${index}`).trim().toUpperCase(),
+              name: String(row[2] || "Unknown"),
+              photoUrl: String(row[3] || "https://picsum.photos/200"),
+              partnerName: String(row[4] || "N/A"),
+              month: String(row[5] || "Active Month"),
+              year: String(row[6] || new Date().getFullYear().toString()),
+              ltp: parseFloat(row[7]) || 0,
+              exLtp: parseFloat(row[8]) || 0,
+              redo: parseFloat(row[9]) || 0,
+              ssr: parseFloat(row[10]) || 0,
+              dRnps: parseFloat(row[11]) || 0,
+              ofs: parseFloat(row[12]) || 0,
+              rCxe: parseFloat(row[13]) || 0,
+              sdr: parseFloat(row[14]) || 0,
+              audit: parseFloat(row[15]) || 0,
+              pr: parseFloat(row[16]) || 0,
+            };
+            eng.tcsScore = calculatePQAScore(eng);
+          } else {
+            eng = {
+              id: '',
+              name: String(row[0] || "Unknown"),
+              code: String(row[1] || `TEMP-${index}`).trim().toUpperCase(),
+              photoUrl: String(row[2] || "https://picsum.photos/200"),
+              asc: String(row[3] || "N/A"),
+              partnerName: String(row[4] || "N/A"),
+              month: String(row[5] || "Active Month"),
+              year: String(row[6] || new Date().getFullYear().toString()),
+              redoRatio: parseFloat(row[7]) || 0,
+              iqcSkipRatio: parseFloat(row[8]) || 0,
+              maintenanceModeRatio: parseFloat(row[9]) || 0,
+              oqcPassRate: parseFloat(row[10]) || 0,
+              trainingAttendance: parseFloat(row[11]) || 0,
+              corePartsPBA: parseFloat(row[12]) || 0,
+              corePartsOcta: parseFloat(row[13]) || 0,
+              multiPartsRatio: parseFloat(row[14]) || 0,
+              examScore: parseFloat(row[15]) || 0,
+              promoters: parseFloat(row[16]) || 0,
+              detractors: parseFloat(row[17]) || 0,
+            };
+            eng.tcsScore = calculateTCS(eng);
+          }
+          eng.tier = getTier(eng.tcsScore);
+          return eng;
         });
       }
 
+      if (uploadedRecords.length === 0) {
+        message.warning("No valid data found in the Excel sheet.");
+        return;
+      }
+
+      // --- Overwrite Logic ---
+      const finalUploadSet = [];
+      uploadedRecords.forEach(rec => {
+        const existing = engineers.find(e =>
+          e.code?.toUpperCase() === rec.code?.toUpperCase() &&
+          e.month?.toLowerCase() === rec.month?.toLowerCase() &&
+          e.year === rec.year
+        );
+        if (existing) {
+          finalUploadSet.push({ ...rec, id: existing.id });
+        } else {
+          finalUploadSet.push(rec);
+        }
+      });
+
       // ── Bulk Save ────────────────────────────────────────────────────────
       try {
-        const promises = uploadedRecords.map(async (rec) => {
+        const promises = finalUploadSet.map(async (rec) => {
           const savedId = await saveEngineerToDb(rec, colName);
           return { ...rec, id: savedId || rec.id };
         });
         const savedRecords = await Promise.all(promises);
 
-        // Merge into local state: replace by id if exists, else push new
         setEngineers(prev => {
           const next = [...prev];
           savedRecords.forEach(rec => {
@@ -1213,7 +1277,8 @@ const PageContent = () => {
           return next;
         });
 
-        message.success(`Success: ${uploadedRecords.length} records processed and saved.`);
+        message.success(`Success: ${savedRecords.length} records processed and saved to ${appMode}.`);
+        writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: `Excel Bulk Import (${appMode})`, details: { count: savedRecords.length }, severity: 'info' });
       } catch (error) {
         console.error("Error uploading Excel data:", error);
         message.error("Error saving Excel data to database.");
