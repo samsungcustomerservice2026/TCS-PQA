@@ -89,6 +89,22 @@ export const calculateTCS = (eng) => {
     return Number(finalScore.toFixed(1));
 };
 
+export const calculatePQAScore = (pqa) => {
+    const n = (v) => parseFloat(v) || 0;
+    
+    const baseScore = n(pqa.ltp) + n(pqa.exLtp) + n(pqa.redo) + n(pqa.ssr) + 
+                      n(pqa.dRnps) + n(pqa.ofs) + n(pqa.rCxe) + n(pqa.sdr);
+    
+    // Deductions: ensure they are subtracted
+    let auditScore = n(pqa.audit);
+    if (auditScore > 0) auditScore = -auditScore;
+    let prScore = n(pqa.pr);
+    if (prScore > 0) prScore = -prScore;
+    
+    const finalScore = baseScore + auditScore + prScore;
+    return Number(Math.max(0, Math.min(100, finalScore)).toFixed(1));
+};
+
 export const getTier = (score) => {
     if (score >= 95) return 'Masters';
     if (score >= 90) return 'Diamond';

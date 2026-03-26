@@ -40,7 +40,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-import { INITIAL_ENGINEERS, calculateTCS, calculateDRNPS, getTier, getTierColor } from '../constants';
+import { INITIAL_ENGINEERS, calculateTCS, calculateDRNPS, getTier, getTierColor, calculatePQAScore } from '../constants';
+import * as XLSX from 'xlsx';
 import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb } from '../services/firestoreService';
 
 import { uploadPhoto } from '../services/storageService';
@@ -313,7 +314,8 @@ const MetricBar = ({ label, value, max = 100, suffix = "", target = null, color 
 
 const PageContent = () => {
   const { message, modal, notification } = App.useApp();
-  const [view, setView] = useState('HOME');
+  const [view, setView] = useState('APP_SELECTION');
+  const [appMode, setAppMode] = useState(null); // 'TCS' | 'PQA_MX' | 'PQA_CE'
   const [engineers, setEngineers] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [currentUser, setCurrentUser] = useState(() => {
@@ -336,7 +338,7 @@ const PageContent = () => {
   const [noEngineers, setNoEngineers] = useState(false);
   const [editingEng, setEditingEng] = useState(null);
   const [showAddAdmin, setShowAddAdmin] = useState(false);
-  const [newAdminData, setNewAdminData] = useState({ username: '', password: '', name: '' });
+  const [newAdminData, setNewAdminData] = useState({ username: '', password: '', name: '', role: 'ADMIN', access: 'TCS_ONLY' });
   const [fetchedHiddenEngineers, setFetchedHiddenEngineers] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef(null);
@@ -466,8 +468,15 @@ const PageContent = () => {
     };
   }, []);
 
-  // Initial Load
+  // Initial/Mode Load
   useEffect(() => {
+    if (!appMode && view === 'APP_SELECTION') {
+      setIsLoading(false);
+      return;
+    }
+
+    const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
+
     const fetchData = async () => {
       setIsLoading(true);
       setFetchError(null);
@@ -477,12 +486,13 @@ const PageContent = () => {
         passwordB64: 'QWhsYXd5QDE5MDc=', // Ahlawy@1907
         name: 'Fawzy M.',
         role: 'SUPER_ADMIN',
+        access: 'ALL',
         createdAt: new Date().toISOString()
       };
 
       try {
-        const fetchedEngineers = await getEngineers();
-        const fetchedHiddenEngineers = await getHiddenEngineers();
+        const fetchedEngineers = await getEngineers(colName);
+        const fetchedHiddenEngineers = await getHiddenEngineers(colName);
         const fetchedAdmins = await getAdmins();
 
         // Data Handling
@@ -521,7 +531,7 @@ const PageContent = () => {
     };
 
     fetchData();
-  }, []);
+  }, [appMode, view]);
 
   const sortedEngineers = useMemo(() => {
     return [...engineers].sort((a, b) => b.tcsScore - a.tcsScore);
@@ -741,6 +751,11 @@ const PageContent = () => {
     );
 
     if (foundAdmin) {
+      if (foundAdmin.username === 'fawzy.m' || foundAdmin.username === 'g.samir') {
+        foundAdmin.role = 'SUPER_ADMIN';
+        foundAdmin.access = 'ALL';
+      }
+      
       setCurrentUser(foundAdmin);
       setLoginUser('');
       setLoginPass('');
@@ -883,7 +898,8 @@ const PageContent = () => {
       // Generate a temporary ID if still missing
       if (!finalEng.id) finalEng.id = Date.now().toString();
 
-      const savedId = await saveEngineerToDb(finalEng);
+      const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
+      const savedId = await saveEngineerToDb(finalEng, colName);
       const savedFinalId = savedId || finalEng.id;
 
       setEngineers(prev => {
@@ -922,14 +938,15 @@ const PageContent = () => {
       username: newAdminData.username,
       passwordB64: window.btoa(newAdminData.password),
       name: newAdminData.name,
-      role: 'ADMIN',
+      role: newAdminData.role || 'ADMIN',
+      access: newAdminData.access || 'TCS_ONLY',
       createdAt: new Date().toISOString()
     };
 
     try {
       await saveAdminToDb(newAdmin);
       setAdmins(prev => [...prev, newAdmin]);
-      setNewAdminData({ username: '', password: '', name: '' });
+      setNewAdminData({ username: '', password: '', name: '', role: 'ADMIN', access: 'TCS_ONLY' });
       setShowAddAdmin(false);
       message.success("New admin added successfully");
       writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: 'Added new admin', details: { username: newAdmin.username, name: newAdmin.name }, severity: 'info' });
@@ -974,7 +991,8 @@ const PageContent = () => {
       okType: 'danger',
       onOk: async () => {
         try {
-          await archiveEngineer(id);
+          const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
+          await archiveEngineer(id, colName);
           const archivedEng = engineers.find(e => e.id === id);
           setEngineers(prev => prev.filter(e => e.id !== id));
           if (archivedEng) {
@@ -997,7 +1015,8 @@ const PageContent = () => {
       content: 'Are you sure you want to restore this engineer?',
       onOk: async () => {
         try {
-          await saveEngineerToDb({ id, hidden: false });
+          const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
+          await saveEngineerToDb({ id, hidden: false }, colName);
           const restoredEng = fetchedHiddenEngineers.find(e => e.id === id);
           setFetchedHiddenEngineers(prev => prev.filter(e => e.id !== id));
           if (restoredEng) {
@@ -1014,24 +1033,45 @@ const PageContent = () => {
     });
   };
 
-  const downloadCSVTemplate = () => {
-    const headers = [
-      "Name", "Code", "PhotoURL", "ASC", "PartnerName", "Month", "Year",
-      "RedoRatio", "IQCSkipRatio", "MaintenanceModeRatio", "OQCPassRate",
-      "TrainingAttendance", "CorePartsPBA", "CorePartsOcta", "MultiPartsRatio",
-      "ExamScore", "Promoters", "Detractors"
-    ];
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",");
-    const encodedUri = encodeURI(csvContent);
+  const downloadExcelTemplate = () => {
+    const isPqaMode = appMode === 'PQA_MX' || appMode === 'PQA_CE';
+    
+    const wb = XLSX.utils.book_new();
+
+    if (isPqaMode) {
+      const pqaHeaders = [
+        ["Region", "ASCCode", "ASCName", "PhotoURL", "PartnerName", "Month", "Year", "LTP", "EX-LTP", "REDO", "SSR", "D-RNPS", "OFS", "R-CXE", "SDR", "Audit", "PR"]
+      ];
+      const ws1 = XLSX.utils.aoa_to_sheet(pqaHeaders);
+      XLSX.utils.book_append_sheet(wb, ws1, "★Evaluation point");
+
+      const avgHeaders = [
+        ["ASC Code", "ASC name", "Average Score by month", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      ];
+      const ws2 = XLSX.utils.aoa_to_sheet(avgHeaders);
+      XLSX.utils.book_append_sheet(wb, ws2, "★Monthly Average");
+      
+    } else {
+      const tcsHeaders = [
+        ["Name", "Code", "PhotoURL", "ASC", "PartnerName", "Month", "Year", "RedoRatio", "IQCSkipRatio", "MaintenanceModeRatio", "OQCPassRate", "TrainingAttendance", "CorePartsPBA", "CorePartsOcta", "MultiPartsRatio", "ExamScore", "Promoters", "Detractors"]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(tcsHeaders);
+      XLSX.utils.book_append_sheet(wb, ws, "TCS Scores");
+    }
+
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    const url = window.URL.createObjectURL(data);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "TCS_Score_Template_2026.csv");
+    link.href = url;
+    link.download = isPqaMode ? `PQA_Score_Template_${appMode}_2026.xlsx` : "TCS_Score_Template_2026.xlsx";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
-  const handleCSVUpload = async (e) => {
+  const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
     // Reset the input so re-uploading the same file retriggers onChange
     e.target.value = '';
@@ -1039,32 +1079,67 @@ const PageContent = () => {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const text = event.target?.result;
-      const rows = text.split("\n").filter(row => row.trim() !== "");
-      const uploadedRecords = rows.slice(1).map((row, index) => {
-        const cols = row.split(",").map(c => c.trim());
-        const eng = {
-          id: '',
-          name: cols[0] || "Unknown",
-          code: cols[1]?.toUpperCase() || `TEMP-${index}`,
-          photoUrl: cols[2] || "https://picsum.photos/200",
-          asc: cols[3] || "N/A",
-          partnerName: cols[4] || "N/A",
-          month: cols[5] || "Active Month",
-          year: cols[6] || new Date().getFullYear().toString(),
-          redoRatio: parseFloat(cols[7]) || 0,
-          iqcSkipRatio: parseFloat(cols[8]) || 0,
-          maintenanceModeRatio: parseFloat(cols[9]) || 0,
-          oqcPassRate: parseFloat(cols[10]) || 0,
-          trainingAttendance: parseFloat(cols[11]) || 0,
-          corePartsPBA: parseFloat(cols[12]) || 0,
-          corePartsOcta: parseFloat(cols[13]) || 0,
-          multiPartsRatio: parseFloat(cols[14]) || 0,
-          examScore: parseFloat(cols[15]) || 0,
-          promoters: parseFloat(cols[16]) || 0,
-          detractors: parseFloat(cols[17]) || 0,
-        };
-        eng.tcsScore = calculateTCS(eng);
+      const data = event.target?.result;
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      const isPqaMode = appMode === 'PQA_MX' || appMode === 'PQA_CE';
+      const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
+
+      // Pick the first sheet always for the parsing
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      const uploadedRecords = rows.slice(1).filter(row => row.length > 0).map((row, index) => {
+        let eng;
+        
+        if (isPqaMode) {
+          eng = {
+            id: '',
+            region: String(row[0] || "Unknown"),
+            code: String(row[1] || `TEMP-${index}`).toUpperCase(),
+            name: String(row[2] || "Unknown"),
+            photoUrl: String(row[3] || "https://picsum.photos/200"),
+            partnerName: String(row[4] || "N/A"),
+            month: String(row[5] || "Active Month"),
+            year: String(row[6] || new Date().getFullYear().toString()),
+            ltp: parseFloat(row[7]) || 0,
+            exLtp: parseFloat(row[8]) || 0,
+            redo: parseFloat(row[9]) || 0,
+            ssr: parseFloat(row[10]) || 0,
+            dRnps: parseFloat(row[11]) || 0,
+            ofs: parseFloat(row[12]) || 0,
+            rCxe: parseFloat(row[13]) || 0,
+            sdr: parseFloat(row[14]) || 0,
+            audit: parseFloat(row[15]) || 0,
+            pr: parseFloat(row[16]) || 0,
+          };
+          eng.tcsScore = calculatePQAScore(eng);
+        } else {
+          eng = {
+            id: '',
+            name: String(row[0] || "Unknown"),
+            code: String(row[1] || `TEMP-${index}`).toUpperCase(),
+            photoUrl: String(row[2] || "https://picsum.photos/200"),
+            asc: String(row[3] || "N/A"),
+            partnerName: String(row[4] || "N/A"),
+            month: String(row[5] || "Active Month"),
+            year: String(row[6] || new Date().getFullYear().toString()),
+            redoRatio: parseFloat(row[7]) || 0,
+            iqcSkipRatio: parseFloat(row[8]) || 0,
+            maintenanceModeRatio: parseFloat(row[9]) || 0,
+            oqcPassRate: parseFloat(row[10]) || 0,
+            trainingAttendance: parseFloat(row[11]) || 0,
+            corePartsPBA: parseFloat(row[12]) || 0,
+            corePartsOcta: parseFloat(row[13]) || 0,
+            multiPartsRatio: parseFloat(row[14]) || 0,
+            examScore: parseFloat(row[15]) || 0,
+            promoters: parseFloat(row[16]) || 0,
+            detractors: parseFloat(row[17]) || 0,
+          };
+          eng.tcsScore = calculateTCS(eng);
+        }
+        
         eng.tier = getTier(eng.tcsScore);
         return eng;
       });
@@ -1101,7 +1176,7 @@ const PageContent = () => {
       // ── Bulk Save ────────────────────────────────────────────────────────
       try {
         const promises = uploadedRecords.map(async (rec) => {
-          const savedId = await saveEngineerToDb(rec);
+          const savedId = await saveEngineerToDb(rec, colName);
           return { ...rec, id: savedId || rec.id };
         });
         const savedRecords = await Promise.all(promises);
@@ -1119,11 +1194,11 @@ const PageContent = () => {
 
         message.success(`Success: ${uploadedRecords.length} records processed and saved.`);
       } catch (error) {
-        console.error("Error uploading CSV data:", error);
-        message.error("Error saving CSV data to database.");
+        console.error("Error uploading Excel data:", error);
+        message.error("Error saving Excel data to database.");
       }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
 
@@ -1157,6 +1232,112 @@ const PageContent = () => {
 
         {/* Animated page content wrapper — key changes on view to trigger re-animation */}
         <div key={view} className="animate-in fade-in slide-in-from-bottom-3 duration-500 ease-out">
+
+          {view === 'APP_SELECTION' && (
+            <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-12 animate-in fade-in zoom-in duration-700 ease-out">
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full mb-4">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                  </span>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400">System Gateway</p>
+                </div>
+                <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic">
+                  Select <span className="text-blue-600">Portal</span>
+                </h2>
+                <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest max-w-md mx-auto">Choose your destination environment to proceed with operations.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
+                {/* Engineer Portal */}
+                <button
+                  onClick={() => { setAppMode('TCS'); setView('HOME'); }}
+                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-24 h-24 rounded-[2rem] bg-blue-500/10 flex items-center justify-center border border-blue-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                    <Users className="w-10 h-10 text-blue-400" />
+                  </div>
+                  <div className="text-center space-y-2 relative z-10">
+                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">( Engineers )</p>
+                  </div>
+                </button>
+
+                {/* Service Center Portal */}
+                <button
+                  onClick={() => setView('PQA_DIVISION_SELECTION')}
+                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-24 h-24 rounded-[2rem] bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_30px_rgba(234,179,8,0.3)]">
+                    <ShieldCheck className="w-10 h-10 text-yellow-400" />
+                  </div>
+                  <div className="text-center space-y-2 relative z-10">
+                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-yellow-400 transition-colors">PQA Portal</h3>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">( Service Center )</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {view === 'PQA_DIVISION_SELECTION' && (
+            <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-12 animate-in fade-in zoom-in duration-700 ease-out">
+              <button
+                onClick={() => setView('APP_SELECTION')}
+                className="absolute top-28 left-8 md:left-24 flex items-center gap-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-white transition-all bg-white/5 px-8 py-4 rounded-full border border-white/10"
+              >
+                <ChevronLeft className="w-4 h-4" /> Back to Gateway
+              </button>
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full mb-4">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                  </span>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400">PQA Environment</p>
+                </div>
+                <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic">
+                  Select <span className="text-yellow-500">Division</span>
+                </h2>
+                <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest max-w-md mx-auto">Choose your division cluster.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
+                {/* MX Division */}
+                <button
+                  onClick={() => { setAppMode('PQA_MX'); setView('HOME'); }}
+                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-24 h-24 rounded-[2rem] bg-purple-500/10 flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+                    <Layers className="w-10 h-10 text-purple-400" />
+                  </div>
+                  <div className="text-center space-y-2 relative z-10">
+                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-purple-400 transition-colors">MX Division</h3>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Mobile Experience</p>
+                  </div>
+                </button>
+
+                {/* CE Division */}
+                <button
+                  onClick={() => { setAppMode('PQA_CE'); setView('HOME'); }}
+                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-emerald-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-24 h-24 rounded-[2rem] bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                    <Activity className="w-10 h-10 text-emerald-400" />
+                  </div>
+                  <div className="text-center space-y-2 relative z-10">
+                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-emerald-400 transition-colors">CE Division</h3>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Consumer Electronics</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
 
           {view === 'HOME' && (
             <div className="space-y-16 animate-in fade-in slide-in-from-bottom-12 duration-1000 ease-out">
@@ -1494,6 +1675,34 @@ const PageContent = () => {
 
           {view === 'ADMIN_DASHBOARD' && currentUser && (
             <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700">
+              {/* Admin Environment Controller */}
+              <div className="flex flex-col md:flex-row items-center justify-center gap-4 bg-zinc-900 border border-white/10 rounded-3xl p-3 mb-8 w-fit mx-auto shadow-2xl">
+                <button 
+                  onClick={() => setAppMode('TCS')}
+                  disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'TCS_ONLY' && currentUser.access !== 'ALL'}
+                  className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 ${appMode === 'TCS' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-zinc-500 hover:text-white'}`}
+                >
+                  <Users className="w-4 h-4" />
+                  TCS Workspace
+                </button>
+                <div className="w-[1px] h-8 bg-white/10 hidden md:block" />
+                <button 
+                  onClick={() => setAppMode('PQA_MX')}
+                  disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'PQA_ONLY' && currentUser.access !== 'ALL'}
+                  className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 ${appMode === 'PQA_MX' ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)]' : 'text-zinc-500 hover:text-white'}`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  PQA MX Division
+                </button>
+                <button 
+                  onClick={() => setAppMode('PQA_CE')}
+                  disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'PQA_ONLY' && currentUser.access !== 'ALL'}
+                  className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 ${appMode === 'PQA_CE' ? 'bg-emerald-600 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-zinc-500 hover:text-white'}`}
+                >
+                  <Activity className="w-4 h-4" />
+                  PQA CE Division
+                </button>
+              </div>
               {/* Dashboard Header — compact */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
                 <div className="space-y-1">
@@ -1541,17 +1750,17 @@ const PageContent = () => {
                 {/* Bulk Upload */}
                 <label className="flex flex-col items-center gap-2 cursor-pointer bg-blue-600/10 border border-blue-500/20 text-blue-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-blue-600/20 transition-all">
                   <Upload className="w-5 h-5" />
-                  Bulk Upload
-                  <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
+                  Bulk Upload Excel
+                  <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleExcelUpload} />
                 </label>
 
                 {/* Download Template */}
                 <button
-                  onClick={downloadCSVTemplate}
+                  onClick={downloadExcelTemplate}
                   className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
                 >
                   <Download className="w-5 h-5" />
-                  CSV Template
+                  Excel Template
                 </button>
 
                 {/* Seed Database (Conditional) */}
@@ -1898,6 +2107,35 @@ const PageContent = () => {
                           onChange={e => setNewAdminData({ ...newAdminData, password: e.target.value })}
                         />
                       </div>
+                      
+                      {currentUser?.role === 'SUPER_ADMIN' && (
+                        <>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">System Role</label>
+                            <select
+                              value={newAdminData.role}
+                              onChange={e => setNewAdminData({ ...newAdminData, role: e.target.value })}
+                              className="w-full bg-black border border-white/5 rounded-2xl p-5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-green-600 text-white appearance-none"
+                            >
+                              <option value="ADMIN">Standard Operator</option>
+                              <option value="SUPER_ADMIN">Super Admin Root</option>
+                            </select>
+                          </div>
+  
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Access Clearance</label>
+                            <select
+                              value={newAdminData.access}
+                              onChange={e => setNewAdminData({ ...newAdminData, access: e.target.value })}
+                              className="w-full bg-black border border-white/5 rounded-2xl p-5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-green-600 text-white appearance-none"
+                            >
+                              <option value="TCS_ONLY">TCS Environment Only</option>
+                              <option value="PQA_ONLY">PQA Environments Only</option>
+                              <option value="ALL">Global Access (All)</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
                       <button
                         onClick={handleAddAdmin}
                         className="w-full bg-green-600 text-white py-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] hover:bg-green-500 transition-all shadow-2xl shadow-green-900/40 mt-6"
@@ -1924,7 +2162,8 @@ const PageContent = () => {
                           <div className="flex flex-col">
                             <div className="flex items-center gap-3">
                               <span className="text-xl font-black text-white uppercase tracking-tighter">{admin.name}</span>
-                              {admin.role === 'SUPER_ADMIN' && <span className="text-[8px] bg-blue-600/10 text-blue-500 px-3 py-1 rounded-full border border-blue-600/20 font-black tracking-widest uppercase">System Root</span>}
+                              {admin.role === 'SUPER_ADMIN' && <span className="text-[8px] bg-blue-600/10 text-blue-500 px-3 py-1 rounded-full border border-blue-600/20 font-black tracking-widest uppercase">Root</span>}
+                              {admin.role === 'ADMIN' && <span className="text-[8px] bg-emerald-600/10 text-emerald-500 px-3 py-1 rounded-full border border-emerald-600/20 font-black tracking-widest uppercase">{admin.access?.replace('_', ' ') || 'TCS ONLY'}</span>}
                             </div>
                             <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mt-1">@ACCESS_ID: {admin.username}</span>
                           </div>
@@ -2859,6 +3098,7 @@ const PageContent = () => {
       </main>
 
       {/* Floating Feedback Button */}
+      {view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
       <button
         onClick={() => { setShowFeedbackModal(true); setFeedbackSent(false); setFeedbackText(''); setFeedbackCode(''); setFeedbackRating(0); }}
         className="fixed bottom-28 right-5 z-50 w-12 h-12 bg-purple-600 hover:bg-purple-500 rounded-2xl shadow-2xl shadow-purple-900/60 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
@@ -2866,6 +3106,7 @@ const PageContent = () => {
       >
         <MessageSquare className="w-5 h-5 text-white" />
       </button>
+      )}
 
       {/* Feedback Modal */}
       {showFeedbackModal && (
@@ -3031,6 +3272,7 @@ const PageContent = () => {
       )
       }
 
+      {view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-4 px-6 flex justify-around items-center shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
         {/* Dashboard */}
         <button onClick={() => setView('HOME')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'HOME' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
@@ -3050,6 +3292,7 @@ const PageContent = () => {
           <span className="text-[8px] font-black uppercase tracking-tight">Secure</span>
         </button>
       </nav>
+      )}
 
     </div >
   );

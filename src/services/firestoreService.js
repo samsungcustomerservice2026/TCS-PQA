@@ -5,8 +5,8 @@ const ENGINEERS_COLLECTION = 'engineers';
 const ADMINS_COLLECTION = 'admins';
 
 // Engineers
-export const getEngineers = async () => {
-    const snapshot = await getDocs(collection(db, ENGINEERS_COLLECTION));
+export const getEngineers = async (collectionName = ENGINEERS_COLLECTION) => {
+    const snapshot = await getDocs(collection(db, collectionName));
     // Filter out soft-deleted items (where hidden === true)
     // We do this in JS to handle legacy docs that might not have the 'hidden' field at all.
     return snapshot.docs
@@ -14,8 +14,8 @@ export const getEngineers = async () => {
         .filter(eng => !eng.hidden);
 };
 
-export const getHiddenEngineers = async () => {
-    const snapshot = await getDocs(collection(db, ENGINEERS_COLLECTION));
+export const getHiddenEngineers = async (collectionName = ENGINEERS_COLLECTION) => {
+    const snapshot = await getDocs(collection(db, collectionName));
     // Filter out soft-deleted items (where hidden === true)
     // We do this in JS to handle legacy docs that might not have the 'hidden' field at all.
     return snapshot.docs
@@ -23,10 +23,10 @@ export const getHiddenEngineers = async () => {
         .filter(eng => eng.hidden);
 };
 
-export const saveEngineer = async (engineer) => {
+export const saveEngineer = async (engineer, collectionName = ENGINEERS_COLLECTION) => {
     if (engineer.id && engineer.id.length > 15) { // Firestore IDs are typically 20 chars. Date.now() is 13.
         try {
-            const docRef = doc(db, ENGINEERS_COLLECTION, engineer.id);
+            const docRef = doc(db, collectionName, engineer.id);
             await setDoc(docRef, engineer, { merge: true });
             return engineer.id;
         } catch (e) {
@@ -35,14 +35,14 @@ export const saveEngineer = async (engineer) => {
         }
     } else {
         // Create new
-        const docRef = await addDoc(collection(db, ENGINEERS_COLLECTION), engineer);
+        const docRef = await addDoc(collection(db, collectionName), engineer);
         return docRef.id;
     }
 };
 
-export const archiveEngineer = async (id) => {
+export const archiveEngineer = async (id, collectionName = ENGINEERS_COLLECTION) => {
     // Call the API route for soft delete
-    const response = await fetch(`/api/engineers/${id}`, {
+    const response = await fetch(`/api/engineers/${id}?col=${collectionName}`, {
         method: 'DELETE',
     });
     if (!response.ok) {
