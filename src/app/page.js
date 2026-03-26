@@ -740,9 +740,9 @@ const PageContent = () => {
       return;
     }
 
-    // Find all records matching this code
+    // Find all records matching this code - strip spaces completely for matching
     const matchingRecords = engineers.filter(
-      e => String(e.code || '').trim().toUpperCase() === searchCode.trim().toUpperCase()
+      e => String(e.code || '').replace(/\s+/g, '').toUpperCase() === searchCode.replace(/\s+/g, '').toUpperCase()
     );
 
     if (matchingRecords.length === 0) {
@@ -1125,7 +1125,7 @@ const PageContent = () => {
       // Pick the first sheet
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
       let uploadedRecords = [];
 
@@ -1926,6 +1926,29 @@ const PageContent = () => {
                   <Activity className="w-5 h-5" />
                   Actions Log
                 </button>
+
+                {/* Clear Division Data */}
+                {currentUser?.role === 'SUPER_ADMIN' && (
+                   <button
+                   onClick={async () => {
+                     if (window.confirm(`⚠️ ATTENTION: This will PERMANENTLY DELETE ALL records in the ${appMode} database. Continue?`)) {
+                       // We'll iterate and delete (simplest for firestoreService without new functions)
+                        try {
+                          const promises = engineers.map(e => archiveEngineer(e.id, colName)); // Using archive for safety
+                          await Promise.all(promises);
+                          setEngineers([]);
+                          message.success(`${appMode} database cleared.`);
+                        } catch (err) {
+                          message.error("Failed to clear database.");
+                        }
+                     }
+                   }}
+                   className="flex flex-col items-center gap-2 bg-red-600/10 border border-red-500/20 text-red-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-red-600/20 transition-all font-bold"
+                 >
+                   <Trash2 className="w-5 h-5" />
+                   Clear {appMode} Data
+                 </button>
+                )}
               </div>
 
               {/* Analytics Panel */}
