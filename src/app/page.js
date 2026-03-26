@@ -1127,32 +1127,61 @@ const PageContent = () => {
 
       let uploadedRecords = [];
 
-      // --- Detect Format ---
-      // We check if row 2 (index 1) has month headers like "Jan-26" or "Feb-26"
-      const headerRow2 = rows[1] || [];
-      const hasHorizontalMonths = headerRow2.some(cell => String(cell).includes('-2'));
+      // --- 1. Dynamic Header Detection ---
+      let regionCol = -1;
+      let codeCol = -1;
+      let nameCol = -1;
+      let monthRow = -1;
+      let metricRow = -1;
 
-      if (isPqaMode && hasHorizontalMonths) {
+      // Scan first 10 rows for critical keywords
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const row = rows[i] || [];
+        for (let j = 0; j < row.length; j++) {
+          const val = String(row[j] || '').toLowerCase().trim();
+          if (val === 'region') regionCol = j;
+          if (val === 'asc code' || val === 'code' || (val.includes('code') && val.includes('asc'))) codeCol = j;
+          if (val === 'asc name' || val === 'name' || (val.includes('name') && val.includes('asc'))) nameCol = j;
+          if (val === 'ltp' || val === 'evaluation item') metricRow = i;
+          if (val.includes('-2') || val.includes('-20')) monthRow = i;
+        }
+      }
+
+      // Fallbacks for standard formats if detection fails
+      if (codeCol === -1) codeCol = 1; 
+      if (nameCol === -1) nameCol = 2;
+      if (regionCol === -1) regionCol = 0;
+
+      const isHorizontal = isPqaMode && monthRow !== -1;
+
+      if (isHorizontal) {
         // --- HORIZONTAL PQA FORMAT PARSER ---
-        const dataStartRow = 4; // Data usually starts at row 5 (index 4)
+        const monthHeaderRow = rows[monthRow] || [];
+        // Data usually starts 1-2 rows after the metric row or month row
+        const dataStartRow = Math.max(monthRow, metricRow) + 1;
         
         for (let i = dataStartRow; i < rows.length; i++) {
           const row = rows[i];
-          const region = String(row[0] || '').trim();
-          const pCode = String(row[2] || '').trim(); // ASC Code is index 2
-          const pName = String(row[3] || '').trim(); // ASC Name is index 3
+          if (!row || !row[codeCol]) continue;
           
-          if (!pCode || pCode.toLowerCase() === 'asc code') continue;
+          const region = String(row[regionCol] || '').trim();
+          const pCode = String(row[codeCol]).trim();
+          const pName = String(row[nameCol] || pCode).trim();
+          
+          // Skip header repetitions
+          if (!pCode || pCode.toLowerCase().includes('code')) continue;
 
-          // Scan Row 2 for month blocks
-          for (let j = 0; j < headerRow2.length; j++) {
-            const cellVal = String(headerRow2[j]);
-            if (cellVal.includes('-2')) {
-              // Found a month header (e.g., "Jan-26")
-              const [mName, yShort] = cellVal.split('-');
-              const year = yShort?.length === 2 ? `20${yShort}` : (yShort || new Date().getFullYear().toString());
+          // Scan the monthHeaderRow for month blocks (e.g., "Jan-26")
+          for (let j = 0; j < monthHeaderRow.length; j++) {
+            const cellVal = String(monthHeaderRow[j]);
+            if (cellVal.includes('-2') || cellVal.includes('-20')) {
+              // Extract month/year
+              const parts = cellVal.split('-');
+              const mName = parts[0].trim();
+              let year = parts[1]?.trim() || new Date().getFullYear().toString();
+              if (year.length === 2) year = `20${year}`;
 
-              // Metrics are in 10 consecutive columns starting at j
+              // Metrics usually reside in 10-column chunks starting from this J
               const ltp = parseFloat(row[j]) || 0;
               const exLtp = parseFloat(row[j+1]) || 0;
               const redo = parseFloat(row[j+2]) || 0;
@@ -1164,8 +1193,8 @@ const PageContent = () => {
               const audit = parseFloat(row[j+8]) || 0;
               const pr = parseFloat(row[j+9]) || 0;
 
-              // If any metric exists, create record
-              if (ltp !== 0 || redo !== 0 || drnps !== 0 || ofs !== 0) {
+              // Only import if there's actual data
+              if (ltp !== 0 || redo !== 0 || drnps !== 0 || ofs !== 0 || ssr !== 0) {
                 const pqaRecord = {
                   id: '',
                   region,
@@ -1186,14 +1215,15 @@ const PageContent = () => {
         }
       } else {
         // --- STANDARD VERTICAL FORMAT PARSER ---
-        uploadedRecords = rows.slice(1).filter(row => row.length > 0).map((row, index) => {
+        const rowsToParse = rows.slice(metricRow !== -1 ? metricRow + 1 : 1);
+        uploadedRecords = rowsToParse.filter(r => r && r[codeCol]).map((row, index) => {
           let eng;
           if (isPqaMode) {
             eng = {
               id: '',
-              region: String(row[0] || "Unknown"),
-              code: String(row[1] || `TEMP-${index}`).trim().toUpperCase(),
-              name: String(row[2] || "Unknown"),
+              region: String(row[regionCol] || "Unknown"),
+              code: String(row[codeCol]).trim().toUpperCase(),
+              name: String(row[nameCol] || "Unknown"),
               photoUrl: String(row[3] || "https://picsum.photos/200"),
               partnerName: String(row[4] || "N/A"),
               month: String(row[5] || "Active Month"),
@@ -1214,7 +1244,7 @@ const PageContent = () => {
             eng = {
               id: '',
               name: String(row[0] || "Unknown"),
-              code: String(row[1] || `TEMP-${index}`).trim().toUpperCase(),
+              code: String(row[1]).trim().toUpperCase(),
               photoUrl: String(row[2] || "https://picsum.photos/200"),
               asc: String(row[3] || "N/A"),
               partnerName: String(row[4] || "N/A"),
@@ -1240,7 +1270,7 @@ const PageContent = () => {
       }
 
       if (uploadedRecords.length === 0) {
-        message.warning("No valid data found in the Excel sheet.");
+        message.warning("No valid data found in the Excel sheet. Check headers (Region, ASC Code, ASC Name).");
         return;
       }
 
