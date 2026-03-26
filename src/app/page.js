@@ -3097,7 +3097,7 @@ const PageContent = () => {
                     { label: 'LTP (Life-Time Perf)', pts: '10 pts', desc: 'Accumulated performance score focusing on long-term repair stability.' },
                     { label: 'Ex-LTP (Excessive LTP)', pts: '10 pts', desc: 'Tracking and reducing excessive repair times to maintain productivity.' },
                     { label: 'REDO Rate', pts: '10 pts', desc: 'Service quality indicator measuring devices that returned within the warranty period.' },
-                    { label: 'SSR (Same Symptom REDO)', pts: '20 pts', desc: 'Specific tracking for devices returning with identical symptoms within 30 days.' },
+                    { label: 'SSR (Same Symptom REDO)', pts: '20 pts', desc: 'Specific tracking for devices returning with identical symptoms within 90 days.' },
                     { label: 'D-RNPS', pts: '20 pts', desc: 'Retail Net Promoter Score for the service center, evaluating customer satisfaction.' },
                     { label: 'OFS Ordering Accuracy', pts: '10 pts', desc: 'Ordering Field Score: Warehouse accuracy and precision in ordering spare parts.' },
                     { label: 'R-CXE Experience', pts: '10 pts', desc: 'Customer Experience quality measured through environment and staff interaction.' },
