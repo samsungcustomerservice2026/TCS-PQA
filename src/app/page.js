@@ -357,6 +357,22 @@ const PageContent = () => {
 
   const [selectedEngineer, setSelectedEngineer] = useState(null);
   const [searchCode, setSearchCode] = useState('');
+  const [pqaDefaultUrl, setPqaDefaultUrl] = useState(PQA_SERVICE_CENTER_PHOTO);
+
+  useEffect(() => {
+    // Dynamically fetch the real download URL (with token) for the PQA Service Center photo
+    const getPqaPhoto = async () => {
+      try {
+        const { ref, getDownloadURL } = await import('firebase/storage');
+        const { storage } = await import('../firebase');
+        const pqaRef = ref(storage, 'PQA/Service centers.png');
+        const url = await getDownloadURL(pqaRef);
+        if (url) setPqaDefaultUrl(url);
+      } catch (e) { console.warn("PQA photo fetch failed, using fallback path.", e); }
+    };
+    getPqaPhoto();
+  }, []);
+
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
 
@@ -454,9 +470,9 @@ const PageContent = () => {
     if (!eng) return 'https://picsum.photos/200';
     const isPqa = appMode?.startsWith('PQA');
     if (isPqa) {
-      // If it's a placeholder or a default picsum, use the Service Center photo
-      if (!eng.photoUrl || eng.photoUrl.includes('picsum') || eng.photoUrl.includes('default')) {
-        return PQA_SERVICE_CENTER_PHOTO;
+      // If it's a placeholder or a default picsum, use the Service Center photo (dynamic URL with token)
+      if (!eng.photoUrl || eng.photoUrl.includes('picsum') || eng.photoUrl.includes('default') || eng.photoUrl === PQA_SERVICE_CENTER_PHOTO) {
+        return pqaDefaultUrl || PQA_SERVICE_CENTER_PHOTO;
       }
     }
     return eng.photoUrl || 'https://picsum.photos/200';
@@ -898,7 +914,8 @@ const PageContent = () => {
     const hide = message.loading("Saving engineer data...", 0);
 
     try {
-      const newScore = calculateTCS(updated);
+      const isPqa = appMode?.startsWith('PQA');
+      const newScore = isPqa ? calculatePQAScore(updated) : calculateTCS(updated);
       const newTier = getTier(newScore);
 
       let finalPhotoUrl = updated.photoUrl;
@@ -2610,20 +2627,43 @@ const PageContent = () => {
                           <TierBadge tier={getTier(dispScore)} size="lg" />
                         </div>
 
-                        {/* Three weighted components */}
+                        {/* Three weighted components / PQA Components */}
                         <div className="flex-1 grid grid-cols-3 gap-4 w-full">
-                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">KPIs</span>
-                            <span className="text-3xl font-black text-emerald-300 italic">{kpiPts > 0 ? kpiPts.toFixed(1) : '—'}</span>
-                          </div>
-                          <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                            <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest mb-1">DRNPS</span>
-                            <span className="text-3xl font-black text-purple-300 italic">{drnpsPts.toFixed(1)}</span>
-                          </div>
-                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Exam</span>
-                            <span className="text-3xl font-black text-blue-300 italic">{examPts.toFixed(1)}</span>
-                          </div>
+                          {!isPqaMode ? (
+                            <>
+                              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">KPIs</span>
+                                <span className="text-3xl font-black text-emerald-300 italic">{kpiPts > 0 ? kpiPts.toFixed(1) : '—'}</span>
+                              </div>
+                              <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                                <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest mb-1">DRNPS</span>
+                                <span className="text-3xl font-black text-purple-300 italic">{drnpsPts.toFixed(1)}</span>
+                              </div>
+                              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Exam</span>
+                                <span className="text-3xl font-black text-blue-300 italic">{examPts.toFixed(1)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Base Pts</span>
+                                <span className="text-3xl font-black text-emerald-300 italic">
+                                  {(parseFloat(dispRecord.ltp || 0) + parseFloat(dispRecord.exLtp || 0) + parseFloat(dispRecord.redo || 0) + 
+                                    parseFloat(dispRecord.ssr || 0) + parseFloat(dispRecord.dRnps || 0) + parseFloat(dispRecord.ofs || 0) + 
+                                    parseFloat(dispRecord.rCxe || 0) + parseFloat(dispRecord.sdr || 0)).toFixed(1)}
+                                </span>
+                              </div>
+                              <div className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                                <span className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1">Audit</span>
+                                <span className="text-3xl font-black text-rose-300 italic">{Math.abs(dispRecord.audit || 0).toFixed(1)}</span>
+                              </div>
+                              <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
+                                <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest mb-1">PR/Penalty</span>
+                                <span className="text-3xl font-black text-orange-300 italic">{Math.abs(dispRecord.pr || 0).toFixed(1)}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -3353,63 +3393,120 @@ const PageContent = () => {
                     <div className="bg-zinc-900/30 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-white/5 space-y-10 glass-card">
                       <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] border-b border-white/5 pb-6">Performance Matrix Allocation</h3>
 
-                      {/* ── Exam & DRNPS ── */}
-                      <div>
-                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Exam &amp; DRNPS</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">Exam Score (%) <span className="text-zinc-600 normal-case">target ≥ 90</span></label>
-                            <input type="number" step="0.1" min="0" max="100" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.examScore} onChange={e => setEditingEng({ ...editingEng, examScore: e.target.value })} />
+                      {!appMode?.startsWith('PQA') ? (
+                        <>
+                          {/* ── TCS Mode: Exam & DRNPS ── */}
+                          <div>
+                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Exam &amp; DRNPS</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">Exam Score (%) <span className="text-zinc-600 normal-case">target ≥ 90</span></label>
+                                <input type="number" step="0.1" min="0" max="100" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.examScore} onChange={e => setEditingEng({ ...editingEng, examScore: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-1">Promoters <span className="text-zinc-600 normal-case">count</span></label>
+                                <input type="number" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-purple-500 transition-all outline-none" value={editingEng.promoters} onChange={e => setEditingEng({ ...editingEng, promoters: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-1">Detractors <span className="text-zinc-600 normal-case">count</span></label>
+                                <input type="number" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-purple-500 transition-all outline-none" value={editingEng.detractors} onChange={e => setEditingEng({ ...editingEng, detractors: e.target.value })} />
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-1">Promoters <span className="text-zinc-600 normal-case">count</span></label>
-                            <input type="number" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-purple-500 transition-all outline-none" value={editingEng.promoters} onChange={e => setEditingEng({ ...editingEng, promoters: e.target.value })} />
-                          </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-1">Detractors <span className="text-zinc-600 normal-case">count</span></label>
-                            <input type="number" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-purple-500 transition-all outline-none" value={editingEng.detractors} onChange={e => setEditingEng({ ...editingEng, detractors: e.target.value })} />
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* ── KPI Inputs ── */}
-                      <div className="border-t border-white/5 pt-8">
-                        <p className="text-[9px] font-black text-green-500 uppercase tracking-[0.4em] mb-6">KPI Metrics</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">REDO Ratio (%) <span className="text-zinc-600 normal-case">target ≤ 0.7 · 30 pts</span></label>
-                            <input type="number" step="0.01" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.redoRatio} onChange={e => setEditingEng({ ...editingEng, redoRatio: e.target.value })} />
+                          {/* ── TCS Mode: KPI Inputs ── */}
+                          <div className="border-t border-white/5 pt-8">
+                            <p className="text-[9px] font-black text-green-500 uppercase tracking-[0.4em] mb-6">KPI Metrics</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">REDO Ratio (%) <span className="text-zinc-600 normal-case">target ≤ 0.7 · 30 pts</span></label>
+                                <input type="number" step="0.01" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.redoRatio} onChange={e => setEditingEng({ ...editingEng, redoRatio: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest ml-1">IQC Skip Ratio (%) <span className="text-zinc-600 normal-case">target ≤ 25 · 15 pts</span></label>
+                                <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-orange-500 transition-all outline-none" value={editingEng.iqcSkipRatio} onChange={e => setEditingEng({ ...editingEng, iqcSkipRatio: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-yellow-400 uppercase tracking-widest ml-1">Maintenance Mode (%) <span className="text-zinc-600 normal-case">target ≥ 65 · 10 pts</span></label>
+                                <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-yellow-500 transition-all outline-none" value={editingEng.maintenanceModeRatio} onChange={e => setEditingEng({ ...editingEng, maintenanceModeRatio: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-teal-400 uppercase tracking-widest ml-1">OQC Pass Rate (%) <span className="text-zinc-600 normal-case">target ≥ 85 · 15 pts</span></label>
+                                <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-teal-500 transition-all outline-none" value={editingEng.oqcPassRate} onChange={e => setEditingEng({ ...editingEng, oqcPassRate: e.target.value })} />
+                              </div>
+                              <div className="space-y-3 md:col-span-2">
+                                <label className="text-[10px] font-black text-green-400 uppercase tracking-widest ml-1">Training Attendance (%) <span className="text-zinc-600 normal-case">target = 100 · 10 pts</span></label>
+                                <input type="number" step="0.1" min="0" max="100" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-green-500 transition-all outline-none" value={editingEng.trainingAttendance} onChange={e => setEditingEng({ ...editingEng, trainingAttendance: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">Core Parts PBA (%) <span className="text-zinc-600 normal-case">target ≤ 30 · 5 pts</span></label>
+                                <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.corePartsPBA} onChange={e => setEditingEng({ ...editingEng, corePartsPBA: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">Core Parts Octa (%) <span className="text-zinc-600 normal-case">target ≤ 40 · 5 pts</span></label>
+                                <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.corePartsOcta} onChange={e => setEditingEng({ ...editingEng, corePartsOcta: e.target.value })} />
+                              </div>
+                              <div className="space-y-3 md:col-span-2">
+                                <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest ml-1">Multi Parts Ratio (%) <span className="text-zinc-600 normal-case">target ≤ 1 · 10 pts</span></label>
+                                <input type="number" step="0.01" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-orange-500 transition-all outline-none" value={editingEng.multiPartsRatio} onChange={e => setEditingEng({ ...editingEng, multiPartsRatio: e.target.value })} />
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest ml-1">IQC Skip Ratio (%) <span className="text-zinc-600 normal-case">target ≤ 25 · 15 pts</span></label>
-                            <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-orange-500 transition-all outline-none" value={editingEng.iqcSkipRatio} onChange={e => setEditingEng({ ...editingEng, iqcSkipRatio: e.target.value })} />
+                        </>
+                      ) : (
+                        <>
+                          {/* ── PQA Mode: Operations Metrics ── */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">LTP Score <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.ltp} onChange={e => setEditingEng({ ...editingEng, ltp: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">EX-LTP Score <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.exLtp} onChange={e => setEditingEng({ ...editingEng, exLtp: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest ml-1">SDR (Same Day Repair) <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-emerald-500 transition-all outline-none" value={editingEng.sdr} onChange={e => setEditingEng({ ...editingEng, sdr: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-1">D-RNPS <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-purple-500 transition-all outline-none" value={editingEng.dRnps} onChange={e => setEditingEng({ ...editingEng, dRnps: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">REDO Score <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.redo} onChange={e => setEditingEng({ ...editingEng, redo: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-red-500 uppercase tracking-widest ml-1">SSR (90 Day Redo) <span className="text-zinc-600 normal-case">max 20 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="20" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-600 transition-all outline-none" value={editingEng.ssr} onChange={e => setEditingEng({ ...editingEng, ssr: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-teal-400 uppercase tracking-widest ml-1">OFS (Parts Accuracy) <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-teal-500 transition-all outline-none" value={editingEng.ofs} onChange={e => setEditingEng({ ...editingEng, ofs: e.target.value })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">R-CXE Score <span className="text-zinc-600 normal-case">max 10 pts</span></label>
+                              <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-zinc-500 transition-all outline-none" value={editingEng.rCxe} onChange={e => setEditingEng({ ...editingEng, rCxe: e.target.value })} />
+                            </div>
+
+                            {/* ── PQA Mode: Deductions ── */}
+                            <div className="border-t border-white/5 pt-8 md:col-span-2 space-y-6">
+                               <p className="text-[9px] font-black text-red-500 uppercase tracking-[0.4em]">Negative Deductions</p>
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                  <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest ml-1">Audit Penalty <span className="text-zinc-600 normal-case">subtracted</span></label>
+                                    <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/20 rounded-2xl p-5 text-sm font-bold text-white focus:border-rose-600 transition-all outline-none" value={Math.abs(editingEng.audit || 0)} onChange={e => setEditingEng({ ...editingEng, audit: e.target.value })} />
+                                  </div>
+                                  <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest ml-1">PR Penalty <span className="text-zinc-600 normal-case">subtracted</span></label>
+                                    <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/20 rounded-2xl p-5 text-sm font-bold text-white focus:border-rose-600 transition-all outline-none" value={Math.abs(editingEng.pr || 0)} onChange={e => setEditingEng({ ...editingEng, pr: e.target.value })} />
+                                  </div>
+                               </div>
+                            </div>
                           </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-yellow-400 uppercase tracking-widest ml-1">Maintenance Mode (%) <span className="text-zinc-600 normal-case">target ≥ 65 · 10 pts</span></label>
-                            <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-yellow-500 transition-all outline-none" value={editingEng.maintenanceModeRatio} onChange={e => setEditingEng({ ...editingEng, maintenanceModeRatio: e.target.value })} />
-                          </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-teal-400 uppercase tracking-widest ml-1">OQC Pass Rate (%) <span className="text-zinc-600 normal-case">target ≥ 85 · 15 pts</span></label>
-                            <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-teal-500 transition-all outline-none" value={editingEng.oqcPassRate} onChange={e => setEditingEng({ ...editingEng, oqcPassRate: e.target.value })} />
-                          </div>
-                          <div className="space-y-3 md:col-span-2">
-                            <label className="text-[10px] font-black text-green-400 uppercase tracking-widest ml-1">Training Attendance (%) <span className="text-zinc-600 normal-case">target = 100 · 10 pts</span></label>
-                            <input type="number" step="0.1" min="0" max="100" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-green-500 transition-all outline-none" value={editingEng.trainingAttendance} onChange={e => setEditingEng({ ...editingEng, trainingAttendance: e.target.value })} />
-                          </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">Core Parts PBA (%) <span className="text-zinc-600 normal-case">target ≤ 30 · 5 pts</span></label>
-                            <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.corePartsPBA} onChange={e => setEditingEng({ ...editingEng, corePartsPBA: e.target.value })} />
-                          </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">Core Parts Octa (%) <span className="text-zinc-600 normal-case">target ≤ 40 · 5 pts</span></label>
-                            <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-red-500 transition-all outline-none" value={editingEng.corePartsOcta} onChange={e => setEditingEng({ ...editingEng, corePartsOcta: e.target.value })} />
-                          </div>
-                          <div className="space-y-3 md:col-span-2">
-                            <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest ml-1">Multi Parts Ratio (%) <span className="text-zinc-600 normal-case">target ≤ 1 · 10 pts</span></label>
-                            <input type="number" step="0.01" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-orange-500 transition-all outline-none" value={editingEng.multiPartsRatio} onChange={e => setEditingEng({ ...editingEng, multiPartsRatio: e.target.value })} />
-                          </div>
-                        </div>
-                      </div>
+                        </>
+                      )}
                     </div>
 
                     <button
