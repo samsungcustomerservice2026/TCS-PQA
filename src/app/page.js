@@ -77,7 +77,7 @@ const TIER_META = {
   Bronze: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FBronze%202.png?alt=media&token=ec56f9b5-f567-4778-b0b2-4df15fe0a840', border: 'border-orange-600', text: 'text-orange-400', glow: 'shadow-orange-600/30' },
 };
 
-const PQA_SERVICE_CENTER_PHOTO = 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2Fservice%20centers.png?alt=media';
+const PQA_SERVICE_CENTER_PHOTO = 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers.png?alt=media';
 const TierBadge = ({ tier, size = 'md' }) => {
   const meta = TIER_META[tier] || TIER_META.Bronze;
   const sizeClass = size === 'sm'
