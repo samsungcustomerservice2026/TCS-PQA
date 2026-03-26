@@ -37,7 +37,9 @@ import {
   Send,
   CheckCircle,
   Info,
-  RefreshCw
+  RefreshCw,
+  Building2,
+  Shield
 } from 'lucide-react';
 
 import { INITIAL_ENGINEERS, calculateTCS, calculateDRNPS, getTier, getTierColor, calculatePQAScore } from '../constants';
