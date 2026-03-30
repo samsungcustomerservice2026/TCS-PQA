@@ -3785,7 +3785,7 @@ const PageContent = () => {
                         if (!selfPhotoFile) return;
                         setSelfPhotoUploading(true);
                         try {
-                          const folder = isPqaMode ? 'service_centers' : 'engineers';
+                          const folder = 'engineers'; // Both TCS and PQA use same Firebase-permitted folder
                           const url = await uploadPhoto(selfPhotoFile, folder, selectedEngineer.code.toUpperCase());
                           if (url) {
                             if (isPqaMode) {
