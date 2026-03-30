@@ -221,7 +221,7 @@ const RankReveal3D = ({ tier, score, name, onDismiss }) => {
 
 // --- Sub-components ---
 
-const Header = ({ onHome, appMode }) => {
+const Header = ({ onHome, onLogoClick, appMode }) => {
   const rightLogo = useMemo(() => {
     if (appMode === 'PQA_MX') return './mx_logo.png';
     if (appMode === 'PQA_CE') return './ce_logo.png';
@@ -238,10 +238,10 @@ const Header = ({ onHome, appMode }) => {
     <header className="sticky top-0 z-[100] px-6 py-4 md:px-12 md:py-5 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
       <div className="max-w-[1400px] mx-auto grid grid-cols-3 items-center gap-4">
 
-        {/* Left — Samsung logo */}
+        {/* Left — Samsung logo (homepage button → APP_SELECTION) */}
         <div
           className="flex items-center cursor-pointer group"
-          onClick={onHome}
+          onClick={onLogoClick || onHome}
         >
           <div className="relative">
             <div className="absolute -inset-4 bg-white/5 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700" />
@@ -340,6 +340,30 @@ const PageContent = () => {
   const { message, modal, notification } = App.useApp();
   const [view, setView] = useState('APP_SELECTION');
   const [appMode, setAppMode] = useState(null); // 'TCS' | 'PQA_MX' | 'PQA_CE'
+
+  // ─── View history stack for swipe-back / browser-back support ────────────
+  const viewStackRef = React.useRef(['APP_SELECTION']);
+  const navigateTo = React.useCallback((nextView) => {
+    viewStackRef.current = [...viewStackRef.current, nextView];
+    window.history.pushState({ view: nextView }, '');
+    setView(nextView);
+  }, []);
+  const navigateBack = React.useCallback(() => {
+    const stack = viewStackRef.current;
+    if (stack.length > 1) {
+      viewStackRef.current = stack.slice(0, -1);
+      setView(stack[stack.length - 2]);
+    } else {
+      setView('APP_SELECTION');
+    }
+  }, []);
+  useEffect(() => {
+    const handlePopState = () => {
+      navigateBack();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigateBack]);
   const isPqaMode = appMode?.startsWith('PQA');
   const [engineers, setEngineers] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -809,7 +833,7 @@ const PageContent = () => {
     setSelectedProfileQuarter(qKey);
     
     // Execute transition
-    setView('ENGINEER_PROFILE');
+    navigateTo('ENGINEER_PROFILE');
     setShowRankReveal(true);
     message.success(`Dossier found: ${newestRecord.name}`);
   };
@@ -1393,7 +1417,11 @@ const PageContent = () => {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col pb-24 selection:bg-blue-600 selection:text-white">
-      <Header onHome={() => setView('HOME')} appMode={appMode} />
+      <Header
+        onHome={() => setView('HOME')}
+        onLogoClick={() => { viewStackRef.current = ['APP_SELECTION']; setAppMode(null); setView('APP_SELECTION'); }}
+        appMode={appMode}
+      />
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
         {/* Error Notification */}
@@ -1426,7 +1454,7 @@ const PageContent = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
                 {/* Engineer Portal */}
                 <button
-                  onClick={() => { setAppMode('TCS'); setView('HOME'); }}
+                  onClick={() => { setAppMode('TCS'); navigateTo('HOME'); }}
                   className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -1441,7 +1469,7 @@ const PageContent = () => {
 
                 {/* Service Center Portal */}
                 <button
-                  onClick={() => setView('PQA_DIVISION_SELECTION')}
+                  onClick={() => navigateTo('PQA_DIVISION_SELECTION')}
                   className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -1460,7 +1488,7 @@ const PageContent = () => {
           {view === 'PQA_DIVISION_SELECTION' && (
             <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-12 animate-in fade-in zoom-in duration-700 ease-out">
               <button
-                onClick={() => setView('APP_SELECTION')}
+                onClick={() => navigateTo('APP_SELECTION')}
                 className="absolute top-28 left-8 md:left-24 flex items-center gap-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-white transition-all bg-white/5 px-8 py-4 rounded-full border border-white/10"
               >
                 <ChevronLeft className="w-4 h-4" /> Back to Gateway
@@ -1482,7 +1510,7 @@ const PageContent = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
                 {/* MX Division */}
                 <button
-                  onClick={() => { setAppMode('PQA_MX'); setView('HOME'); }}
+                  onClick={() => { setAppMode('PQA_MX'); navigateTo('HOME'); }}
                   className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -1497,7 +1525,7 @@ const PageContent = () => {
 
                 {/* CE Division */}
                 <button
-                  onClick={() => { setAppMode('PQA_CE'); setView('HOME'); }}
+                  onClick={() => { setAppMode('PQA_CE'); navigateTo('HOME'); }}
                   className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-emerald-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -1598,25 +1626,34 @@ const PageContent = () => {
                       const isFirst = idx === 0;
                       const isSecond = idx === 1;
                       const isThird = idx === 2;
-                      const rankBg = isFirst ? 'bg-yellow-500 text-black' : isSecond ? 'bg-zinc-300 text-black' : isThird ? 'bg-orange-700 text-white' : 'bg-zinc-800 text-zinc-400';
+                      const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
                       const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
+                      const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score';
                       return (
                         <div key={eng.id} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
-                          <div className="relative flex-shrink-0 w-14 h-14">
-                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-14 h-14 object-contain tier-emblem-blend" />
+                          {/* Numeric rank badge */}
+                          <div className={`flex-shrink-0 w-12 h-12 rounded-2xl border flex items-center justify-center font-black text-lg italic ${rankColor}`}>
+                            #{idx + 1}
                           </div>
+                          {/* Only show photo for TCS mode; for PQA show photo too */}
                           <img src={getPhotoUrl(eng)} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-base md:text-lg font-black uppercase tracking-tight truncate ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              <TierBadge tier={eng.tier} size="sm" />
-                            </div>
+                            {/* TCS only: show tier badge; PQA: show code */}
+                            {!appMode?.startsWith('PQA') && (
+                              <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                <TierBadge tier={eng.tier} size="sm" />
+                              </div>
+                            )}
+                            {appMode?.startsWith('PQA') && eng.code && (
+                              <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">{eng.code}</p>
+                            )}
                           </div>
                           <div className="flex-shrink-0 text-right">
                             <span className={`text-3xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
                               {eng.tcsScore}
                             </span>
-                            <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">TCS Score</p>
+                            <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
                           </div>
                         </div>
                       );
@@ -1664,18 +1701,20 @@ const PageContent = () => {
                       const isFirst = idx === 0;
                       const isSecond = idx === 1;
                       const isThird = idx === 2;
-                      const rankBg = isFirst ? 'bg-yellow-500 text-black' : isSecond ? 'bg-zinc-300 text-black' : isThird ? 'bg-orange-700 text-white' : 'bg-zinc-800 text-zinc-400';
+                      const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
                       const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
+                      const avgLabel = appMode?.startsWith('PQA') ? 'Avg PQA' : 'Avg TCS';
                       return (
                         <div key={eng.id + effectiveQuarterKey} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
-                          <div className="relative flex-shrink-0 w-14 h-14">
-                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-14 h-14 object-contain tier-emblem-blend" />
+                          {/* Numeric rank badge */}
+                          <div className={`flex-shrink-0 w-12 h-12 rounded-2xl border flex items-center justify-center font-black text-lg italic ${rankColor}`}>
+                            #{idx + 1}
                           </div>
                           <img src={getPhotoUrl(eng)} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-base md:text-lg font-black uppercase tracking-tight truncate ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              <TierBadge tier={eng.tier} size="sm" />
+                              {!appMode?.startsWith('PQA') && <TierBadge tier={eng.tier} size="sm" />}
                               <span className="text-[8px] font-black text-zinc-700 uppercase">{eng.monthCount} month{eng.monthCount > 1 ? 's' : ''} tracked</span>
                             </div>
                           </div>
@@ -1683,7 +1722,7 @@ const PageContent = () => {
                             <span className={`text-3xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
                               {eng.avgScore}
                             </span>
-                            <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">Avg TCS</p>
+                            <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{avgLabel}</p>
                           </div>
                         </div>
                       );
@@ -2229,7 +2268,7 @@ const PageContent = () => {
                       <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
                         <div className="text-right">
                           <span className="text-sm md:text-xl font-black text-white tracking-widest italic">{eng.tcsScore}</span>
-                          <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">TCS</p>
+                          <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA' : 'TCS'}</p>
                         </div>
                         <div className="flex gap-1 md:gap-2">
                           <button
@@ -2906,7 +2945,7 @@ const PageContent = () => {
                             <TierBadge tier={activeRecord.tier} size="lg" />
                             <div className="text-right">
                               <span className="text-5xl font-black text-white italic tracking-tighter">{activeRecord.tcsScore}</span>
-                              <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">TCS Score</p>
+                              <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score'}</p>
                             </div>
                           </div>
                         </div>
@@ -3704,19 +3743,19 @@ const PageContent = () => {
       {view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-4 px-6 flex justify-around items-center shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
         {/* Dashboard */}
-        <button onClick={() => setView('HOME')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'HOME' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
+        <button onClick={() => navigateTo('HOME')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'HOME' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <BarChart3 className={`w-5 h-5 ${view === 'HOME' ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''}`} />
           <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
         </button>
         {/* Search — center, elevated */}
-        <button onClick={() => setView('ENGINEER_LOOKUP')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 relative ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>
+        <button onClick={() => navigateTo('ENGINEER_LOOKUP')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 relative ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <div className={`-mt-6 w-14 h-14 rounded-[1.25rem] flex items-center justify-center shadow-xl transition-all duration-200 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'bg-blue-600 shadow-blue-500/40 scale-110' : 'bg-zinc-800 hover:bg-zinc-700'}`}>
             <Search className="w-6 h-6" />
           </div>
           <span className="text-[8px] font-black uppercase tracking-tight mt-0.5">Search</span>
         </button>
         {/* Secure */}
-        <button onClick={() => setView(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT'].includes(view) ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
+        <button onClick={() => navigateTo(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT'].includes(view) ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <ShieldCheck className={`w-5 h-5 ${['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT'].includes(view) ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''}`} />
           <span className="text-[8px] font-black uppercase tracking-tight">Secure</span>
         </button>
