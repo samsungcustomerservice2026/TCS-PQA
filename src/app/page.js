@@ -2262,17 +2262,48 @@ const PageContent = () => {
 
                     <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-3 md:p-6 flex items-center justify-between gap-2 group">
                       <div className="flex items-center gap-3 md:gap-6 min-w-0 flex-1">
-                        <div className="w-10 h-10 md:w-14 md:h-14 relative flex-shrink-0">
+                      <div className="w-10 h-10 md:w-14 md:h-14 relative flex-shrink-0">
                           <img src={getPhotoUrl(eng)} className="w-full h-full rounded-xl md:rounded-2xl object-cover grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80" alt={eng.name} />
-                          <div className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black bg-black flex items-center justify-center">
-                            <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-4 h-4 object-contain tier-emblem-blend" />
-                          </div>
+                          {isPqaMode ? (
+                            // PQA: show numeric rank in corner
+                            (() => {
+                              const pqaRank = deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === eng.code?.toUpperCase()) + 1;
+                              const isTopThree = pqaRank <= 3;
+                              return (
+                                <div className={`absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black flex items-center justify-center text-[8px] font-black italic ${
+                                  pqaRank === 1 ? 'bg-yellow-500 text-black' :
+                                  pqaRank === 2 ? 'bg-zinc-300 text-black' :
+                                  pqaRank === 3 ? 'bg-orange-500 text-black' :
+                                  'bg-zinc-800 text-zinc-400'
+                                }`}>{pqaRank}</div>
+                              );
+                            })()
+                          ) : (
+                            <div className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black bg-black flex items-center justify-center">
+                              <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-4 h-4 object-contain tier-emblem-blend" />
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col min-w-0">
                           <h4 className="text-xs md:text-base font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors truncate">{eng.name}</h4>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-[7px] md:text-[9px] font-black text-zinc-600 uppercase tracking-widest">{eng.code}</span>
-                            <TierBadge tier={eng.tier} size="sm" />
+                            {isPqaMode ? (
+                              // PQA: show numeric rank pill
+                              (() => {
+                                const pqaRank = deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === eng.code?.toUpperCase()) + 1;
+                                return (
+                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                                    pqaRank === 1 ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' :
+                                    pqaRank === 2 ? 'bg-zinc-300/10 border-zinc-300/30 text-zinc-300' :
+                                    pqaRank === 3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
+                                    'bg-zinc-800/60 border-white/5 text-zinc-500'
+                                  }`}>#{pqaRank}</span>
+                                );
+                              })()
+                            ) : (
+                              <TierBadge tier={eng.tier} size="sm" />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2481,7 +2512,10 @@ const PageContent = () => {
                   name={selectedEngineer.name}
                   onDismiss={() => setShowRankReveal(false)}
                   isPqaMode={isPqaMode}
-                  rank={isPqaMode ? (selectedEngineer.ytdRank || '-') : (engineerSummaryRanks?.monthRank || selectedEngineer.ytdRank || '-')}
+                  rank={isPqaMode
+                    ? (deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === selectedEngineer.code?.toUpperCase()) + 1 || '-')
+                    : (engineerSummaryRanks?.monthRank || selectedEngineer.ytdRank || '-')
+                  }
                 />
               )}
               <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
