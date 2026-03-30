@@ -3813,8 +3813,17 @@ const PageContent = () => {
                             }
                           }
                           setPhotoAuthStep('done');
-                        } catch (err) { console.error(err); message.error('Photo upload failed.'); }
-                        finally { setSelfPhotoUploading(false); }
+                        } catch (err) {
+                          console.error('Upload error:', err);
+                          const code = err?.code || '';
+                          if (code.includes('unauthorized') || code.includes('permission')) {
+                            message.error('Permission denied. Check Firebase Storage rules.');
+                          } else if (code.includes('canceled') || code.includes('network')) {
+                            message.error('Network error. Check your connection and try again.');
+                          } else {
+                            message.error(`Upload failed: ${err?.message || err?.code || 'Unknown error'}`);
+                          }
+                        } finally { setSelfPhotoUploading(false); }
                       }}
                       className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
                     >
