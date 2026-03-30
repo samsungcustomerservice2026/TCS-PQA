@@ -104,9 +104,9 @@ const TIER_GLOW_COLORS = {
   Bronze: { from: 'rgba(194, 65, 12, 0.5)', to: 'rgba(251, 146, 60, 0.3)', ring: 'border-orange-600', particle: 'bg-orange-400', text: 'text-orange-400', gradient: 'from-orange-600 via-amber-500 to-yellow-400' },
 };
 
-const RankReveal3D = ({ tier, score, name, onDismiss }) => {
-  const glowColors = TIER_GLOW_COLORS[tier] || TIER_GLOW_COLORS.Bronze;
-  const meta = TIER_META[tier] || TIER_META.Bronze;
+const RankReveal3D = ({ tier, score, name, onDismiss, isPqaMode, rank }) => {
+  const glowColors = isPqaMode ? TIER_GLOW_COLORS.Diamond : (TIER_GLOW_COLORS[tier] || TIER_GLOW_COLORS.Bronze);
+  const meta = isPqaMode ? null : (TIER_META[tier] || TIER_META.Bronze);
   const [phase, setPhase] = React.useState('reveal'); // 'reveal' | 'idle'
   const [visible, setVisible] = React.useState(true);
 
@@ -184,22 +184,30 @@ const RankReveal3D = ({ tier, score, name, onDismiss }) => {
           ))}
         </div>
 
-        {/* The tier emblem — 3D spin then float */}
+        {/* The tier emblem / PQA rank — 3D spin then float */}
         <div className={phase === 'reveal' ? 'animate-rank-spin-3d' : 'animate-rank-float'}>
-          <img
-            src={meta.img}
-            alt={tier}
-            className="w-36 h-36 md:w-48 md:h-48 object-contain drop-shadow-[0_0_40px_rgba(255,255,255,0.2)] relative z-10 tier-emblem-blend"
-          />
+          {isPqaMode ? (
+            <div className={`w-36 h-36 md:w-48 md:h-48 rounded-full border-[6px] border-blue-400 bg-black/50 shadow-[0_0_40px_rgba(96,165,250,0.5)] flex items-center justify-center relative z-10`}>
+                <span className="text-7xl font-black italic text-blue-400">#{rank || '-'}</span>
+            </div>
+          ) : (
+            <img
+              src={meta?.img}
+              alt={tier}
+              className="w-36 h-36 md:w-48 md:h-48 object-contain drop-shadow-[0_0_40px_rgba(255,255,255,0.2)] relative z-10 tier-emblem-blend"
+            />
+          )}
         </div>
 
-        {/* Tier name */}
+        {/* Tier / Rank name */}
         <div className="animate-tier-title text-center space-y-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-600">You have earned</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-600">
+            {isPqaMode ? 'System Ranking' : 'You have earned'}
+          </p>
           <h2 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter bg-gradient-to-r ${glowColors.gradient} bg-clip-text text-transparent animate-shimmer`}
             style={{ backgroundImage: `linear-gradient(110deg, ${glowColors.from}, white 30%, ${glowColors.from} 50%, white 70%, ${glowColors.from})` }}
           >
-            {tier}
+            {isPqaMode ? `Rank #${rank || '-'}` : tier}
           </h2>
           <p className={`text-xs font-black uppercase tracking-[0.4em] ${glowColors.text}`}>{name}</p>
         </div>
@@ -209,7 +217,9 @@ const RankReveal3D = ({ tier, score, name, onDismiss }) => {
           <span className="text-7xl md:text-8xl font-black text-white italic tracking-tighter drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
             {score}
           </span>
-          <p className="text-[9px] font-black uppercase tracking-[0.5em] text-zinc-600 mt-2">TCS Score</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.5em] text-zinc-600 mt-2">
+            {isPqaMode ? 'PQA Score' : 'TCS Score'}
+          </p>
         </div>
 
         {/* Tap to continue hint */}
@@ -1647,9 +1657,7 @@ const PageContent = () => {
                                 <TierBadge tier={eng.tier} size="sm" />
                               </div>
                             )}
-                            {appMode?.startsWith('PQA') && eng.code && (
-                              <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">{eng.code}</p>
-                            )}
+                            {/* Show only name for PQA dashboard; code parameter is completely hidden. */}
                           </div>
                           <div className="flex-shrink-0 text-right">
                             <span className={`text-3xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
@@ -2470,6 +2478,8 @@ const PageContent = () => {
                   score={selectedEngineer.tcsScore}
                   name={selectedEngineer.name}
                   onDismiss={() => setShowRankReveal(false)}
+                  isPqaMode={isPqaMode}
+                  rank={engineerSummaryRanks?.monthRank || selectedEngineer.ytdRank || '-'}
                 />
               )}
               <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
