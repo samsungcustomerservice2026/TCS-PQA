@@ -365,6 +365,8 @@ const PageContent = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigateBack]);
   const isPqaMode = appMode?.startsWith('PQA');
+  // Derived Firestore collection name — available everywhere in the component
+  const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
   const [engineers, setEngineers] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [currentUser, setCurrentUser] = useState(() => {
@@ -2487,7 +2489,7 @@ const PageContent = () => {
                       className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-400 hover:border-blue-500/30 transition-all"
                     >
                       <Camera className="w-3 h-3" />
-                      Update My Photo
+                      {isPqaMode ? 'Update Center Photo' : 'Update My Photo'}
                     </button>
                     <div className="text-center md:text-left space-y-2">
                       <div className="flex items-center justify-center md:justify-start gap-3">
@@ -3651,7 +3653,7 @@ const PageContent = () => {
         </div>
       )}
 
-      {/* Engineer Photo Auth Modal */}
+      {/* Engineer / Service Center Photo Auth Modal */}
       {showPhotoAuth && selectedEngineer && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl">
           <div className="bg-zinc-950 border border-white/10 rounded-[3rem] w-full max-w-sm p-8 space-y-6 shadow-[0_0_80px_rgba(0,0,0,0.8)] relative animate-in fade-in zoom-in-95 duration-300">
@@ -3665,23 +3667,32 @@ const PageContent = () => {
                   <CheckCircle className="w-8 h-8 text-emerald-400" />
                 </div>
                 <h3 className="text-lg font-black text-white uppercase">Photo Updated!</h3>
+                <p className="text-zinc-500 text-xs">{isPqaMode ? 'All records for this service center have been updated.' : 'Your profile photo has been updated.'}</p>
                 <button onClick={() => { setShowPhotoAuth(false); setPhotoAuthCode(''); setPhotoAuthStep('idle'); setSelfPhotoFile(null); }}
                   className="px-8 py-3 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-zinc-200 transition-all">Done</button>
               </div>
             ) : (
               <>
                 <div className="text-center space-y-2 pt-2">
-                  <div className="w-14 h-14 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 mx-auto">
-                    <Camera className="w-7 h-7 text-blue-400" />
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border mx-auto ${isPqaMode ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-blue-600/10 border-blue-500/20'}`}>
+                    <Camera className={`w-7 h-7 ${isPqaMode ? 'text-yellow-400' : 'text-blue-400'}`} />
                   </div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Update Photo</h3>
-                  <p className="text-zinc-500 text-xs">{photoAuthStep === 'upload' ? 'Choose your new profile photo' : 'Confirm your engineer code to continue'}</p>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                    {isPqaMode ? 'Update Center Photo' : 'Update Photo'}
+                  </h3>
+                  <p className="text-zinc-500 text-xs">
+                    {photoAuthStep === 'upload'
+                      ? (isPqaMode ? 'Choose the new service center photo' : 'Choose your new profile photo')
+                      : (isPqaMode ? 'Enter service center code to verify' : 'Confirm your engineer code to continue')}
+                  </p>
                 </div>
                 {photoAuthStep !== 'upload' && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Your Engineer Code</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">
+                      {isPqaMode ? 'Service Center Code' : 'Your Engineer Code'}
+                    </label>
                     <input type="text" value={photoAuthCode} onChange={e => setPhotoAuthCode(e.target.value.toUpperCase())}
-                      placeholder="Enter your engineer code"
+                      placeholder={isPqaMode ? 'Enter service center code' : 'Enter your engineer code'}
                       className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm focus:border-blue-500 transition-all outline-none font-bold text-white shadow-inner uppercase tracking-widest text-center" />
                   </div>
                 )}
@@ -3692,24 +3703,53 @@ const PageContent = () => {
                       <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{selfPhotoFile ? selfPhotoFile.name : 'Choose Photo'}</span>
                       <input ref={selfPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setSelfPhotoFile(f); }} />
                     </label>
-                    {/* Photo guidelines */}
-                    <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-4 space-y-1.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-yellow-400 mb-2">Photo Requirements</p>
-                      <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> Wearing official Samsung uniform</p>
-                      <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> Face centered and looking at the camera</p>
-                      <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> No sunglasses or face coverings</p>
-                    </div>
+                    {!isPqaMode && (
+                      <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-4 space-y-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-yellow-400 mb-2">Photo Requirements</p>
+                        <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> Wearing official Samsung uniform</p>
+                        <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> Face centered and looking at the camera</p>
+                        <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-yellow-500">◆</span> No sunglasses or face coverings</p>
+                      </div>
+                    )}
+                    {isPqaMode && (
+                      <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 space-y-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-400 mb-2">📸 Photo Tips</p>
+                        <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-blue-400">◆</span> Use the official service center building photo</p>
+                        <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-blue-400">◆</span> Clear, well-lit exterior or interior shot</p>
+                        <p className="text-[10px] text-zinc-400 flex items-center gap-2"><span className="text-blue-400">◆</span> This photo will show across all records for this center</p>
+                      </div>
+                    )}
                     <button disabled={!selfPhotoFile || selfPhotoUploading}
                       onClick={async () => {
                         if (!selfPhotoFile) return;
                         setSelfPhotoUploading(true);
                         try {
-                          const url = await uploadPhoto(selfPhotoFile, 'engineers', selectedEngineer.code.toUpperCase());
+                          const folder = isPqaMode ? 'service_centers' : 'engineers';
+                          const url = await uploadPhoto(selfPhotoFile, folder, selectedEngineer.code.toUpperCase());
                           if (url) {
-                            const updated = { ...selectedEngineer, photoUrl: url };
-                            await saveEngineerToDb(updated);
-                            setSelectedEngineer(updated);
-                            setEngineers(prev => prev.map(e => e.id === updated.id ? updated : e));
+                            if (isPqaMode) {
+                              // Update ALL records with same code (all months)
+                              const updatedEngineers = engineers.map(e =>
+                                e.code?.toUpperCase() === selectedEngineer.code?.toUpperCase()
+                                  ? { ...e, photoUrl: url }
+                                  : e
+                              );
+                              // Save only the unique records to DB
+                              const uniqueCodes = new Set();
+                              for (const e of updatedEngineers) {
+                                if (e.code?.toUpperCase() === selectedEngineer.code?.toUpperCase() && !uniqueCodes.has(e.id)) {
+                                  uniqueCodes.add(e.id);
+                                  await saveEngineerToDb({ ...e, photoUrl: url }, colName);
+                                }
+                              }
+                              setEngineers(updatedEngineers);
+                              setSelectedEngineer(prev => ({ ...prev, photoUrl: url }));
+                            } else {
+                              const updated = { ...selectedEngineer, photoUrl: url };
+                              await saveEngineerToDb(updated);
+                              setSelectedEngineer(updated);
+                              setEngineers(prev => prev.map(e => e.id === updated.id ? updated : e));
+                            }
                           }
                           setPhotoAuthStep('done');
                         } catch (err) { console.error(err); message.error('Photo upload failed.'); }
@@ -3727,7 +3767,7 @@ const PageContent = () => {
                       if (photoAuthCode.trim().toUpperCase() === selectedEngineer.code.trim().toUpperCase()) {
                         setPhotoAuthStep('upload');
                       } else {
-                        message.error('Engineer code does not match. Access denied.');
+                        message.error(isPqaMode ? 'Service center code does not match. Access denied.' : 'Engineer code does not match. Access denied.');
                       }
                     }}
                     className="w-full bg-white text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
