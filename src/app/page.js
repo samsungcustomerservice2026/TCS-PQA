@@ -2479,9 +2479,12 @@ const PageContent = () => {
                     <div className="relative group">
                       <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
                       <img src={getPhotoUrl(selectedEngineer)} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-cover border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
-                      <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
-                        <img src={TIER_META[selectedEngineer.tier]?.img || TIER_META.Bronze.img} alt={selectedEngineer.tier} className="w-7 h-7 md:w-9 md:h-9 object-contain tier-emblem-blend" />
-                      </div>
+                      {/* Only show tier emblem for TCS mode */}
+                      {!isPqaMode && (
+                        <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
+                          <img src={TIER_META[selectedEngineer.tier]?.img || TIER_META.Bronze.img} alt={selectedEngineer.tier} className="w-7 h-7 md:w-9 md:h-9 object-contain tier-emblem-blend" />
+                        </div>
+                      )}
                     </div>
                     {/* Self-service photo update */}
                     <button
@@ -2665,7 +2668,14 @@ const PageContent = () => {
                           {dispRecord.monthlyRank > 0 && profileViewMode === 'MONTHLY' && (
                             <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-2">Monthly Rank: #{dispRecord.monthlyRank}</span>
                           )}
-                          <TierBadge tier={getTier(dispScore)} size="lg" />
+                          {/* TCS: show tier badge | PQA: show numeric rank */}
+                          {isPqaMode ? (
+                            <div className="mt-3 flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-600/10 border border-blue-500/20">
+                              <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">PQA Score</span>
+                            </div>
+                          ) : (
+                            <TierBadge tier={getTier(dispScore)} size="lg" />
+                          )}
                         </div>
 
                         {/* Three weighted components / PQA Components */}
@@ -2787,8 +2797,12 @@ const PageContent = () => {
                                 <span className="text-xs font-black text-yellow-400 uppercase">{getQuarter(selectedEngineer.month)} · {selectedEngineer.year}</span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Tier Status</span>
-                                <TierBadge tier={selectedEngineer.tier} size="sm" />
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">{isPqaMode ? 'Ranking' : 'Tier Status'}</span>
+                                {isPqaMode ? (
+                                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Numeric Only</span>
+                                ) : (
+                                  <TierBadge tier={selectedEngineer.tier} size="sm" />
+                                )}
                               </div>
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-bold text-zinc-600 uppercase">Auth Code</span>
@@ -2944,7 +2958,8 @@ const PageContent = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-6">
-                            <TierBadge tier={activeRecord.tier} size="lg" />
+                            {/* TCS: tier badge | PQA: no badge */}
+                            {!isPqaMode && <TierBadge tier={activeRecord.tier} size="lg" />}
                             <div className="text-right">
                               <span className="text-5xl font-black text-white italic tracking-tighter">{activeRecord.tcsScore}</span>
                               <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score'}</p>
