@@ -63,7 +63,9 @@ const getQuarter = (monthName) => {
   return `Q${Math.floor(idx / 3) + 1}`;
 };
 const getMonthIndex = (monthName) => {
-  const idx = MONTH_ORDER.findIndex(m => m.toLowerCase() === (monthName || '').toLowerCase());
+  if (!monthName) return 0;
+  const mn = monthName.toLowerCase().trim();
+  const idx = MONTH_ORDER.findIndex(m => m.toLowerCase() === mn || m.toLowerCase().startsWith(mn.slice(0, 3)));
   return idx < 0 ? 0 : idx;
 };
 
@@ -2479,7 +2481,7 @@ const PageContent = () => {
                   name={selectedEngineer.name}
                   onDismiss={() => setShowRankReveal(false)}
                   isPqaMode={isPqaMode}
-                  rank={engineerSummaryRanks?.monthRank || selectedEngineer.ytdRank || '-'}
+                  rank={isPqaMode ? (selectedEngineer.ytdRank || '-') : (engineerSummaryRanks?.monthRank || selectedEngineer.ytdRank || '-')}
                 />
               )}
               <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
@@ -2528,7 +2530,7 @@ const PageContent = () => {
                   <div className="flex flex-col items-end gap-4">
                     <div className="glass-card px-10 py-6 rounded-3xl flex flex-col items-end border-blue-500/20 shadow-2xl">
                       <span className="text-6xl font-black text-white italic tracking-tighter">{selectedEngineer.tcsScore}</span>
-                      <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Aggregate Capability Index</span>
+                      <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{isPqaMode ? 'Aggregate PQA Score' : 'Aggregate Capability Index'}</span>
                     </div>
                     <button
                       onClick={() => setView('ENGINEER_LOOKUP')}
