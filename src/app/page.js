@@ -80,6 +80,16 @@ const TIER_META = {
 };
 
 const PQA_SERVICE_CENTER_PHOTO = 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers.png?alt=media';
+const PARTNER_LOGOS = {
+  RAYA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FRAYA.png?alt=media',
+  SKY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FSKY.png?alt=media',
+  HITECH: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FHITECH.png?alt=media',
+  URC: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FURC.png?alt=media',
+  KELECTRONICS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FKELECTRONICS.png?alt=media',
+  ATS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FATS.png?alt=media',
+  ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FELECTRA.png?alt=media',
+  MTI: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FMTI.png?alt=media'
+};
 const TierBadge = ({ tier, size = 'md' }) => {
   const meta = TIER_META[tier] || TIER_META.Bronze;
   const sizeClass = size === 'sm'
@@ -481,9 +491,22 @@ const PageContent = () => {
   // Helper to ensure PQA Service Center photo is displayed correctly
   const getPhotoUrl = (eng) => {
     if (!eng) return 'https://picsum.photos/200';
+    
+    // Check for branded partner logos first (PQA and TCS)
+    const pName = String(eng.partnerName || '').toUpperCase();
+    const cName = String(eng.name || '').toUpperCase();
+    
+    if (pName.includes('RAYA') || cName.includes('RAYA')) return PARTNER_LOGOS.RAYA;
+    if (pName.includes('SKY') || cName.includes('SKY')) return PARTNER_LOGOS.SKY;
+    if (pName.includes('HI TECH') || pName.includes('HITECH') || cName.includes('HI TECH') || cName.includes('HITECH')) return PARTNER_LOGOS.HITECH;
+    if (pName.includes('URC') || cName.includes('URC')) return PARTNER_LOGOS.URC;
+    if (pName.includes('K-ELECTRONICS') || pName.includes('K ELECTRONICS') || cName.includes('K-ELECTRONICS') || cName.includes('K ELECTRONICS')) return PARTNER_LOGOS.KELECTRONICS;
+    if (pName.includes('ATS') || cName.includes('ATS')) return PARTNER_LOGOS.ATS;
+    if (pName.includes('ELECTRA') || cName.includes('ELECTRA')) return PARTNER_LOGOS.ELECTRA;
+    if (pName.includes('MTI') || cName.includes('MTI')) return PARTNER_LOGOS.MTI;
+
     const isPqa = appMode?.startsWith('PQA');
     if (isPqa) {
-      // If it's a placeholder or a default picsum, use the Service Center photo (dynamic URL with token)
       if (!eng.photoUrl || eng.photoUrl.includes('picsum') || eng.photoUrl.includes('default') || eng.photoUrl === PQA_SERVICE_CENTER_PHOTO) {
         return pqaDefaultUrl || PQA_SERVICE_CENTER_PHOTO;
       }
