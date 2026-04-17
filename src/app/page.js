@@ -234,59 +234,32 @@ const RankReveal3D = ({ tier, score, name, onDismiss, isPqaMode, rank }) => {
 // --- Sub-components ---
 
 const Header = ({ onHome, onLogoClick, appMode }) => {
-  const rightLogo = useMemo(() => {
-    if (appMode === 'PQA_MX') return './mx_logo.png';
-    if (appMode === 'PQA_CE') return './ce_logo.png';
+  const showLogo = appMode !== null; 
+  const appLogo = useMemo(() => {
+    if (appMode?.startsWith('PQA')) return './pqa_logo.png';
     return './fawzy-logo.png';
   }, [appMode]);
-
-  const slogan = useMemo(() => {
-    if (appMode === 'PQA_MX') return 'Mobile Experience • Ranking';
-    if (appMode === 'PQA_CE') return 'Home Appliances • Ranking';
-    return 'Earn Your Tier • Own Your Title';
-  }, [appMode]);
-
+  const slogan = 'Earn Your Tier • Own Your Title';
   return (
-    <header className="sticky top-0 z-[100] px-6 py-4 md:px-12 md:py-5 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
+    <header className="sticky top-0 z-[100] px-6 py-4 md:px-12 md:py-6 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
       <div className="max-w-[1400px] mx-auto grid grid-cols-3 items-center gap-4">
-
-        {/* Left — Samsung logo (homepage button → APP_SELECTION) */}
-        <div
-          className="flex items-center cursor-pointer group"
-          onClick={onLogoClick || onHome}
-        >
-          <div className="relative">
-            <div className="absolute -inset-4 bg-white/5 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700" />
-            <img
-              src="./sam_logo.png"
-              alt="Samsung Logo"
-              className="h-10 md:h-14 w-auto object-contain brightness-110 group-hover:scale-110 transition-transform duration-500 relative z-10"
-            />
+        <div className="flex items-center">
+          <div className="cursor-pointer group" onClick={onLogoClick || onHome}>
+            <img src="./sam_logo.png" alt="Samsung" className="h-10 md:h-14 w-auto object-contain brightness-110 group-hover:scale-105 transition-transform duration-500" />
           </div>
         </div>
-
-        {/* Center — Slogan */}
-        <div className="flex flex-col items-center text-center gap-1">
-          <p className="text-[8px] md:text-[11px] uppercase tracking-[0.35em] md:tracking-[0.5em] text-zinc-400 font-black leading-relaxed">
-            {slogan.split(' • ').map((s, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span className="hidden md:inline"> • </span>}
-                {i > 0 && <br className="md:hidden" />}
-                {s}
-              </React.Fragment>
-            ))}
+        <div className="flex justify-center text-center">
+           <p className="text-[10px] md:text-[15px] uppercase tracking-[0.4em] md:tracking-[0.6em] text-zinc-300 font-extrabold leading-relaxed">
+            {slogan}
           </p>
         </div>
-
-        {/* Right — Dynamic logo */}
-        <div className="flex items-center justify-end group">
-          <img
-            src={rightLogo}
-            alt="Environment Logo"
-            className="h-10 md:h-14 w-auto object-contain brightness-110 group-hover:scale-105 transition-transform duration-500 rounded-lg"
-          />
+        <div className="flex justify-end items-center group">
+          {showLogo && (
+            <div className="h-16 w-16 md:h-24 md:w-24 rounded-[1.5rem] md:rounded-[2.2rem] overflow-hidden border-2 border-white/10 shadow-3xl bg-black transition-all duration-700 hover:scale-110 hover:border-white/40 group-hover:shadow-[0_0_50px_rgba(255,255,255,0.1)]">
+               <img src={appLogo} alt="App Logo" className="w-full h-full object-cover" />
+            </div>
+          )}
         </div>
-
       </div>
     </header>
   );
@@ -434,6 +407,8 @@ const PageContent = () => {
 
   // New feature states
   const [homeViewMode, setHomeViewMode] = useState('MONTHLY'); // 'MONTHLY' | 'QUARTERLY'
+  const [pqaMxGroupBy, setPqaMxGroupBy] = useState('PARTNER'); // 'PARTNER' | 'CENTER'
+
   const [selectedHofMonth, setSelectedHofMonth] = useState(null); // Used for Monthly view
   const [selectedQuarterKey, setSelectedQuarterKey] = useState(null); // Used for Quarterly view
 
@@ -676,20 +651,84 @@ const PageContent = () => {
   const hofTop10 = useMemo(() => {
     if (!effectiveHofMonth) return [];
     const [m, y] = effectiveHofMonth.split('-');
-    // Deduplicate by code — keep highest TCS score per engineer
-    const byCode = {};
-    engineers
-      .filter(e => e.month?.toLowerCase() === m?.toLowerCase() && e.year === y)
-      .forEach(e => {
-        const code = e.code?.toUpperCase();
-        if (!code) return;
-        if (!byCode[code] || e.tcsScore > byCode[code].tcsScore) byCode[code] = e;
+    const filtered = engineers.filter(e => e.month?.toLowerCase() === m?.toLowerCase() && e.year === y);
+
+    if (appMode === 'PQA_MX' && pqaMxGroupBy === 'PARTNER') {
+      // ── By Partner: aggregate partnerScore per official partner ──────────────
+      const OFFICIAL_PARTNERS = ['ALSAFY', 'ATS', 'RAYA', 'URC', 'SKY', 'K-ELECTRONICS', 'MTI'];
+      const partners = {};
+
+      // Seed ALL 7 partners so they always appear even if score is 0
+      OFFICIAL_PARTNERS.forEach(op => {
+        partners[op] = {
+          id: `partner-${op}`,
+          name: op,
+          code: op,
+          tcsScore: 0,
+          bestPartnerScore: 0,
+          totalCenterScore: 0,
+          count: 0,
+          photoUrl: `./logos/${op.toLowerCase()}.png`
+        };
       });
-    const limit = (appMode === 'PQA_MX' || appMode === 'PQA_CE') ? 20 : 10;
-    return Object.values(byCode)
-      .sort((a, b) => b.tcsScore - a.tcsScore)
+
+      filtered.forEach(e => {
+        let pName = String(e.partnerName || '').trim().toUpperCase();
+        if (!pName || pName === 'N/A') {
+          // Fallback: derive partner from "PARTNER - CENTER" naming convention
+          const parts = e.name.split(' - ');
+          if (parts.length > 1) pName = parts[0].trim().toUpperCase();
+        }
+        const matched = OFFICIAL_PARTNERS.find(op => pName === op || pName.startsWith(op) || pName.includes(op));
+        if (matched) {
+          const ps = e.partnerScore || 0;
+          const cs = e.tcsScore || 0;
+          // Track best partnerScore (Excel pre-computed) and also accumulate center scores as fallback
+          if (ps > partners[matched].bestPartnerScore) partners[matched].bestPartnerScore = ps;
+          partners[matched].totalCenterScore += cs;
+          partners[matched].count += 1;
+        }
+      });
+
+      return Object.values(partners)
+        .map(p => ({
+          ...p,
+          // Prefer Excel partnerScore; fall back to average of center scores
+          tcsScore: p.bestPartnerScore > 0 ? p.bestPartnerScore : (p.count > 0 ? parseFloat((p.totalCenterScore / p.count).toFixed(1)) : 0)
+        }))
+        .sort((a, b) => b.tcsScore - a.tcsScore)
+        .slice(0, 7);
+    }
+
+    // ── By Center: deduplicate + dense/excel ranking ─────────────────────────
+    const byCode = {};
+    filtered.forEach(e => {
+      const code = e.code?.toUpperCase();
+      if (!code) return;
+      if (!byCode[code] || e.tcsScore > byCode[code].tcsScore) byCode[code] = e;
+    });
+    const limit = (appMode === 'PQA_MX' || appMode === 'PQA_CE') ? 26 : 10;
+    const sorted = Object.values(byCode)
+      .sort((a, b) => {
+        if (appMode?.startsWith('PQA')) {
+           const rankA = a.centerMonthlyRank > 0 ? a.centerMonthlyRank : 999;
+           const rankB = b.centerMonthlyRank > 0 ? b.centerMonthlyRank : 999;
+           if (rankA !== rankB) return rankA - rankB;
+        }
+        return b.tcsScore - a.tcsScore;
+      })
       .slice(0, limit);
-  }, [engineers, effectiveHofMonth, appMode]);
+
+    // Assign dense ranks (same score → same rank) or use Excel rank
+    let currentRank = 1;
+    return sorted.map((e, i) => {
+      if (i > 0 && e.tcsScore < sorted[i - 1].tcsScore) currentRank++;
+      if (appMode?.startsWith('PQA')) {
+         return { ...e, displayRank: e.centerMonthlyRank || currentRank };
+      }
+      return { ...e, displayRank: currentRank };
+    });
+  }, [engineers, effectiveHofMonth, appMode, pqaMxGroupBy]);
 
   // ─── Quarterly: all unique quarter keys, sorted latest-first ─────────────────
   const allQuarterKeys = useMemo(() => {
@@ -711,11 +750,96 @@ const PageContent = () => {
 
   const effectiveQuarterKey = selectedQuarterKey || allQuarterKeys[0] || null;
 
-  // Aggregate per-engineer per-quarter (avg TCS score across months in that quarter)
+  // Accumulated / Quarterly ranking for PQA_MX
   const quarterlyRanking = useMemo(() => {
+    const OFFICIAL_PARTNERS = ['ALSAFY', 'ATS', 'RAYA', 'URC', 'SKY', 'K-ELECTRONICS', 'MTI'];
+
+    // ── PQA ACCUMULATED mode ─────────────────────────────────────────────────
+    if (appMode === 'PQA_MX') {
+      if (pqaMxGroupBy === 'PARTNER') {
+        // Collect best accumulatedScore & accumulatedRank per partner across all records
+        const pGroup = {};
+        OFFICIAL_PARTNERS.forEach(op => {
+          pGroup[op] = { id: `acc-${op}`, name: op, code: op, avgScore: 0, ytdRank: 0, monthCount: 0 };
+        });
+
+        engineers.forEach(e => {
+          let pName = String(e.partnerName || '').trim().toUpperCase();
+          if (!pName || pName === 'N/A') {
+            const parts = e.name.split(' - ');
+            if (parts.length > 1) pName = parts[0].trim().toUpperCase();
+          }
+          const matched = OFFICIAL_PARTNERS.find(op => pName === op || pName.startsWith(op) || pName.includes(op));
+          if (matched) {
+            const accScore = e.ytdScore || 0;
+            const monthScore = e.tcsScore || 0;
+            if (accScore > pGroup[matched].avgScore) {
+              pGroup[matched].avgScore = accScore;
+              pGroup[matched].ytdRank = e.ytdRank || 0;
+            }
+            // Always track center scores as fallback
+            pGroup[matched].totalCenterScore = (pGroup[matched].totalCenterScore || 0) + monthScore;
+            pGroup[matched].monthCount += 1;
+          }
+        });
+
+        // Apply fallback: if no ytdScore data, use avg of center monthly scores
+        Object.values(pGroup).forEach(p => {
+          if (p.avgScore === 0 && p.monthCount > 0) {
+            p.avgScore = parseFloat((p.totalCenterScore / p.monthCount).toFixed(1));
+          }
+        });
+
+        const sorted = Object.values(pGroup).sort((a, b) => b.avgScore - a.avgScore);
+        let currentRank = 1;
+        return sorted.map((p, i) => {
+          if (i > 0 && p.avgScore < sorted[i - 1].avgScore) currentRank = i + 1;
+          return { ...p, displayRank: currentRank };
+        });
+
+      } else {
+        // By Center – accumulated: use ytdScore (Excel avg score column) per center
+        const byCode = {};
+        engineers.forEach(e => {
+          const code = e.code?.toUpperCase();
+          if (!code) return;
+          // Keep record with the highest ytdScore (it's the same per center per year, just take it)
+          const existing = byCode[code];
+          if (!existing || (e.ytdScore || 0) > (existing.ytdScore || 0) || (e.ytdScore === existing.ytdScore && (e.tcsScore || 0) > (existing.tcsScore || 0))) {
+            byCode[code] = e;
+          }
+        });
+        const sorted = Object.values(byCode)
+          .map(e => {
+            // Priority: Excel Monthly Average > single month score
+            const score = (e.centerYtdScore || 0) > 0 ? e.centerYtdScore : (e.tcsScore || 0);
+            return { ...e, _accScore: score };
+          })
+          .filter(e => e._accScore > 0)
+          .sort((a, b) => {
+              if (appMode?.startsWith('PQA')) {
+                 const rankA = a.centerYtdRank > 0 ? a.centerYtdRank : 999;
+                 const rankB = b.centerYtdRank > 0 ? b.centerYtdRank : 999;
+                 if (rankA !== rankB) return rankA - rankB;
+              }
+              return b._accScore - a._accScore;
+          });
+
+        let currentRank = 1;
+        return sorted.map((e, i) => {
+          if (i > 0 && e._accScore < sorted[i - 1]._accScore) currentRank++;
+          if (appMode?.startsWith('PQA')) {
+              return { ...e, avgScore: e._accScore, displayRank: e.centerYtdRank || currentRank, monthCount: 1 };
+          }
+          return { ...e, avgScore: e._accScore, displayRank: currentRank, monthCount: 1 };
+        });
+      }
+    }
+
+    // ── TCS / non-PQA quarterly mode ─────────────────────────────────────────
     if (!effectiveQuarterKey) return [];
     const [q, y] = effectiveQuarterKey.split('-');
-    const bucket = {}; // code -> { eng, scores[] }
+    const bucket = {};
     engineers.forEach(e => {
       if (!e.month || !e.year) return;
       if (getQuarter(e.month) === q && e.year === y) {
@@ -728,9 +852,15 @@ const PageContent = () => {
         ...eng,
         avgScore: parseFloat((scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1)),
         monthCount: scores.length,
+        displayRank: 0,
       }))
-      .sort((a, b) => b.avgScore - a.avgScore);
-  }, [engineers, effectiveQuarterKey]);
+      .sort((a, b) => b.avgScore - a.avgScore)
+      .map((e, i, arr) => {
+        if (i === 0 || e.avgScore < arr[i - 1].avgScore) e.displayRank = i + 1;
+        else e.displayRank = arr[i - 1].displayRank;
+        return e;
+      });
+  }, [engineers, effectiveQuarterKey, appMode, pqaMxGroupBy]);
 
   // ─── Engineer history: all records for the selected engineer's code, latest 3 months ───
   const engineerHistory = useMemo(() => {
@@ -994,7 +1124,9 @@ const PageContent = () => {
         // A different record for this exact month/year exists → ask to overwrite or cancel
         hide();
         const confirmed = window.confirm(
-          `⚠️ A record for ${finalEng.month} ${finalEng.year} already exists for ${finalEng.name}.\n\nDo you want to UPDATE the existing record? Click OK to update, or Cancel to abort.`
+          `⚠️ A record for ${finalEng.month} ${finalEng.year} already exists for ${finalEng.name}.
+
+Do you want to UPDATE the existing record? Click OK to update, or Cancel to abort.`
         );
         if (!confirmed) {
           setIsSaving(false);
@@ -1193,8 +1325,6 @@ const PageContent = () => {
   const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Reset the input so re-uploading the same file retriggers onChange
     e.target.value = '';
 
     const reader = new FileReader();
@@ -1205,164 +1335,405 @@ const PageContent = () => {
       const isPqaMode = appMode === 'PQA_MX' || appMode === 'PQA_CE';
       const colName = appMode === 'PQA_MX' ? 'pqa_mx_centers' : (appMode === 'PQA_CE' ? 'pqa_ce_centers' : 'engineers');
 
-      // Pick the first sheet
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
-
       let uploadedRecords = [];
 
-      // --- 1. Dynamic Header Detection ---
-      let regionCol = -1;
-      let codeCol = -1;
-      let nameCol = -1;
-      let ytdScoreCol = -1;
-      let ytdRankCol = -1;
-      let monthRow = -1;
-      let metricRow = -1;
+      const findSheet = (keyword) => {
+        const name = workbook.SheetNames.find(n => n.toLowerCase().replace(/[^a-z0-9]/g, '').includes(keyword.toLowerCase().replace(/[^a-z0-9]/g, '')));
+        return name ? workbook.Sheets[name] : null;
+      };
 
-      // Scan first 10 rows for critical keywords
-      for (let i = 0; i < Math.min(rows.length, 10); i++) {
-        const row = rows[i] || [];
-        for (let j = 0; j < row.length; j++) {
-          const val = String(row[j] || '').toLowerCase().trim();
-          if (val === 'region') regionCol = j;
-          if (val === 'asc code' || val === 'code' || (val.includes('code') && val.includes('asc'))) codeCol = j;
-          if (val === 'asc name' || val === 'name' || (val.includes('name') && val.includes('asc'))) nameCol = j;
-          if (val.includes('kpi score total') || (val.includes('score') && val.includes('total'))) ytdScoreCol = j;
-          if (val.includes('accumelated year rank') || val.includes('year rank') || val.includes('accumulated')) ytdRankCol = j;
-          if (val === 'ltp' || val.includes('evaluation pts')) metricRow = i;
-          if (val.includes('-2') || val.includes('-20')) monthRow = i;
-        }
-      }
+      if (isPqaMode) {
+        // ════════════════════════════════════════════════════════════
+        // PQA MULTI-SHEET PARSER
+        // ════════════════════════════════════════════════════════════
+        const partnerRankMap = {};
+        const ytdRankMap = {};
 
-      // Fallbacks
-      if (codeCol === -1) codeCol = 1; 
-      if (nameCol === -1) nameCol = 2;
-      if (regionCol === -1) regionCol = 0;
+        // ── 1. Parse Partner Ranking (Master records for all months) ──
+        const prSheet = findSheet('PartnerRanking') || findSheet('Partner');
+        if (prSheet) {
+          const prRows = XLSX.utils.sheet_to_json(prSheet, { header: 1, raw: false });
 
-      const isHorizontal = isPqaMode && monthRow !== -1;
+          // ── Detect header rows ──────────────────────────────────────────────
+          // The sheet has 2 header rows:
+          //   Row A (group row): "Partner" | blank | blank | "2026 Acc" | "Jan" | "Feb" ...
+          //   Row B (col  row):  blank | "ASC Code" | "ASC Name" | "Ave Score" | "Ranking" | "Branch Score" | ...
+          let prGroupRowIdx = -1;  // row with "Partner" label and month group names
+          let prColRowIdx   = -1;  // row with "ASC Code"
 
-      if (isHorizontal) {
-        // --- HORIZONTAL PQA FORMAT PARSER ---
-        const monthHeaderRow = rows[monthRow] || [];
-        const dataStartRow = Math.max(monthRow, metricRow) + 1;
-        
-        for (let i = dataStartRow; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || !row[codeCol]) continue;
-          
-          const region = String(row[regionCol] || '').trim();
-          const pCode = String(row[codeCol]).trim();
-          const pName = String(row[nameCol] || pCode).trim();
-          const ytdScore = parseFloat(row[ytdScoreCol]) || 0;
-          const ytdRank = parseInt(row[ytdRankCol]) || 0;
-          
-          if (!pCode || pCode.toLowerCase().includes('code')) continue;
+          for (let i = 0; i < Math.min(prRows.length, 12); i++) {
+            const r = prRows[i] || [];
+            const rowText = r.map(v => String(v || '').toLowerCase().trim());
+            if (rowText.includes('asc code')) { prColRowIdx = i; break; }
+            // group row is the one containing "partner" in col 0 or col 1
+            if ((rowText[0] === 'partner' || rowText[1] === 'partner') && prGroupRowIdx === -1) {
+              prGroupRowIdx = i;
+            }
+          }
+          if (prColRowIdx === -1) { prGroupRowIdx = -1; } // need both
 
-          // Scan Row 2 for month blocks (e.g., "Jan-26")
-          for (let j = 0; j < monthHeaderRow.length; j++) {
-            const cellVal = String(monthHeaderRow[j]);
-            if (cellVal.includes('-2') || cellVal.includes('-20')) {
-              // Extract month/year
-              const parts = cellVal.split('-');
-              const mName = parts[0].trim();
-              let year = parts[1]?.trim() || new Date().getFullYear().toString();
-              if (year.length === 2) year = `20${year}`;
+          const groupRow  = prGroupRowIdx >= 0 ? (prRows[prGroupRowIdx] || []) : [];
+          const colRow    = prColRowIdx   >= 0 ? (prRows[prColRowIdx]   || []) : [];
 
-              // Block layout (12 columns): 
-              // j: Monthly Points, j+1: Monthly Rank, j+2: LTP, j+3: EX-LTP, j+4: REDO, j+5: SSR, j+6: D-RNPS, j+7: OFS, j+8: R-CXE, j+9: SDR, j+10: Audit, j+11: PR
-              const excelMonthlyScore = parseFloat(row[j]) || 0;
-              const monthlyRank = parseInt(row[j+1]) || 0;
-              const ltp = parseFloat(row[j+2]) || 0;
-              const exLtp = parseFloat(row[j+3]) || 0;
-              const redo = parseFloat(row[j+4]) || 0;
-              const ssr = parseFloat(row[j+5]) || 0;
-              const drnps = parseFloat(row[j+6]) || 0;
-              const ofs = parseFloat(row[j+7]) || 0;
-              const rcxe = parseFloat(row[j+8]) || 0;
-              const sdr = parseFloat(row[j+9]) || 0;
-              const audit = parseFloat(row[j+10]) || 0;
-              const pr = parseFloat(row[j+11]) || 0;
+          // ── Map column indices from colRow ──────────────────────────────────
+          let prPartnerCol = 0;       // Column A always holds partner name
+          let prCodeCol    = -1;
+          let prNameCol    = -1;
+          let prAccScoreCol = -1;     // "2026 Acc" → Ave Score
+          let prAccRankCol  = -1;     // "2026 Acc" → Ranking
 
-              // Only import if there's actual data
-              if (excelMonthlyScore !== 0 || ltp !== 0 || ssr !== 0) {
-                const pqaRecord = {
-                  id: '',
-                  region,
-                  code: pCode.toUpperCase(),
-                  name: pName,
-                  photoUrl: "https://picsum.photos/200",
-                  partnerName: "N/A",
-                  month: mName,
-                  year: year,
-                  ltp, exLtp, redo, ssr, dRnps: drnps, ofs, rCxe: rcxe, sdr, audit, pr,
-                  ytdScore,
-                  ytdRank,
-                  monthlyRank,
-                  tcsScore: excelMonthlyScore || calculatePQAScore({ltp, exLtp, redo, ssr, dRnps: drnps, ofs, rCxe: rcxe, sdr, audit, pr})
+          // Find "partner" in groupRow to confirm column 0
+          for (let j = 0; j < groupRow.length; j++) {
+            if (String(groupRow[j] || '').toLowerCase().trim() === 'partner') { prPartnerCol = j; break; }
+          }
+
+          // Scan colRow for ASC Code, ASC Name
+          for (let j = 0; j < colRow.length; j++) {
+            const v = String(colRow[j] || '').toLowerCase().trim();
+            if (v === 'asc code') prCodeCol = j;
+            if (v === 'asc name') prNameCol = j;
+          }
+
+          // Scan groupRow for "2026 Acc" block, then read colRow for Ave Score + Ranking within that block
+          let accBlockStart = -1, accBlockEnd = -1;
+          for (let j = 0; j < groupRow.length; j++) {
+            const g = String(groupRow[j] || '').toLowerCase().replace(/\s/g, '');
+            if (g.includes('acc') || g.includes('2026acc')) {
+              if (accBlockStart === -1) accBlockStart = j;
+              accBlockEnd = j;
+            }
+          }
+          // Find the next non-acc group column to bound the acc block
+          if (accBlockStart !== -1) {
+            for (let j = accBlockStart; j <= Math.min(accBlockEnd + 4, colRow.length - 1); j++) {
+              const v = String(colRow[j] || '').toLowerCase().trim();
+              if ((v.includes('ave') || v.includes('avg')) && v.includes('score')) prAccScoreCol = j;
+              if (v === 'ranking' || (v.includes('rank') && !v.includes('partner'))) prAccRankCol = j;
+            }
+          }
+
+          // ── Detect monthly blocks from groupRow ─────────────────────────────
+          // Each month group: "Jan" / "Feb" etc. appears in groupRow with merged span
+          // Within that span, colRow has: Branch Score | Ratio | Score(Weigh) | Partner Score | Partner Rank
+          const prMonths = [];
+          for (let j = 0; j < groupRow.length; j++) {
+            const val = String(groupRow[j] || '').trim();
+            if (!val) continue;
+            const m = val.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*([-\s_']*(2\d|\d{4}))?$/i);
+            if (m) {
+              prMonths.push({
+                month: m[1].charAt(0).toUpperCase() + m[1].slice(1, 3).toLowerCase(),
+                year: m[3] ? (m[3].length === 2 ? '20' + m[3] : m[3]) : '2026',
+                startCol: j
+              });
+            }
+          }
+
+          // For each month block, locate exact sub-columns using colRow
+          prMonths.forEach((mb, mi) => {
+            const blockEnd = mi + 1 < prMonths.length ? prMonths[mi + 1].startCol : mb.startCol + 8;
+            mb.branchScoreCol  = -1;
+            mb.partnerScoreCol = -1;
+            mb.partnerRankCol  = -1;
+            for (let c = mb.startCol; c < Math.min(blockEnd, colRow.length); c++) {
+              const h = String(colRow[c] || '').toLowerCase().trim();
+              if ((h.includes('branch') || h === 'score' || h.includes('score')) && mb.branchScoreCol === -1) mb.branchScoreCol = c;
+              if (h.includes('partner') && h.includes('score')) mb.partnerScoreCol = c;
+              if (h.includes('partner') && h.includes('rank')) mb.partnerRankCol  = c;
+            }
+            // Fallbacks by offset if header names didn't match
+            if (mb.branchScoreCol  === -1) mb.branchScoreCol  = mb.startCol;
+            if (mb.partnerScoreCol === -1) mb.partnerScoreCol = mb.startCol + 3;
+            if (mb.partnerRankCol  === -1) mb.partnerRankCol  = mb.startCol + 4;
+          });
+
+          // ── Iterate data rows ───────────────────────────────────────────────
+          let lastPartnerName = '';  // carry-forward for merged cells in col A
+
+          for (let i = prColRowIdx + 1; i < prRows.length; i++) {
+            const r = prRows[i] || [];
+            if (!r[prCodeCol]) continue;
+            const pCode = String(r[prCodeCol]).trim().toUpperCase();
+            if (!pCode || pCode === 'ASC CODE') continue;
+            const pName = String(r[prNameCol] || pCode).trim();
+
+            // Carry-forward partner name from merged Column A
+            const cellPartner = String(r[prPartnerCol] || '').trim();
+            if (cellPartner && cellPartner.toLowerCase() !== 'partner') {
+              lastPartnerName = cellPartner;
+            }
+            const partnerName = lastPartnerName;
+
+            // 2026 Accumulated data
+            const accScore = prAccScoreCol > -1 ? parseFloat(r[prAccScoreCol]) || 0 : 0;
+            const accRank  = prAccRankCol  > -1 ? parseInt(r[prAccRankCol])    || 0 : 0;
+
+            if (accScore > 0 || accRank > 0) {
+              ytdRankMap[pCode] = { ytdRank: accRank, ytdScore: accScore };
+            }
+
+            // Monthly data
+            for (const mb of prMonths) {
+              const branchScore   = parseFloat(r[mb.branchScoreCol])  || 0;
+              const pScore        = parseFloat(r[mb.partnerScoreCol]) || 0;
+              const pRank         = parseInt(r[mb.partnerRankCol])    || 0;
+
+              if (branchScore > 0 || pScore > 0 || pRank > 0 || accScore > 0) {
+                const key = `${pCode}_${mb.month.toLowerCase()}_${mb.year}`;
+                partnerRankMap[key] = {
+                  code: pCode, name: pName, partnerName,
+                  monthlyScore: branchScore,
+                  monthlyRank: pRank, partnerScore: pScore,
+                  accumulatedScore: accScore, accumulatedRank: accRank,
+                  mName: mb.month, year: mb.year
                 };
-                pqaRecord.tier = getTier(pqaRecord.tcsScore);
-                uploadedRecords.push(pqaRecord);
               }
             }
           }
         }
-      } else {
-        // --- STANDARD VERTICAL FORMAT PARSER ---
-        const rowsToParse = rows.slice(metricRow !== -1 ? metricRow + 1 : 1);
-        uploadedRecords = rowsToParse.filter(r => r && r[codeCol]).map((row, index) => {
-          let eng;
-          if (isPqaMode) {
-            eng = {
-              id: '',
-              region: String(row[regionCol] || "Unknown"),
-              code: String(row[codeCol]).trim().toUpperCase(),
-              name: String(row[nameCol] || "Unknown"),
-              photoUrl: String(row[3] || "https://picsum.photos/200"),
-              partnerName: String(row[4] || "N/A"),
-              month: String(row[5] || "Active Month"),
-              year: String(row[6] || new Date().getFullYear().toString()),
-              ltp: parseFloat(row[7]) || 0,
-              exLtp: parseFloat(row[8]) || 0,
-              redo: parseFloat(row[9]) || 0,
-              ssr: parseFloat(row[10]) || 0,
-              dRnps: parseFloat(row[11]) || 0,
-              ofs: parseFloat(row[12]) || 0,
-              rCxe: parseFloat(row[13]) || 0,
-              sdr: parseFloat(row[14]) || 0,
-              audit: parseFloat(row[15]) || 0,
-              pr: parseFloat(row[16]) || 0,
-              tcsScore: 0
-            };
-            eng.tcsScore = calculatePQAScore(eng);
-          } else {
-            eng = {
-              id: '',
-              name: String(row[0] || "Unknown"),
-              code: String(row[1]).trim().toUpperCase(),
-              photoUrl: String(row[2] || "https://picsum.photos/200"),
-              asc: String(row[3] || "N/A"),
-              partnerName: String(row[4] || "N/A"),
-              month: String(row[5] || "Active Month"),
-              year: String(row[6] || new Date().getFullYear().toString()),
-              redoRatio: parseFloat(row[7]) || 0,
-              iqcSkipRatio: parseFloat(row[8]) || 0,
-              maintenanceModeRatio: parseFloat(row[9]) || 0,
-              oqcPassRate: parseFloat(row[10]) || 0,
-              trainingAttendance: parseFloat(row[11]) || 0,
-              corePartsPBA: parseFloat(row[12]) || 0,
-              corePartsOcta: parseFloat(row[13]) || 0,
-              multiPartsRatio: parseFloat(row[14]) || 0,
-              examScore: parseFloat(row[15]) || 0,
-              promoters: parseFloat(row[16]) || 0,
-              detractors: parseFloat(row[17]) || 0,
-            };
-            eng.tcsScore = calculateTCS(eng);
+
+        // ── 2. Parse Evaluation Point ──
+        const evalSheet = findSheet('Evaluation') || findSheet('EvaluationPoint') || workbook.Sheets[workbook.SheetNames[0]];
+        if (evalSheet) {
+          const evalRows = XLSX.utils.sheet_to_json(evalSheet, { header: 1, raw: false });
+          let evalCodeRowIdx = -1;
+          for (let i = 0; i < Math.min(evalRows.length, 15); i++) {
+            const r = evalRows[i] || [];
+            if (r.some(v => {
+              const tv = String(v || '').toLowerCase().replace(/[^a-z]/g, '');
+              return tv === 'asccode' || (tv.includes('code') && (tv.includes('asc') || tv.includes('center') || tv.includes('serv')));
+            })) {
+              evalCodeRowIdx = i; break;
+            }
           }
+
+          if (evalCodeRowIdx !== -1) {
+             const headerRow = evalRows[evalCodeRowIdx] || [];
+             const subheaderRow = evalRows[evalCodeRowIdx + 1] || [];
+             
+             let eRegionIdx=-1, eCodeIdx=-1, eNameIdx=-1, eYtdScoreIdx=-1, eYtdRankIdx=-1, ePartnerIdx=-1;
+             for (let j=0; j < headerRow.length; j++) {
+                const v = String(headerRow[j] || '').toLowerCase().trim();
+                const nv = v.replace(/[^a-z]/g, '');
+                if (v.includes('region')) eRegionIdx = j;
+                if (nv === 'asccode' || (nv.includes('code') && (nv.includes('asc') || nv.includes('center') || nv.includes('serv')))) eCodeIdx = j;
+                if (nv === 'ascname' || (nv.includes('name') && (nv.includes('asc') || nv.includes('center') || nv.includes('serv')))) eNameIdx = j;
+                if (v.includes('partner')) ePartnerIdx = j;
+              }
+             for (let j=0; j < Math.min(subheaderRow.length, 10); j++) {
+                const subV = String(subheaderRow[j] || '').toLowerCase().trim();
+                if (subV === 'score') eYtdScoreIdx = Math.max(j, eYtdScoreIdx);
+                if (subV === '(rank)') eYtdRankIdx = Math.max(j, eYtdRankIdx);
+             }
+
+             let evalMonth = 'Mar', evalYear = '2026';
+             for (let r=0; r <= evalCodeRowIdx; r++) {
+               const rw = evalRows[r] || [];
+               for (let c=0; c < rw.length; c++) {
+                 const v = String(rw[c]||'').trim();
+                 const mm2 = v.match(/^(2\d)\.\s*(0[1-9]|1[0-2])$/);
+                 if (mm2) {
+                    const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    evalMonth = mNames[parseInt(mm2[2], 10) - 1];
+                    evalYear = '20' + mm2[1];
+                 }
+                 const mm1 = v.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*([-\s_']*(2\d|\d{4}))?$/i);
+                 if (!mm2 && mm1 && c > 5) {
+                    evalMonth = mm1[1].charAt(0).toUpperCase() + mm1[1].slice(1,3).toLowerCase();
+                    evalYear = mm1[3] ? (mm1[3].length===2?'20'+mm1[3]:mm1[3]) : '2026';
+                 }
+               }
+             }
+
+             const cols = {};
+             for (let c=0; c < subheaderRow.length; c++) {
+               const v = String(subheaderRow[c] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+               if (!v) continue;
+               if (!cols.score && (v.includes('point') || v === 'score') && c > 10) cols.score = c;
+               if (!cols.rank && v.includes('rank') && c > 10) cols.rank = c;
+               if (v === 'ltp') cols.ltp = c;
+               if (v === 'exltp') cols.exLtp = c;
+               if (v === 'redo') cols.redo = c;
+               if (v.includes('owrnps')) cols.owRnps = c;
+               if (v === 'ssr') cols.ssr = c;
+               if (v.includes('drnps')) cols.dRnps = c;
+               if (v === 'ofs') cols.ofs = c;
+               if (v.includes('surv') || v.includes('cxe')) cols.rCxe = c;
+               if (v.includes('coa')) cols.coa = c;
+               if (v === 'sdr') cols.sdr = c;
+               if (v.includes('switch')) cols.switching = c;
+               if (v === 'audit') cols.audit = c;
+               if (v === 'tc' && !cols.tc) cols.tc = c;
+             }
+
+             for (let i = evalCodeRowIdx + 2; i < evalRows.length; i++) {
+               const rw = evalRows[i];
+               if (!rw || !rw[eCodeIdx]) continue;
+               const pCode = String(rw[eCodeIdx]).trim().toUpperCase();
+               if (!pCode || pCode.toLowerCase() === 'asc code') continue;
+               
+               const region = String(rw[eRegionIdx] || '').trim();
+               const key = `${pCode}_${evalMonth.toLowerCase()}_${evalYear}`;
+                if (!partnerRankMap[key]) {
+                  partnerRankMap[key] = {
+                    code: pCode,
+                    name: String(rw[eNameIdx] || pCode).trim(),
+                    partnerName: ePartnerIdx > -1 ? String(rw[ePartnerIdx] || '').trim() : '',
+                    mName: evalMonth,
+                    year: evalYear
+                  };
+                } else if (ePartnerIdx > -1) {
+                  partnerRankMap[key].partnerName = String(rw[ePartnerIdx] || '').trim();
+                }
+               
+               const rData = partnerRankMap[key];
+               rData.region = region;
+               if (cols.ltp) rData.ltp = parseFloat(rw[cols.ltp]) || 0;
+               if (cols.exLtp) rData.exLtp = parseFloat(rw[cols.exLtp]) || 0;
+               if (cols.redo) rData.redo = parseFloat(rw[cols.redo]) || 0;
+               if (cols.owRnps) rData.owRnps = parseFloat(rw[cols.owRnps]) || 0;
+               if (cols.ssr) rData.ssr = parseFloat(rw[cols.ssr]) || 0;
+               if (cols.dRnps) rData.dRnps = parseFloat(rw[cols.dRnps]) || 0;
+               if (cols.ofs) rData.ofs = parseFloat(rw[cols.ofs]) || 0;
+               if (cols.rCxe) rData.rCxe = parseFloat(rw[cols.rCxe]) || 0;
+               if (cols.coa) rData.coa = parseFloat(rw[cols.coa]) || 0;
+               if (cols.sdr) rData.sdr = parseFloat(rw[cols.sdr]) || 0;
+               if (cols.switching) rData.switching = parseFloat(rw[cols.switching]) || 0;
+               if (cols.audit) rData.audit = parseFloat(rw[cols.audit]) || 0;
+               if (cols.tc) rData.tc = parseFloat(rw[cols.tc]) || 0;
+               
+               if (eYtdScoreIdx !== -1) {
+                  ytdRankMap[pCode] = { ytdScore: parseFloat(rw[eYtdScoreIdx]) || 0, ytdRank: parseInt(rw[eYtdRankIdx]) || ytdRankMap[pCode]?.ytdRank || 0 };
+               }
+               if (cols.score) rData.evalMonthlyScore = parseFloat(rw[cols.score]) || 0;
+             }
+          }
+        }
+        // ── 3. Parse Monthly Average for Center Accumulated Score ──
+        const avgSheet = findSheet('MonthlyAverage') || findSheet('Monthly Average') || findSheet('Average');
+        if (avgSheet) {
+          const avgRows = XLSX.utils.sheet_to_json(avgSheet, { header: 1, raw: false });
+          let aCodeCol = -1, aScoreCol = -1, aYtdRankCol = -1;
+          let aMonthCols = [];
+          let headerRowIdx = 1;
+
+          for (let i = 0; i < Math.min(avgRows.length, 10); i++) {
+             const r = avgRows[i] || [];
+             if (r.some(v => String(v).toLowerCase().replace(/\s/g, '') === 'asccode')) {
+                headerRowIdx = i;
+                break;
+             }
+          }
+          
+          const colRow = avgRows[headerRowIdx] || [];
+          const monthRow = avgRows[headerRowIdx + 1] || [];
+
+          for (let j = 0; j < Math.max(colRow.length, monthRow.length); j++) {
+             const cName = String(colRow[j] || '').toLowerCase().replace(/\s/g, '');
+             if (cName === 'asccode') aCodeCol = j;
+             if (cName === 'score' && String(monthRow[j] || '').toLowerCase().replace(/\s/g, '') === 'bymonth') {
+                 aScoreCol = j;
+                 if (String(colRow[j+1] || '').toLowerCase().includes('rank')) aYtdRankCol = j + 1;
+             }
+             
+             const mStr = String(monthRow[j] || '').trim();
+             if (mStr) {
+                const mMatch = mStr.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*([-\s_']*(2\d|\d{4}))?$/i);
+                if (mMatch && cName === 'score') {
+                   const mName = mMatch[1].charAt(0).toUpperCase() + mMatch[1].slice(1, 3).toLowerCase();
+                   const mYear = mMatch[3] ? (mMatch[3].length === 2 ? '20' + mMatch[3] : mMatch[3]) : '2026';
+                   let rankCol = j + 1;
+                   if (String(colRow[j+1] || '').toLowerCase().includes('rank')) rankCol = j + 1;
+                   aMonthCols.push({ month: mName, year: mYear, scoreCol: j, rankCol: rankCol });
+                }
+             }
+          }
+
+          if (aCodeCol > -1) {
+             for (let i = headerRowIdx + 2; i < avgRows.length; i++) {
+                const r = avgRows[i] || [];
+                const pCode = String(r[aCodeCol]).trim().toUpperCase();
+                if (!pCode || pCode === 'ASC CODE') continue;
+                
+                const centerYtdScore = parseFloat(r[aScoreCol]) || 0;
+                const centerYtdRank = parseInt(String(r[aYtdRankCol]).replace(/[^0-9]/g, '')) || 0;
+                
+                if (centerYtdScore > 0 || centerYtdRank > 0) {
+                   if (!ytdRankMap[pCode]) ytdRankMap[pCode] = { ytdScore: 0, ytdRank: 0 };
+                   if (centerYtdScore > 0) ytdRankMap[pCode].centerYtdScore = centerYtdScore;
+                   if (centerYtdRank > 0) ytdRankMap[pCode].centerYtdRank = centerYtdRank;
+                }
+                
+                for (const mc of aMonthCols) {
+                   const mScore = parseFloat(r[mc.scoreCol]) || 0;
+                   const mRank = parseInt(String(r[mc.rankCol]).replace(/[^0-9]/g, '')) || 0;
+                   if (mScore > 0 || mRank > 0) {
+                      const key = `${pCode}_${mc.month.toLowerCase()}_${mc.year}`;
+                      if (!partnerRankMap[key]) {
+                         partnerRankMap[key] = { code: pCode, mName: mc.month, year: mc.year };
+                      }
+                      if (mScore > 0) partnerRankMap[key].centerMonthlyScore = mScore;
+                      if (mRank > 0) partnerRankMap[key].centerMonthlyRank = mRank;
+                   }
+                }
+             }
+          }
+        }
+
+        for (const [key, rd] of Object.entries(partnerRankMap)) {
+           const hasAnyData = rd.monthlyScore || rd.partnerScore || rd.monthlyRank || rd.ltp || rd.evalMonthlyScore || rd.centerMonthlyScore || rd.tc || rd.sdr || rd.audit || rd.ofs || rd.ssr || rd.rCxe || rd.owRnps || rd.dRnps;
+           if (!hasAnyData) continue;
+           const ytd = ytdRankMap[rd.code] || {};
+           const pqaRecord = {
+              id: '', region: rd.region || '', code: rd.code, name: rd.name,
+              photoUrl: 'https://picsum.photos/200', partnerName: rd.partnerName || 'N/A',
+              month: rd.mName, year: rd.year,
+              ltp: rd.ltp||0, exLtp: rd.exLtp||0, redo: rd.redo||0, owRnps: rd.owRnps||0, 
+              ssr: rd.ssr||0, dRnps: rd.dRnps||0, ofs: rd.ofs||0, rCxe: rd.rCxe||0, 
+              coa: rd.coa||0, sdr: rd.sdr||0, switching: rd.switching||0, audit: rd.audit||0, tc: rd.tc||0,
+              ytdScore: rd.accumulatedScore || ytd.ytdScore || 0,
+              centerYtdScore: ytd.centerYtdScore || 0,
+              ytdRank: rd.accumulatedRank || ytd.ytdRank || 0,
+              centerYtdRank: ytd.centerYtdRank || 0,
+              monthlyRank: rd.monthlyRank || 0, 
+              centerMonthlyRank: rd.centerMonthlyRank || 0,
+              partnerScore: rd.partnerScore || 0,
+              tcsScore: rd.monthlyScore || rd.evalMonthlyScore || calculatePQAScore({ ltp:rd.ltp||0, exLtp:rd.exLtp||0, redo:rd.redo||0, ssr:rd.ssr||0, dRnps:rd.dRnps||0, ofs:rd.ofs||0, rCxe:rd.rCxe||0, sdr:rd.sdr||0, audit:rd.audit||0, pr: 0 }),
+           };
+           pqaRecord.tier = getTier(pqaRecord.tcsScore);
+           uploadedRecords.push(pqaRecord);
+        }
+
+      } else {
+        // TCS Original Parser
+        const targetSheet = workbook.Sheets["TCS Scores"] || workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(targetSheet, { header: 1, raw: false });
+        let headerRow = -1;
+        let cName=0, cCode=1, cPhoto=2, cAsc=3, cPartner=4, cMonth=5, cYear=6, cRedo=7, cSk=8, cMaint=9, cOqc=10, cTrain=11, cPba=12, cOcta=13, cMulti=14, cExam=15, cProm=16, cDet=17;
+        for (let i = 0; i < Math.min(rows.length, 5); i++) {
+          const r = rows[i] || [];
+          for (let j = 0; j < Math.min(r.length, 10); j++) {
+            const v = String(r[j] || '').toLowerCase().trim();
+            if (v === 'code') cCode = j;
+            if (v === 'name') cName = j;
+          }
+          if (cCode > -1) { headerRow = i; break; }
+        }
+        for (let i = (headerRow > -1 ? headerRow + 1 : 1); i < rows.length; i++) {
+          const r = rows[i] || [];
+          if (!r[cCode]) continue;
+          let eng = {
+            id: '',
+            name: String(r[cName] || "Unknown"), code: String(r[cCode]).trim().toUpperCase(), photoUrl: String(r[cPhoto] || "https://picsum.photos/200"),
+            asc: String(r[cAsc] || "N/A"), partnerName: String(r[cPartner] || "N/A"), month: String(r[cMonth] || "Active Month"), year: String(r[cYear] || new Date().getFullYear().toString()),
+            redoRatio: parseFloat(r[cRedo]) || 0, iqcSkipRatio: parseFloat(r[cSk]) || 0, maintenanceModeRatio: parseFloat(r[cMaint]) || 0, oqcPassRate: parseFloat(r[cOqc]) || 0,
+            trainingAttendance: parseFloat(r[cTrain]) || 0, corePartsPBA: parseFloat(r[cPba]) || 0, corePartsOcta: parseFloat(r[cOcta]) || 0, multiPartsRatio: parseFloat(r[cMulti]) || 0,
+            examScore: parseFloat(r[cExam]) || 0, promoters: parseFloat(r[cProm]) || 0, detractors: parseFloat(r[cDet]) || 0,
+          };
+          eng.tcsScore = calculateTCS(eng);
           eng.tier = getTier(eng.tcsScore);
-          return eng;
-        });
+          uploadedRecords.push(eng);
+        }
       }
 
       if (uploadedRecords.length === 0) {
@@ -1370,22 +1741,13 @@ const PageContent = () => {
         return;
       }
 
-      // --- Overwrite Logic ---
       const finalUploadSet = [];
       uploadedRecords.forEach(rec => {
-        const existing = engineers.find(e =>
-          e.code?.toUpperCase() === rec.code?.toUpperCase() &&
-          e.month?.toLowerCase() === rec.month?.toLowerCase() &&
-          e.year === rec.year
-        );
-        if (existing) {
-          finalUploadSet.push({ ...rec, id: existing.id });
-        } else {
-          finalUploadSet.push(rec);
-        }
+        const existing = engineers.find(e => e.code?.toUpperCase() === rec.code?.toUpperCase() && e.month?.toLowerCase() === rec.month?.toLowerCase() && e.year === rec.year);
+        if (existing) finalUploadSet.push({ ...rec, id: existing.id });
+        else finalUploadSet.push(rec);
       });
 
-      // ── Bulk Save ────────────────────────────────────────────────────────
       try {
         const promises = finalUploadSet.map(async (rec) => {
           const savedId = await saveEngineerToDb(rec, colName);
@@ -1412,7 +1774,6 @@ const PageContent = () => {
     };
     reader.readAsArrayBuffer(file);
   };
-
 
   if (isLoading) {
     return <div className="min-h-screen bg-black text-white flex items-center justify-center font-black animate-pulse uppercase tracking-widest">Initializing TCS Protocol...</div>;
@@ -1465,39 +1826,40 @@ const PageContent = () => {
                 <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest max-w-md mx-auto">Choose your destination environment to proceed with operations.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-5xl px-4">
                 {/* Engineer Portal */}
                 <button
                   onClick={() => { setAppMode('TCS'); navigateTo('HOME'); }}
-                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                  className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-24 h-24 rounded-[2rem] bg-blue-500/10 flex items-center justify-center border border-blue-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]">
-                    <Users className="w-10 h-10 text-blue-400" />
+                  <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(37,99,235,0.3)] overflow-hidden">
+                    <img src="./fawzy-logo.png" alt="TCS" className="w-full h-full object-cover scale-150" />
                   </div>
-                  <div className="text-center space-y-2 relative z-10">
-                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">( Engineers )</p>
+                  <div className="text-center space-y-3 relative z-10">
+                    <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">( Engineers )</p>
                   </div>
                 </button>
 
                 {/* Service Center Portal */}
                 <button
                   onClick={() => navigateTo('PQA_DIVISION_SELECTION')}
-                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                  className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-24 h-24 rounded-[2rem] bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_30px_rgba(234,179,8,0.3)]">
-                    <Building2 className="w-10 h-10 text-yellow-400" />
+                  <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-yellow-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(234,179,8,0.3)] overflow-hidden">
+                    <img src="./pqa_logo.png" alt="PQA" className="w-full h-full object-cover rounded-2xl" />
                   </div>
-                  <div className="text-center space-y-2 relative z-10">
-                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-yellow-400 transition-colors">PQA Portal</h3>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">( Service Center )</p>
+                  <div className="text-center space-y-3 relative z-10">
+                    <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-yellow-400 transition-colors">PQA Portal</h3>
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">( Service Center )</p>
                   </div>
                 </button>
               </div>
             </div>
           )}
+
 
           {view === 'PQA_DIVISION_SELECTION' && (
             <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-12 animate-in fade-in zoom-in duration-700 ease-out">
@@ -1521,51 +1883,42 @@ const PageContent = () => {
                 <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest max-w-md mx-auto">Choose your division cluster.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
-                {/* MX Division */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-5xl px-4">
                 <button
                   onClick={() => { setAppMode('PQA_MX'); navigateTo('HOME'); }}
-                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                  className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-24 h-24 rounded-[2rem] bg-zinc-950 flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_40px_rgba(168,85,247,0.2)]">
-                    <img src="./mx_logo.png" alt="MX" className="w-16 h-16 object-contain rounded-xl" />
+                  <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-purple-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(168,85,247,0.3)] overflow-hidden">
+                    <img src="./mx_logo.png" alt="MX" className="w-full h-full object-cover" />
                   </div>
-                  <div className="text-center space-y-2 relative z-10">
-                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-purple-400 transition-colors">MX Division</h3>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Mobile Experience</p>
+                  <div className="text-center space-y-3 relative z-10">
+                    <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-purple-400 transition-colors">MX Division</h3>
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Mobile Experience</p>
                   </div>
                 </button>
 
-                {/* CE Division */}
                 <button
                   onClick={() => { setAppMode('PQA_CE'); navigateTo('HOME'); }}
-                  className="group relative h-80 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-emerald-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                  className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-emerald-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-24 h-24 rounded-[2rem] bg-zinc-950 flex items-center justify-center border border-emerald-500/20 group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_0_40px_rgba(16,185,129,0.2)]">
-                    <img src="./ce_logo.png" alt="CE" className="w-16 h-16 object-contain rounded-xl" />
+                  <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(16,185,129,0.3)] overflow-hidden">
+                    <img src="./ce_logo.png" alt="CE" className="w-full h-full object-cover" />
                   </div>
-                  <div className="text-center space-y-2 relative z-10">
-                    <h3 className="text-2xl font-black uppercase tracking-tight text-white group-hover:text-emerald-400 transition-colors">CE Division</h3>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Consumer Electronics</p>
+                  <div className="text-center space-y-3 relative z-10">
+                    <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-emerald-400 transition-colors">CE Division</h3>
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Consumer Electronics</p>
                   </div>
                 </button>
               </div>
             </div>
           )}
 
-          {view === 'HOME' && (
+                    {view === 'HOME' && (
             <div className="space-y-16 animate-in fade-in slide-in-from-bottom-12 duration-1000 ease-out">
               {/* Hero Section */}
               <section className="relative px-4 text-center space-y-4 pt-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                  </span>
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Next-Gen TCS</p>
-                </div>
                 <h2 className="text-4xl md:text-7xl font-black tracking-tighter text-white uppercase">
                   {appMode?.startsWith('PQA') ? 'Evolution' : 'Beyond'}<span className="text-blue-600"> {appMode?.startsWith('PQA') ? 'in Quality' : 'Standards'}</span><br />
                   {appMode?.startsWith('PQA') ? 'Defined' : 'Above'}<span className="text-blue-600"> {appMode?.startsWith('PQA') ? 'by Rank' : 'Average'}</span>
@@ -1573,12 +1926,12 @@ const PageContent = () => {
               </section>
 
               {/* Dashboard Toggle */}
-              <div className="flex justify-center">
-                <div className="bg-zinc-900/60 p-1.5 rounded-full border border-white/10 flex items-center backdrop-blur-xl">
+              <div className="flex flex-col items-center gap-6">
+                <div className="bg-zinc-900/60 p-2 rounded-full border border-white/10 flex items-center backdrop-blur-xl shadow-2xl">
                   <button
                     onClick={() => setHomeViewMode('MONTHLY')}
-                    className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${homeViewMode === 'MONTHLY'
-                      ? 'bg-yellow-500 text-black shadow-[0_0_20px_rgba(234,179,8,0.3)]'
+                    className={`px-10 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${homeViewMode === 'MONTHLY'
+                      ? 'bg-yellow-500 text-black shadow-[0_0_30px_rgba(234,179,8,0.4)]'
                       : 'text-zinc-500 hover:text-white'
                       }`}
                   >
@@ -1586,17 +1939,40 @@ const PageContent = () => {
                   </button>
                   <button
                     onClick={() => setHomeViewMode('QUARTERLY')}
-                    className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${homeViewMode === 'QUARTERLY'
-                      ? 'bg-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]'
+                    className={`px-10 py-3.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${homeViewMode === 'QUARTERLY'
+                      ? 'bg-blue-600 text-white shadow-[0_0_30px_rgba(37,99,235,0.4)]'
                       : 'text-zinc-500 hover:text-white'
                       }`}
                   >
-                    Quarterly
+                    {appMode?.startsWith('PQA') ? 'Accumulated' : 'Quarterly'}
                   </button>
                 </div>
+
+                {appMode === 'PQA_MX' && (
+                  <div className="bg-zinc-900/60 p-1.5 rounded-full border border-white/10 flex items-center backdrop-blur-xl shadow-xl animate-in fade-in slide-in-from-top-2 duration-700">
+                    <button
+                      onClick={() => setPqaMxGroupBy('PARTNER')}
+                      className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${pqaMxGroupBy === 'PARTNER'
+                        ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                        : 'text-zinc-500 hover:text-white'
+                        }`}
+                    >
+                      By Partner
+                    </button>
+                    <button
+                      onClick={() => setPqaMxGroupBy('CENTER')}
+                      className={`px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${pqaMxGroupBy === 'CENTER'
+                        ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                        : 'text-zinc-500 hover:text-white'
+                        }`}
+                    >
+                      By Center
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Content Switcher */}
+              {/* ── Content Switcher: MONTHLY | ACCUMULATED ────────────────────────── */}
               {homeViewMode === 'MONTHLY' ? (
                 <div className="max-w-5xl mx-auto space-y-12 animate-in fade-in zoom-in-95 duration-500">
                   {/* Month Selector */}
@@ -1604,7 +1980,6 @@ const PageContent = () => {
                     <button
                       onClick={() => {
                         const idx = allMonthPeriods.findIndex(p => p.key === effectiveHofMonth);
-                        // Left arrow → go to earlier month (lower index in ascending array)
                         if (idx > 0) setSelectedHofMonth(allMonthPeriods[idx - 1].key);
                       }}
                       className="p-3 bg-zinc-900 border border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"
@@ -1620,7 +1995,6 @@ const PageContent = () => {
                     <button
                       onClick={() => {
                         const idx = allMonthPeriods.findIndex(p => p.key === effectiveHofMonth);
-                        // Right arrow → go to later month (higher index in ascending array)
                         if (idx < allMonthPeriods.length - 1) setSelectedHofMonth(allMonthPeriods[idx + 1].key);
                       }}
                       className="p-3 bg-zinc-900 border border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"
@@ -1632,38 +2006,37 @@ const PageContent = () => {
                   {/* Ranking List Monthly */}
                   <div className="space-y-4">
                     <h3 className="text-center text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">
-                      Top {(appMode === 'PQA_MX' || appMode === 'PQA_CE') ? '20' : '10'} {appMode?.startsWith('PQA') ? 'Service Centers' : 'Engineers'}
+                      {appMode === 'PQA_MX' && pqaMxGroupBy === 'PARTNER'
+                        ? 'All 7 Partners — Monthly Ranking'
+                        : appMode?.startsWith('PQA') ? 'All Service Centers — Monthly Ranking' : 'Top 10 Engineers'}
                     </h3>
                     {hofTop10.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">No data for this period.</div>
                     ) : hofTop10.map((eng, idx) => {
-                      const isFirst = idx === 0;
-                      const isSecond = idx === 1;
-                      const isThird = idx === 2;
+                      const displayRank = eng.displayRank || idx + 1;
+                      const isFirst = displayRank === 1;
+                      const isSecond = displayRank === 2;
+                      const isThird = displayRank === 3;
                       const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
                       const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
                       const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score';
                       return (
-                        <div key={eng.id} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
-                          {/* Numeric rank badge */}
+                        <div key={eng.id || eng.code} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
                           <div className={`flex-shrink-0 w-12 h-12 rounded-2xl border flex items-center justify-center font-black text-lg italic ${rankColor}`}>
-                            #{idx + 1}
+                            #{displayRank}
                           </div>
-                          {/* Only show photo for TCS mode; for PQA show photo too */}
                           <img src={getPhotoUrl(eng)} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-base md:text-lg font-black uppercase tracking-tight truncate ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
-                            {/* TCS only: show tier badge; PQA: show code */}
                             {!appMode?.startsWith('PQA') && (
                               <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 <TierBadge tier={eng.tier} size="sm" />
                               </div>
                             )}
-                            {/* Show only name for PQA dashboard; code parameter is completely hidden. */}
                           </div>
                           <div className="flex-shrink-0 text-right">
                             <span className={`text-3xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                              {eng.tcsScore}
+                              {eng.tcsScore != null ? parseFloat(eng.tcsScore).toFixed(1) : '—'}
                             </span>
                             <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
                           </div>
@@ -1673,66 +2046,59 @@ const PageContent = () => {
                   </div>
                 </div>
               ) : (
+                /* ── ACCUMULATED view ─────────────────────────────────────────────── */
                 <div className="max-w-5xl mx-auto space-y-12 animate-in fade-in zoom-in-95 duration-500">
-                  {/* Quarter Selector */}
                   <div className="flex items-center justify-center gap-4">
-                    <button
-                      onClick={() => {
-                        const idx = allQuarterKeys.indexOf(effectiveQuarterKey);
-                        if (idx < allQuarterKeys.length - 1) setSelectedQuarterKey(allQuarterKeys[idx + 1]);
-                      }}
-                      className="p-3 bg-zinc-900 border border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
                     <div className="flex items-center gap-3 bg-zinc-900 border border-blue-500/20 rounded-2xl px-8 py-4">
                       <TrendingUp className="w-4 h-4 text-blue-400" />
                       <span className="text-base font-black text-white uppercase tracking-widest">
-                        {effectiveQuarterKey ? effectiveQuarterKey.replace('-', ' · ') : 'No Data'}
+                        {appMode?.startsWith('PQA') ? '2026 — Year to Date' : (effectiveQuarterKey ? effectiveQuarterKey.replace('-', ' · ') : 'No Data')}
                       </span>
                     </div>
-                    <button
-                      onClick={() => {
-                        const idx = allQuarterKeys.indexOf(effectiveQuarterKey);
-                        if (idx > 0) setSelectedQuarterKey(allQuarterKeys[idx - 1]);
-                      }}
-                      className="p-3 bg-zinc-900 border border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
+                    {!appMode?.startsWith('PQA') && (
+                      <>
+                        <button onClick={() => { const idx = allQuarterKeys.indexOf(effectiveQuarterKey); if (idx < allQuarterKeys.length - 1) setSelectedQuarterKey(allQuarterKeys[idx + 1]); }} className="p-3 bg-zinc-900 border border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"><ChevronLeft className="w-5 h-5" /></button>
+                        <button onClick={() => { const idx = allQuarterKeys.indexOf(effectiveQuarterKey); if (idx > 0) setSelectedQuarterKey(allQuarterKeys[idx - 1]); }} className="p-3 bg-zinc-900 border border-white/10 rounded-2xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"><ChevronRight className="w-5 h-5" /></button>
+                      </>
+                    )}
                   </div>
 
-                  {/* Ranking List Quarterly */}
                   <div className="space-y-4">
                     <h3 className="text-center text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">
-                      Top {(appMode === 'PQA_MX' || appMode === 'PQA_CE') ? '20' : '10'} {appMode?.startsWith('PQA') ? 'Centers' : 'Engineers'} (Quarterly Avg)
+                      {appMode?.startsWith('PQA')
+                        ? (pqaMxGroupBy === 'PARTNER' ? 'All 7 Partners — Accumulated Average' : 'All Centers — Accumulated Average')
+                        : `Top 10 Engineers (Quarterly Avg)`}
                     </h3>
-                    {quarterlyRanking.slice(0, (appMode?.startsWith('PQA') ? 20 : 10)).length === 0 ? (
-                      <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">No data for this quarter.</div>
-                    ) : quarterlyRanking.slice(0, (appMode?.startsWith('PQA') ? 20 : 10)).map((eng, idx) => {
-                      const isFirst = idx === 0;
-                      const isSecond = idx === 1;
-                      const isThird = idx === 2;
+                    {quarterlyRanking.length === 0 ? (
+                      <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
+                        No accumulated data — upload Excel with ★Partner Ranking sheet.
+                      </div>
+                    ) : quarterlyRanking.slice(0, appMode?.startsWith('PQA') ? 100 : 10).map((eng, idx) => {
+                      const displayRank = eng.displayRank || idx + 1;
+                      const isFirst = displayRank === 1;
+                      const isSecond = displayRank === 2;
+                      const isThird = displayRank === 3;
                       const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
                       const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
-                      const avgLabel = appMode?.startsWith('PQA') ? 'Avg PQA' : 'Avg TCS';
+                      const avgLabel = appMode?.startsWith('PQA') ? 'Acc. Avg PQA' : 'Avg TCS';
                       return (
-                        <div key={eng.id + effectiveQuarterKey} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
-                          {/* Numeric rank badge */}
+                        <div key={`${eng.id || eng.code}-acc`} className={`glass-card rounded-[2.5rem] p-6 md:p-8 flex items-center gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
                           <div className={`flex-shrink-0 w-12 h-12 rounded-2xl border flex items-center justify-center font-black text-lg italic ${rankColor}`}>
-                            #{idx + 1}
+                            #{displayRank}
                           </div>
                           <img src={getPhotoUrl(eng)} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-base md:text-lg font-black uppercase tracking-tight truncate ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               {!appMode?.startsWith('PQA') && <TierBadge tier={eng.tier} size="sm" />}
-                              <span className="text-[8px] font-black text-zinc-700 uppercase">{eng.monthCount} month{eng.monthCount > 1 ? 's' : ''} tracked</span>
+                              {appMode?.startsWith('PQA') && eng.monthCount > 1 && (
+                                <span className="text-[8px] font-black text-zinc-700 uppercase">{eng.monthCount} months tracked</span>
+                              )}
                             </div>
                           </div>
                           <div className="flex-shrink-0 text-right">
                             <span className={`text-3xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                              {eng.avgScore}
+                              {eng.avgScore != null ? parseFloat(eng.avgScore).toFixed(1) : '—'}
                             </span>
                             <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{avgLabel}</p>
                           </div>
@@ -1741,26 +2107,28 @@ const PageContent = () => {
                     })}
                   </div>
 
-                  {/* Quarter Summary Stats */}
-                  {quarterlyRanking.length > 0 && (
+                  {/* Summary Stats – only shown for TCS quarterly mode, hidden for PQA accumulated */}
+                  {quarterlyRanking.length > 0 && !appMode?.startsWith('PQA') && (
                     <div className="glass-card rounded-[3rem] p-10 mt-8">
-                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-8">Quarter Summary — {effectiveQuarterKey?.replace('-', ' · ')}</h3>
+                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-8">
+                        {appMode?.startsWith('PQA') ? 'Accumulated Summary — 2026 YTD' : `Quarter Summary — ${effectiveQuarterKey?.replace('-', ' · ')}`}
+                      </h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                         <div className="text-center">
-                          <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-2">{appMode?.startsWith('PQA') ? 'Centers' : 'Engineers'}</p>
+                          <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-2">{appMode?.startsWith('PQA') ? (pqaMxGroupBy === 'PARTNER' ? 'Partners' : 'Centers') : 'Engineers'}</p>
                           <p className="text-3xl font-black text-white">{quarterlyRanking.length}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-2">Avg Score</p>
-                          <p className="text-3xl font-black text-blue-400">{(quarterlyRanking.reduce((s, e) => s + e.avgScore, 0) / quarterlyRanking.length).toFixed(1)}</p>
+                          <p className="text-3xl font-black text-blue-400">{(quarterlyRanking.reduce((s, e) => s + (e.avgScore || 0), 0) / quarterlyRanking.length).toFixed(1)}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-2">Top Score</p>
-                          <p className="text-3xl font-black text-yellow-400">{quarterlyRanking[0]?.avgScore}</p>
+                          <p className="text-3xl font-black text-yellow-400">{parseFloat(quarterlyRanking[0]?.avgScore || 0).toFixed(1)}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-2">Champion</p>
-                          <TierBadge tier={quarterlyRanking[0]?.tier || 'Bronze'} size="md" />
+                          <p className="text-xl font-black text-white uppercase">{quarterlyRanking[0]?.name || '—'}</p>
                         </div>
                       </div>
                     </div>
