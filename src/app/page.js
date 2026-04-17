@@ -1834,7 +1834,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(37,99,235,0.3)] overflow-hidden">
-                    <img src="./fawzy-logo.png" alt="TCS" className="w-full h-full object-cover scale-150" />
+                    <img src="/fawzy-logo.png" alt="TCS" className="w-full h-full object-cover scale-150" />
                   </div>
                   <div className="text-center space-y-3 relative z-10">
                     <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
@@ -1849,7 +1849,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-yellow-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(234,179,8,0.3)] overflow-hidden">
-                    <img src="./pqa_logo.png" alt="PQA" className="w-full h-full object-cover rounded-2xl" />
+                    <img src="/pqa_logo.png" alt="PQA" className="w-full h-full object-cover rounded-2xl" />
                   </div>
                   <div className="text-center space-y-3 relative z-10">
                     <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-yellow-400 transition-colors">PQA Portal</h3>
@@ -1890,7 +1890,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-purple-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(168,85,247,0.3)] overflow-hidden">
-                    <img src="./mx_logo.png" alt="MX" className="w-full h-full object-cover" />
+                    <img src="/mx_logo.png" alt="MX" className="w-full h-full object-cover" />
                   </div>
                   <div className="text-center space-y-3 relative z-10">
                     <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-purple-400 transition-colors">MX Division</h3>
@@ -1904,7 +1904,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(16,185,129,0.3)] overflow-hidden">
-                    <img src="./ce_logo.png" alt="CE" className="w-full h-full object-cover" />
+                    <img src="/ce_logo.png" alt="CE" className="w-full h-full object-cover" />
                   </div>
                   <div className="text-center space-y-3 relative z-10">
                     <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-emerald-400 transition-colors">CE Division</h3>
@@ -2027,7 +2027,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           </div>
                           <img src={getPhotoUrl(eng)} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
-                            <h4 className={`text-base md:text-lg font-black uppercase tracking-tight truncate ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
+                            <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             {!appMode?.startsWith('PQA') && (
                               <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 <TierBadge tier={eng.tier} size="sm" />
@@ -2088,7 +2088,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           </div>
                           <img src={getPhotoUrl(eng)} className={`w-14 h-14 rounded-2xl object-cover flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
-                            <h4 className={`text-base md:text-lg font-black uppercase tracking-tight truncate ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
+                            <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               {!appMode?.startsWith('PQA') && <TierBadge tier={eng.tier} size="sm" />}
                               {appMode?.startsWith('PQA') && eng.monthCount > 1 && (
