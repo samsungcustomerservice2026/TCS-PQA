@@ -1685,9 +1685,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
            if (!hasAnyData) continue;
            const ytd = ytdRankMap[rd.code] || {};
            const pqaRecord = {
-              id: '', region: rd.region || '', code: rd.code, name: rd.name,
+              id: '', region: rd.region || '', code: rd.code || 'Unknown', name: rd.name || rd.code || 'Unknown',
               photoUrl: 'https://picsum.photos/200', partnerName: rd.partnerName || 'N/A',
-              month: rd.mName, year: rd.year,
+              month: rd.mName || 'Unknown', year: rd.year || '2026',
               ltp: rd.ltp||0, exLtp: rd.exLtp||0, redo: rd.redo||0, owRnps: rd.owRnps||0, 
               ssr: rd.ssr||0, dRnps: rd.dRnps||0, ofs: rd.ofs||0, rCxe: rd.rCxe||0, 
               coa: rd.coa||0, sdr: rd.sdr||0, switching: rd.switching||0, audit: rd.audit||0, tc: rd.tc||0,
