@@ -1698,7 +1698,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               monthlyRank: rd.monthlyRank || 0, 
               centerMonthlyRank: rd.centerMonthlyRank || 0,
               partnerScore: rd.partnerScore || 0,
-              tcsScore: rd.monthlyScore || rd.evalMonthlyScore || calculatePQAScore({ ltp:rd.ltp||0, exLtp:rd.exLtp||0, redo:rd.redo||0, ssr:rd.ssr||0, dRnps:rd.dRnps||0, ofs:rd.ofs||0, rCxe:rd.rCxe||0, sdr:rd.sdr||0, audit:rd.audit||0, pr: 0 }),
+              tcsScore: rd.monthlyScore || rd.centerMonthlyScore || rd.evalMonthlyScore || calculatePQAScore({ ltp:rd.ltp||0, exLtp:rd.exLtp||0, redo:rd.redo||0, ssr:rd.ssr||0, dRnps:rd.dRnps||0, ofs:rd.ofs||0, rCxe:rd.rCxe||0, sdr:rd.sdr||0, audit:rd.audit||0, pr: 0 }),
            };
            pqaRecord.tier = getTier(pqaRecord.tcsScore);
            uploadedRecords.push(pqaRecord);
