@@ -629,6 +629,13 @@ const PageContent = () => {
     }
     return eng.photoUrl || PARTNER_LOGOS.SAMSUNG_FALLBACK;
   };
+  
+  // Helper for conditional logo styling
+  const getLogoStyle = (url) => {
+    if (url === PARTNER_LOGOS.SAMSUNG_FALLBACK) return 'object-cover';
+    return 'object-contain bg-white p-0.5';
+  };
+
 
   // Record visit on mount & session end on tab close
   const isLoggedRef = React.useRef(isLogged);
@@ -2164,7 +2171,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           <div className={`flex-shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl border flex items-center justify-center font-black text-[10px] md:text-lg italic ${rankColor}`}>
                             #{displayRank}
                           </div>
-                          <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl object-contain bg-white p-0.5 flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
+                          <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl ${getLogoStyle(getPhotoUrl(eng))} flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             {!appMode?.startsWith('PQA') && (
@@ -2225,7 +2232,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           <div className={`flex-shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl border flex items-center justify-center font-black text-[10px] md:text-lg italic ${rankColor}`}>
                             #{displayRank}
                           </div>
-                          <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl object-contain bg-white p-0.5 flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
+                          <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl ${getLogoStyle(getPhotoUrl(eng))} flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -3031,7 +3038,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div className="flex flex-col items-center md:items-start gap-8">
                     <div className="relative group">
                       <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
-                      <img src={getPhotoUrl(selectedEngineer)} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-contain bg-white p-1 border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
+                      <img src={getPhotoUrl(selectedEngineer)} className={`relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] ${getLogoStyle(getPhotoUrl(selectedEngineer))} border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500`} alt={selectedEngineer.name} />
                       {/* Only show tier emblem for TCS mode */}
                       {!isPqaMode && (
                         <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
