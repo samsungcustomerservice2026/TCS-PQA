@@ -510,7 +510,7 @@ const PageContent = () => {
   });
 
   // New feature states
-  const [homeViewMode, setHomeViewMode] = useState('MONTHLY'); // 'MONTHLY' | 'QUARTERLY'
+  const [homeViewMode, setHomeViewMode] = useState('QUARTERLY'); // Default to ACCUMULATED for PQA
   const [pqaMxGroupBy, setPqaMxGroupBy] = useState('PARTNER'); // 'PARTNER' | 'CENTER'
 
   const [selectedHofMonth, setSelectedHofMonth] = useState(null); // Used for Monthly view
@@ -853,7 +853,7 @@ const PageContent = () => {
       if (!code) return;
       if (!byCode[code] || e.tcsScore > byCode[code].tcsScore) byCode[code] = e;
     });
-    const limit = (appMode === 'PQA_MX' || appMode === 'PQA_CE') ? 26 : 10;
+    const limit = (appMode === 'PQA_MX' || appMode === 'PQA_CE') ? 999 : 10;
     const sorted = Object.values(byCode)
       .sort((a, b) => {
         if (appMode?.startsWith('PQA')) {
@@ -2219,7 +2219,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         No accumulated data — upload Excel with ★Partner Ranking sheet.
                       </div>
-                    ) : quarterlyRanking.slice(0, appMode?.startsWith('PQA') ? 100 : 10).map((eng, idx) => {
+                    ) : quarterlyRanking.slice(0, appMode?.startsWith('PQA') ? 500 : 10).map((eng, idx) => {
                       const displayRank = eng.displayRank || idx + 1;
                       const isFirst = displayRank === 1;
                       const isSecond = displayRank === 2;
