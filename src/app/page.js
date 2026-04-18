@@ -897,12 +897,13 @@ const PageContent = () => {
   const effectiveQuarterKey = selectedQuarterKey || allQuarterKeys[0] || null;
 
   // Accumulated / Quarterly ranking for PQA_MX
+  const OFFICIAL_PARTNERS = ['ALSAFY', 'ATS', 'RAYA', 'URC', 'SKY', 'K-ELECTRONICS', 'MTI'];
+
   const quarterlyRanking = useMemo(() => {
-    const OFFICIAL_PARTNERS = ['ALSAFY', 'ATS', 'RAYA', 'URC', 'SKY', 'K-ELECTRONICS', 'MTI'];
 
     // ── PQA ACCUMULATED mode ─────────────────────────────────────────────────
-    if (appMode === 'PQA_MX') {
-      if (pqaMxGroupBy === 'PARTNER') {
+    if (appMode?.startsWith('PQA')) {
+      if (appMode === 'PQA_MX' && pqaMxGroupBy === 'PARTNER') {
         // Collect best accumulatedScore & accumulatedRank per partner across all records
         const pGroup = {};
         OFFICIAL_PARTNERS.forEach(op => {
@@ -1533,11 +1534,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             if (String(groupRow[j] || '').toLowerCase().trim() === 'partner') { prPartnerCol = j; break; }
           }
 
-          // Scan colRow for ASC Code, ASC Name
+          // Scan colRow for ASC Code, ASC Name, and Partner
           for (let j = 0; j < colRow.length; j++) {
             const v = String(colRow[j] || '').toLowerCase().trim();
-            if (v === 'asc code') prCodeCol = j;
-            if (v === 'asc name') prNameCol = j;
+            const nv = v.replace(/[^a-z]/g, '');
+            if (v === 'asc code' || nv === 'asccode' || (v.includes('code') && (v.includes('asc') || v.includes('center')))) prCodeCol = j;
+            if (v === 'asc name' || nv === 'ascname' || (v.includes('name') && (v.includes('asc') || v.includes('center')))) prNameCol = j;
+            if (v === 'partner' || nv === 'partnername') prPartnerCol = j;
           }
 
           // Scan groupRow for "2026 Acc" block, then read colRow for Ave Score + Ranking within that block
@@ -1759,7 +1762,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         const avgSheet = findSheet('MonthlyAverage') || findSheet('Monthly Average') || findSheet('Average');
         if (avgSheet) {
           const avgRows = XLSX.utils.sheet_to_json(avgSheet, { header: 1, raw: false });
-          let aCodeCol = -1, aScoreCol = -1, aYtdRankCol = -1;
+          let aCodeCol = -1, aNameCol = -1, aScoreCol = -1, aYtdRankCol = -1, aPartnerCol = -1;
           let aMonthCols = [];
           let headerRowIdx = 1;
 
@@ -1775,9 +1778,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           const monthRow = avgRows[headerRowIdx + 1] || [];
 
           for (let j = 0; j < Math.max(colRow.length, monthRow.length); j++) {
-             const cName = String(colRow[j] || '').toLowerCase().replace(/\s/g, '');
-             if (cName === 'asccode') aCodeCol = j;
-             if (cName === 'score' && String(monthRow[j] || '').toLowerCase().replace(/\s/g, '') === 'bymonth') {
+             const cName = String(colRow[j] || '').toLowerCase().trim();
+             const cn = cName.replace(/[^a-z]/g, '');
+             if (cn === 'asccode' || (cName.includes('code') && (cName.includes('asc') || cName.includes('center')))) aCodeCol = j;
+             if (cn === 'ascname' || (cName.includes('name') && (cName.includes('asc') || cName.includes('center')))) aNameCol = j;
+             if (cName.includes('partner')) aPartnerCol = j;
+
+             if (cName.includes('score') && String(monthRow[j] || '').toLowerCase().replace(/\s/g, '') === 'bymonth') {
                  aScoreCol = j;
                  if (String(colRow[j+1] || '').toLowerCase().includes('rank')) aYtdRankCol = j + 1;
              }
@@ -1813,10 +1820,23 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 for (const mc of aMonthCols) {
                    const mScore = parseFloat(r[mc.scoreCol]) || 0;
                    const mRank = parseInt(String(r[mc.rankCol]).replace(/[^0-9]/g, '')) || 0;
-                   if (mScore > 0 || mRank > 0) {
+                    if (mScore > 0 || mRank > 0) {
                       const key = `${pCode}_${mc.month.toLowerCase()}_${mc.year}`;
                       if (!partnerRankMap[key]) {
-                         partnerRankMap[key] = { code: pCode, mName: mc.month, year: mc.year };
+                         partnerRankMap[key] = { 
+                           code: pCode, 
+                           name: aNameCol > -1 ? String(r[aNameCol] || pCode).trim() : pCode,
+                           partnerName: aPartnerCol > -1 ? String(r[aPartnerCol] || '').trim() : '',
+                           mName: mc.month, 
+                           year: mc.year 
+                         };
+                      } else {
+                        if (aNameCol > -1 && (!partnerRankMap[key].name || partnerRankMap[key].name === pCode)) {
+                          partnerRankMap[key].name = String(r[aNameCol] || pCode).trim();
+                        }
+                        if (aPartnerCol > -1 && !partnerRankMap[key].partnerName) {
+                          partnerRankMap[key].partnerName = String(r[aPartnerCol] || '').trim();
+                        }
                       }
                       if (mScore > 0) partnerRankMap[key].centerMonthlyScore = mScore;
                       if (mRank > 0) partnerRankMap[key].centerMonthlyRank = mRank;
@@ -2237,9 +2257,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                             <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               {!appMode?.startsWith('PQA') && <TierBadge tier={eng.tier} size="sm" />}
-                              {appMode?.startsWith('PQA') && eng.monthCount > 1 && (
-                                <span className="text-[8px] font-black text-zinc-700 uppercase">{eng.monthCount} months tracked</span>
-                              )}
+                              {/* months tracked removed */}
                             </div>
                           </div>
                           <div className="flex-shrink-0 text-right">
