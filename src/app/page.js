@@ -397,6 +397,19 @@ const PageContent = () => {
       navigateBack();
     };
     window.addEventListener('popstate', handlePopState);
+
+    // ── Direct Portal Links based on Domain ────────────────────────────────
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('scora-pqa')) {
+      setAppMode('PQA_MX');
+      setView('HOME');
+      viewStackRef.current = ['APP_SELECTION', 'HOME'];
+    } else if (host.includes('scora-tcs')) {
+      setAppMode('TCS');
+      setView('HOME');
+      viewStackRef.current = ['APP_SELECTION', 'HOME'];
+    }
+
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigateBack]);
   const isPqaMode = appMode?.startsWith('PQA');
@@ -2230,11 +2243,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="text-center text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">
-                      {appMode?.startsWith('PQA')
-                        ? (pqaMxGroupBy === 'PARTNER' ? 'All 7 Partners — Accumulated Average' : 'All Centers — Accumulated Average')
-                        : `Top 10 Engineers (Quarterly Avg)`}
-                    </h3>
+                    {appMode !== 'PQA_CE' && (
+                      <h3 className="text-center text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">
+                        {appMode?.startsWith('PQA')
+                          ? (pqaMxGroupBy === 'PARTNER' ? 'All 7 Partners — Accumulated Average' : 'All Centers — Accumulated Average')
+                          : `Top 10 Engineers (Quarterly Avg)`}
+                      </h3>
+                    )}
                     {quarterlyRanking.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         No accumulated data — upload Excel with ★Partner Ranking sheet.
