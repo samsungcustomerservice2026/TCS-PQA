@@ -1973,33 +1973,33 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-5xl px-4">
-                {/* Engineer Portal */}
-                <button
-                  onClick={() => { setAppMode('TCS'); navigateTo('HOME'); }}
-                  className="group relative min-h-[28rem] md:h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-[2.5rem] sm:rounded-[3rem] bg-zinc-950 border border-blue-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(37,99,235,0.3)] overflow-hidden">
-                    <img src="/fawzy-logo.png" alt="TCS" className="w-full h-full object-cover rounded-[2.5rem] sm:rounded-[3rem]" />
-                  </div>
-                  <div className="text-center space-y-3 relative z-10">
-                    <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
-                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">( Engineers )</p>
-                  </div>
-                </button>
-
-                {/* Service Center Portal */}
+                {/* PQA Portal (Service Center) */}
                 <button
                   onClick={() => navigateTo('PQA_DIVISION_SELECTION')}
-                  className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                  className="group relative h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-yellow-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(234,179,8,0.3)] overflow-hidden">
-                    <img src="/pqa_logo.png" alt="PQA" className="w-full h-full object-cover rounded-2xl" />
+                  <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-[2.5rem] sm:rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-yellow-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(234,179,8,0.3)] overflow-hidden">
+                    <img src="/pqa_logo.png" alt="PQA" className="w-full h-full object-contain rounded-[2.5rem] sm:rounded-[3.5rem]" />
                   </div>
                   <div className="text-center space-y-3 relative z-10">
                     <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-yellow-400 transition-colors">PQA Portal</h3>
                     <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">( Service Center )</p>
+                  </div>
+                </button>
+
+                {/* TCS Portal (Engineers) */}
+                <button
+                  onClick={() => { setAppMode('TCS'); navigateTo('HOME'); }}
+                  className="group relative h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-[2.5rem] sm:rounded-[3.5rem] bg-zinc-950 border border-blue-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(37,99,235,0.3)] overflow-hidden">
+                    <img src="/fawzy-logo.png" alt="TCS" className="w-full h-full object-contain rounded-[2.5rem] sm:rounded-[3.5rem]" />
+                  </div>
+                  <div className="text-center space-y-3 relative z-10">
+                    <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">( Engineers )</p>
                   </div>
                 </button>
               </div>
