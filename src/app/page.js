@@ -89,8 +89,9 @@ const PARTNER_LOGOS = {
   KELECTRONICS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FK%20Electronics%20Logo-1766305188934.jpg?alt=media&token=ada4fc3a-75af-46c8-a5b3-64a1491593b6',
   ATS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FATS%20LOGO.jpg?alt=media&token=07f7845d-c90b-4edb-8aff-aa9af5b5b580',
   ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FElectra%20Logo.jpg?alt=media&token=e1864115-4c0d-4952-ba61-12c82f9d658b',
-  MTI: '/mx_logo.png', // Placeholder until MTI logo is uploaded
-  ALSAFY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FALSAFY.png?alt=media&token=fcb8577b-0994-4d1a-9a29-92489c872b04'
+  MTI: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FMTI.png?alt=media&token=7ec69134-31bb-4ceb-a124-0409a824255c',
+  ALSAFY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FALSAFY.png?alt=media&token=fcb8577b-0994-4d1a-9a29-92489c872b04',
+  SAMSUNG_FALLBACK: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FSAMSUNG.jpg?alt=media&token=90a6b923-e8c1-4f65-96d1-0852386e73c1'
 };
 /**
  * Brand logos under gs://tcs-for-engineers.firebasestorage.app/PQA/Service centers/
@@ -623,10 +624,10 @@ const PageContent = () => {
 
     if (isPqa) {
       if (!eng.photoUrl || eng.photoUrl.includes('picsum') || eng.photoUrl.includes('default') || eng.photoUrl === PQA_SERVICE_CENTER_PHOTO) {
-        return pqaPlaceholder();
+        return PARTNER_LOGOS.SAMSUNG_FALLBACK;
       }
     }
-    return eng.photoUrl || (isPqa ? pqaPlaceholder() : 'https://picsum.photos/200');
+    return eng.photoUrl || PARTNER_LOGOS.SAMSUNG_FALLBACK;
   };
 
   // Record visit on mount & session end on tab close
