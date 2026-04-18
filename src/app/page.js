@@ -585,12 +585,20 @@ const PageContent = () => {
   const getPhotoUrl = (eng) => {
     if (!eng) return 'https://picsum.photos/200';
 
+    // ── Prioritize Custom Manual Uploads ──────────────────────────────
+    if (eng.photoUrl && 
+        !eng.photoUrl.includes('Service%20centers.png') && 
+        !eng.photoUrl.includes('picsum.photos') && 
+        !eng.photoUrl.startsWith('/logos/')) {
+      return eng.photoUrl;
+    }
+
     const isPqa = appMode?.startsWith('PQA');
     const pqaPlaceholder = () => pqaDefaultUrl || PQA_SERVICE_CENTER_PHOTO;
     /** Resolved Storage URL, else PQA generic placeholder (not missing /logos files), else local path for TCS */
-    const brandUrl = (key) => partnerLogoUrls[key] || (isPqa ? pqaPlaceholder() : PARTNER_LOGOS[key]);
+    const brandUrl = (key) => PARTNER_LOGOS[key] || (isPqa ? pqaPlaceholder() : `/logos/${key.toLowerCase()}.png`);
 
-    // Match brand on any common field (Excel / Firestore may use partner vs partnerName, etc.)
+    // Match brand on any common field
     const hay = [
       eng.partnerName,
       eng.partner,
@@ -618,7 +626,7 @@ const PageContent = () => {
         return pqaPlaceholder();
       }
     }
-    return eng.photoUrl || 'https://picsum.photos/200';
+    return eng.photoUrl || (isPqa ? pqaPlaceholder() : 'https://picsum.photos/200');
   };
 
   // Record visit on mount & session end on tab close
@@ -4283,8 +4291,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         if (!selfPhotoFile) return;
                         setSelfPhotoUploading(true);
                         try {
-                          const folder = 'engineers'; // Both TCS and PQA use same Firebase-permitted folder
-                          const url = await uploadPhoto(selfPhotoFile, folder, selectedEngineer.code.toUpperCase());
+                          let url = null;
+                          try {
+                            url = await uploadPhoto(selfPhotoFile, 'PQA', selectedEngineer.code.toUpperCase());
+                          } catch (e) {
+                            // Fallback to engineers folder if PQA is restricted
+                            url = await uploadPhoto(selfPhotoFile, 'engineers', selectedEngineer.code.toUpperCase());
+                          }
                           if (url) {
                             if (isPqaMode) {
                               // Update ALL records with same code (all months)
