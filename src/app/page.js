@@ -401,9 +401,8 @@ const PageContent = () => {
     // ── Direct Portal Links based on Domain ────────────────────────────────
     const host = window.location.hostname.toLowerCase();
     if (host.includes('scora-pqa')) {
-      setAppMode('PQA_MX');
-      setView('HOME');
-      viewStackRef.current = ['APP_SELECTION', 'HOME'];
+      setView('PQA_DIVISION_SELECTION');
+      viewStackRef.current = ['APP_SELECTION', 'PQA_DIVISION_SELECTION'];
     } else if (host.includes('scora-tcs')) {
       setAppMode('TCS');
       setView('HOME');
