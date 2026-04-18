@@ -80,17 +80,48 @@ const TIER_META = {
 };
 
 const PQA_SERVICE_CENTER_PHOTO = 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers.png?alt=media';
+/** Local fallbacks if a file is missing under `PQA/Service centers/` in Firebase Storage. */
 const PARTNER_LOGOS = {
-  RAYA: '/logos/raya.png',
-  SKY: '/logos/sky.png',
-  HITECH: '/logos/hitech.png',
-  URC: '/logos/urc.png',
-  KELECTRONICS: '/logos/kelectronics.png',
-  ATS: '/logos/ats.png',
-  ELECTRA: '/logos/electra.png',
-  MTI: '/logos/mti.png',
-  ALSAFY: '/logos/alsafy.png'
+  RAYA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FRAYA%20LOGO.jpg?alt=media&token=04676d80-fda6-45b7-a733-e231f4097d54',
+  SKY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FSKY%20LOGO.jpg?alt=media&token=88e1d9dd-f889-4ad6-bf50-11749be8ab3f',
+  HITECH: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FHI%20Tech.png?alt=media&token=ed6c0456-26ae-4ddc-98ec-fa6b0b892ec4',
+  URC: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FURC.png?alt=media&token=f4993708-edf0-4503-8729-2d00f16ba5ab',
+  KELECTRONICS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FK%20Electronics%20Logo-1766305188934.jpg?alt=media&token=ada4fc3a-75af-46c8-a5b3-64a1491593b6',
+  ATS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FATS%20LOGO.jpg?alt=media&token=07f7845d-c90b-4edb-8aff-aa9af5b5b580',
+  ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FElectra%20Logo.jpg?alt=media&token=e1864115-4c0d-4952-ba61-12c82f9d658b',
+  MTI: '/mx_logo.png', // Placeholder until MTI logo is uploaded
+  ALSAFY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FALSAFY.png?alt=media&token=fcb8577b-0994-4d1a-9a29-92489c872b04'
 };
+/**
+ * Brand logos under gs://tcs-for-engineers.firebasestorage.app/PQA/Service centers/
+ * Upload as <STEM>.png | .jpg | .jpeg | .webp (first match wins per brand).
+ * Service centers are matched by partnerName / name containing the brand (e.g. "RAYA" → RAYA logo).
+ */
+const PQA_SERVICE_CENTERS_FOLDER = 'PQA/Service centers';
+const PQA_BRAND_LOGO_STEM = {
+  RAYA: 'RAYA',
+  SKY: 'SKY',
+  HITECH: 'HITECH',
+  URC: 'URC',
+  KELECTRONICS: 'K-ELECTRONICS',
+  ATS: 'ATS',
+  ELECTRA: 'ELECTRA',
+  MTI: 'MTI',
+  ALSAFY: 'ALSAFY',
+};
+const PQA_LOGO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
+
+/** Map Storage file stem → brand key (handles K-ELECTRONICS ↔ KELECTRONICS). */
+const STEM_TO_BRAND_KEY = (() => {
+  const m = {};
+  for (const [key, stem] of Object.entries(PQA_BRAND_LOGO_STEM)) {
+    const u = stem.toUpperCase();
+    m[u] = key;
+    m[u.replace(/-/g, '')] = key;
+  }
+  return m;
+})();
+
 const TierBadge = ({ tier, size = 'md' }) => {
   const meta = TIER_META[tier] || TIER_META.Bronze;
   const sizeClass = size === 'sm'
@@ -245,7 +276,8 @@ const RankReveal3D = ({ tier, score, name, onDismiss, isPqaMode, rank }) => {
 // --- Sub-components ---
 
 const Header = ({ onHome, onLogoClick, appMode }) => {
-  const showLogo = appMode !== null; 
+  const showLogo = appMode !== null;
+  const isTcs = appMode === 'TCS';
   const appLogo = useMemo(() => {
     if (appMode?.startsWith('PQA')) return './pqa_logo.png';
     return './fawzy-logo.png';
@@ -253,21 +285,27 @@ const Header = ({ onHome, onLogoClick, appMode }) => {
   const slogan = 'Earn Your Tier • Own Your Title';
   return (
     <header className="sticky top-0 z-[100] px-6 py-4 md:px-12 md:py-6 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
-      <div className="max-w-[1400px] mx-auto grid grid-cols-3 items-center gap-4">
-        <div className="flex items-center">
+      <div className="max-w-[1400px] mx-auto grid grid-cols-3 items-center gap-3 md:gap-4 min-h-0">
+        <div className="flex items-center min-w-0">
           <div className="cursor-pointer group" onClick={onLogoClick || onHome}>
             <img src="./sam_logo.png" alt="Samsung" className="h-10 md:h-14 w-auto object-contain brightness-110 group-hover:scale-105 transition-transform duration-500" />
           </div>
         </div>
-        <div className="flex justify-center text-center">
-           <p className="text-[10px] md:text-[15px] uppercase tracking-[0.4em] md:tracking-[0.6em] text-zinc-300 font-extrabold leading-relaxed">
+        <div className="flex justify-center text-center min-w-0 px-1">
+           <p className="text-[9px] sm:text-[10px] md:text-[13px] uppercase tracking-[0.25em] sm:tracking-[0.35em] md:tracking-[0.5em] text-zinc-300 font-extrabold leading-snug break-words">
             {slogan}
           </p>
         </div>
-        <div className="flex justify-end items-center group">
+        <div className="flex justify-end items-center group min-w-0">
           {showLogo && (
-            <div className="h-16 w-16 md:h-24 md:w-24 rounded-[1.5rem] md:rounded-[2.2rem] overflow-hidden border-2 border-white/10 shadow-3xl bg-black transition-all duration-700 hover:scale-110 hover:border-white/40 group-hover:shadow-[0_0_50px_rgba(255,255,255,0.1)]">
-               <img src={appLogo} alt="App Logo" className="w-full h-full object-cover" />
+            <div
+              className={`rounded-2xl overflow-hidden border-2 border-white/10 shadow-3xl bg-black transition-all duration-700 hover:scale-105 hover:border-white/40 group-hover:shadow-[0_0_40px_rgba(255,255,255,0.08)] shrink-0 ${
+                isTcs
+                  ? 'h-11 w-11 sm:h-12 sm:w-12 md:h-14 md:w-14'
+                  : 'h-16 w-16 md:h-24 md:w-24 rounded-[1.5rem] md:rounded-[2.2rem]'
+              }`}
+            >
+              <img src={appLogo} alt="App Logo" className="h-full w-full object-cover" />
             </div>
           )}
         </div>
@@ -380,6 +418,7 @@ const PageContent = () => {
   const [selectedEngineer, setSelectedEngineer] = useState(null);
   const [searchCode, setSearchCode] = useState('');
   const [pqaDefaultUrl, setPqaDefaultUrl] = useState(PQA_SERVICE_CENTER_PHOTO);
+  const [partnerLogoUrls, setPartnerLogoUrls] = useState({});
 
   useEffect(() => {
     // Dynamically fetch the real download URL (with token) for the PQA Service Center photo
@@ -393,6 +432,59 @@ const PageContent = () => {
       } catch (e) { console.warn("PQA photo fetch failed, using fallback path.", e); }
     };
     getPqaPhoto();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { ref, listAll, getDownloadURL } = await import('firebase/storage');
+        const { storage } = await import('../firebase');
+        const next = {};
+
+        const tryStemExtensions = async (key, stem) => {
+          for (const ext of PQA_LOGO_EXTENSIONS) {
+            try {
+              return await getDownloadURL(ref(storage, `${PQA_SERVICE_CENTERS_FOLDER}/${stem}.${ext}`));
+            } catch { /* next */ }
+          }
+          return null;
+        };
+
+        // 1) List folder — picks up whatever filenames you uploaded (RAYA.png, Raya.jpg, …)
+        try {
+          const { items } = await listAll(ref(storage, PQA_SERVICE_CENTERS_FOLDER));
+          await Promise.all(
+            items.map(async (itemRef) => {
+              const name = itemRef.name; // "RAYA.png"
+              if (!name || name.startsWith('.')) return;
+              const stem = name.replace(/\.[^.]+$/i, '');
+              const stemU = stem.toUpperCase().trim();
+              const brandKey = STEM_TO_BRAND_KEY[stemU] || STEM_TO_BRAND_KEY[stemU.replace(/\s+/g, '')];
+              if (!brandKey) return;
+              try {
+                const url = await getDownloadURL(itemRef);
+                if (url) next[brandKey] = url;
+              } catch { /* skip */ }
+            })
+          );
+        } catch (listErr) {
+          console.warn('PQA Service centers folder list failed (check Storage list rules). Falling back to fixed paths.', listErr);
+        }
+
+        // 2) Fill any missing brand with known stems + extensions
+        for (const [key, stem] of Object.entries(PQA_BRAND_LOGO_STEM)) {
+          if (next[key]) continue;
+          const url = await tryStemExtensions(key, stem);
+          if (url) next[key] = url;
+        }
+
+        if (!cancelled) setPartnerLogoUrls(next);
+      } catch (e) {
+        console.warn('PQA brand logos init failed.', e);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const [loginUser, setLoginUser] = useState('');
@@ -492,25 +584,38 @@ const PageContent = () => {
   // Helper to ensure PQA Service Center photo is displayed correctly
   const getPhotoUrl = (eng) => {
     if (!eng) return 'https://picsum.photos/200';
-    
-    // Check for branded partner logos first (PQA and TCS)
-    const pName = String(eng.partnerName || '').toUpperCase();
-    const cName = String(eng.name || '').toUpperCase();
-    
-    if (pName.includes('RAYA') || cName.includes('RAYA')) return PARTNER_LOGOS.RAYA;
-    if (pName.includes('SKY') || cName.includes('SKY')) return PARTNER_LOGOS.SKY;
-    if (pName.includes('HI TECH') || pName.includes('HITECH') || cName.includes('HI TECH') || cName.includes('HITECH')) return PARTNER_LOGOS.HITECH;
-    if (pName.includes('URC') || cName.includes('URC')) return PARTNER_LOGOS.URC;
-    if (pName.includes('K-ELECTRONICS') || pName.includes('K ELECTRONICS') || cName.includes('K-ELECTRONICS') || cName.includes('K ELECTRONICS')) return PARTNER_LOGOS.KELECTRONICS;
-    if (pName.includes('ATS') || cName.includes('ATS')) return PARTNER_LOGOS.ATS;
-    if (pName.includes('ELECTRA') || cName.includes('ELECTRA')) return PARTNER_LOGOS.ELECTRA;
-    if (pName.includes('MTI') || cName.includes('MTI')) return PARTNER_LOGOS.MTI;
-    if (pName.includes('ALSAFY') || pName.includes('AL SAFY') || cName.includes('ALSAFY') || cName.includes('AL SAFY')) return PARTNER_LOGOS.ALSAFY;
 
     const isPqa = appMode?.startsWith('PQA');
+    const pqaPlaceholder = () => pqaDefaultUrl || PQA_SERVICE_CENTER_PHOTO;
+    /** Resolved Storage URL, else PQA generic placeholder (not missing /logos files), else local path for TCS */
+    const brandUrl = (key) => partnerLogoUrls[key] || (isPqa ? pqaPlaceholder() : PARTNER_LOGOS[key]);
+
+    // Match brand on any common field (Excel / Firestore may use partner vs partnerName, etc.)
+    const hay = [
+      eng.partnerName,
+      eng.partner,
+      eng.name,
+      eng.asc,
+      eng.code,
+      eng.centerName,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toUpperCase();
+
+    if (hay.includes('RAYA')) return brandUrl('RAYA');
+    if (hay.includes('SKY')) return brandUrl('SKY');
+    if (hay.includes('HI TECH') || hay.includes('HITECH')) return brandUrl('HITECH');
+    if (hay.includes('URC')) return brandUrl('URC');
+    if (hay.includes('K-ELECTRONICS') || hay.includes('K ELECTRONICS') || hay.includes('KELECTRONICS')) return brandUrl('KELECTRONICS');
+    if (hay.includes('ATS')) return brandUrl('ATS');
+    if (hay.includes('ELECTRA')) return brandUrl('ELECTRA');
+    if (hay.includes('MTI')) return brandUrl('MTI');
+    if (hay.includes('ALSAFY') || hay.includes('AL SAFY')) return brandUrl('ALSAFY');
+
     if (isPqa) {
       if (!eng.photoUrl || eng.photoUrl.includes('picsum') || eng.photoUrl.includes('default') || eng.photoUrl === PQA_SERVICE_CENTER_PHOTO) {
-        return pqaDefaultUrl || PQA_SERVICE_CENTER_PHOTO;
+        return pqaPlaceholder();
       }
     }
     return eng.photoUrl || 'https://picsum.photos/200';
@@ -1855,11 +1960,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 {/* Engineer Portal */}
                 <button
                   onClick={() => { setAppMode('TCS'); navigateTo('HOME'); }}
-                  className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
+                  className="group relative min-h-[28rem] md:h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-64 h-64 rounded-[3.5rem] bg-zinc-950 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(37,99,235,0.3)] overflow-hidden">
-                    <img src="/fawzy-logo.png" alt="TCS" className="w-full h-full object-cover scale-150" />
+                  <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-[2.5rem] sm:rounded-[3rem] bg-zinc-950 border border-blue-500/20 group-hover:scale-105 transition-transform duration-500 group-hover:shadow-[0_0_60px_rgba(37,99,235,0.3)] overflow-hidden">
+                    <img src="/fawzy-logo.png" alt="TCS" className="w-full h-full object-cover rounded-[2.5rem] sm:rounded-[3rem]" />
                   </div>
                   <div className="text-center space-y-3 relative z-10">
                     <h3 className="text-3xl font-black uppercase tracking-tight text-white group-hover:text-blue-400 transition-colors">TCS Portal</h3>
