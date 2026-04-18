@@ -81,12 +81,12 @@ const TIER_META = {
 
 const PQA_SERVICE_CENTER_PHOTO = 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers.png?alt=media';
 const PARTNER_LOGOS = {
-  RAYA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FRAYA.png?alt=media',
-  SKY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FSKY.png?alt=media',
-  HITECH: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FHITECH.png?alt=media',
-  URC: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FURC.png?alt=media',
+  RAYA: '/logos/raya.png',
+  SKY: '/logos/sky.png',
+  HITECH: '/logos/hitech.png',
+  URC: '/logos/urc.png',
   KELECTRONICS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FKELECTRONICS.png?alt=media',
-  ATS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FATS.png?alt=media',
+  ATS: '/logos/ats.png',
   ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FELECTRA.png?alt=media',
   MTI: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FMTI.png?alt=media'
 };
