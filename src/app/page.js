@@ -88,7 +88,7 @@ const PARTNER_LOGOS = {
   URC: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FURC.png?alt=media&token=f4993708-edf0-4503-8729-2d00f16ba5ab',
   KELECTRONICS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FK%20Electronics%20Logo-1766305188934.jpg?alt=media&token=ada4fc3a-75af-46c8-a5b3-64a1491593b6',
   ATS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FATS%20LOGO.jpg?alt=media&token=07f7845d-c90b-4edb-8aff-aa9af5b5b580',
-  ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FElectra%20Logo.jpg?alt=media&token=e1864115-4c0d-4952-ba61-12c82f9d658b',
+  ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FElectra%20Logo.jpg?alt=media&token=7325e6ac-2371-4741-91ee-50b44ce09845',
   MTI: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FMTI.png?alt=media&token=7ec69134-31bb-4ceb-a124-0409a824255c',
   ALSAFY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FALSAFY.png?alt=media&token=fcb8577b-0994-4d1a-9a29-92489c872b04',
   SAMSUNG_FALLBACK: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FSAMSUNG.jpg?alt=media&token=90a6b923-e8c1-4f65-96d1-0852386e73c1'
