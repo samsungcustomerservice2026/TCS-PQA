@@ -85,10 +85,11 @@ const PARTNER_LOGOS = {
   SKY: '/logos/sky.png',
   HITECH: '/logos/hitech.png',
   URC: '/logos/urc.png',
-  KELECTRONICS: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FKELECTRONICS.png?alt=media',
+  KELECTRONICS: '/logos/kelectronics.png',
   ATS: '/logos/ats.png',
-  ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FELECTRA.png?alt=media',
-  MTI: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Partners%2FMTI.png?alt=media'
+  ELECTRA: '/logos/electra.png',
+  MTI: '/logos/mti.png',
+  ALSAFY: '/logos/alsafy.png'
 };
 const TierBadge = ({ tier, size = 'md' }) => {
   const meta = TIER_META[tier] || TIER_META.Bronze;
@@ -504,6 +505,7 @@ const PageContent = () => {
     if (pName.includes('ATS') || cName.includes('ATS')) return PARTNER_LOGOS.ATS;
     if (pName.includes('ELECTRA') || cName.includes('ELECTRA')) return PARTNER_LOGOS.ELECTRA;
     if (pName.includes('MTI') || cName.includes('MTI')) return PARTNER_LOGOS.MTI;
+    if (pName.includes('ALSAFY') || pName.includes('AL SAFY') || cName.includes('ALSAFY') || cName.includes('AL SAFY')) return PARTNER_LOGOS.ALSAFY;
 
     const isPqa = appMode?.startsWith('PQA');
     if (isPqa) {
@@ -691,7 +693,7 @@ const PageContent = () => {
           bestPartnerScore: 0,
           totalCenterScore: 0,
           count: 0,
-          photoUrl: `./logos/${op.toLowerCase()}.png`
+          photoUrl: `/logos/${op.toLowerCase()}.png`
         };
       });
 
