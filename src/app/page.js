@@ -2744,7 +2744,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     {fetchedHiddenEngineers.map(eng => (
                       <div key={eng.id} className="bg-red-950/10 border border-red-900/20 p-6 rounded-3xl flex items-center justify-between group hover:bg-red-900/20 transition-all">
                         <div className="flex items-center gap-5">
-                          <img src={getPhotoUrl(eng)} className="w-12 h-12 rounded-xl object-cover grayscale opacity-40 shadow-2xl" alt={eng.name} />
+                          <img src={getPhotoUrl(eng)} className="w-12 h-12 rounded-xl object-contain bg-white grayscale opacity-40 shadow-2xl" alt={eng.name} />
                           <div>
                             <p className="text-sm font-black text-zinc-500 uppercase tracking-tight line-through opacity-50">{eng.name}</p>
                             <span className="text-[9px] font-black text-red-500 tracking-widest uppercase mt-1 block">ARCHIVED : {eng.code}</span>
@@ -2770,7 +2770,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-3 md:p-6 flex items-center justify-between gap-2 group">
                       <div className="flex items-center gap-3 md:gap-6 min-w-0 flex-1">
                       <div className="w-10 h-10 md:w-14 md:h-14 relative flex-shrink-0">
-                          <img src={getPhotoUrl(eng)} className="w-full h-full rounded-xl md:rounded-2xl object-cover grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80" alt={eng.name} />
+                          <img src={getPhotoUrl(eng)} className="w-full h-full rounded-xl md:rounded-2xl object-contain bg-white grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80" alt={eng.name} />
                           {isPqaMode ? (
                             // PQA: show numeric rank in corner
                             (() => {
@@ -3031,7 +3031,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div className="flex flex-col items-center md:items-start gap-8">
                     <div className="relative group">
                       <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
-                      <img src={getPhotoUrl(selectedEngineer)} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-cover border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
+                      <img src={getPhotoUrl(selectedEngineer)} className="relative z-10 w-32 h-32 md:w-48 md:h-48 rounded-[2.5rem] md:rounded-[3.5rem] object-contain bg-white p-1 border-4 border-zinc-800 shadow-3xl grayscale-50 group-hover:grayscale-0 transition-all duration-500" alt={selectedEngineer.name} />
                       {/* Only show tier emblem for TCS mode */}
                       {!isPqaMode && (
                         <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
