@@ -648,6 +648,59 @@ const PageContent = () => {
     return 'object-contain bg-white p-0.5';
   };
 
+  /** Top 3 rows only (same order & #displayRank as the ladder). Full list continues below from rank 4. */
+  const renderHomeRankingPodium = (entries, scoreField, scoreLabelStr) => {
+    const top = entries.slice(0, 3);
+    if (top.length === 0) return null;
+    const scoreOf = (eng) => (scoreField === 'avgScore' ? eng?.avgScore : eng?.tcsScore);
+    const PodiumCol = ({ eng, stepClass, champion }) => {
+      const displayRank = eng.displayRank ?? 0;
+      const url = getPhotoUrl(eng);
+      const sc = scoreOf(eng);
+      const scoreTone = champion
+        ? 'text-yellow-400'
+        : displayRank === 2
+          ? 'text-zinc-300'
+          : displayRank === 3
+            ? 'text-orange-500'
+            : 'text-white';
+      return (
+        <div className="flex flex-col items-center w-full max-w-[12rem]">
+          <div className={`flex flex-col items-center gap-1.5 mb-3 px-1 ${champion ? 'scale-[1.03] md:scale-105' : ''}`}>
+            <div className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">#{displayRank}</div>
+            <img
+              src={url}
+              alt=""
+              className={`w-14 h-14 md:w-[4.5rem] md:h-[4.5rem] rounded-2xl border shadow-lg ${getLogoStyle(url)} ${
+                champion ? 'border-yellow-500/80 ring-2 ring-yellow-500/25' : 'border-white/15'
+              }`}
+            />
+            <div className="text-[10px] md:text-xs font-black text-white uppercase text-center leading-tight line-clamp-2 min-h-[2rem] flex items-center justify-center">
+              {eng.name}
+            </div>
+            {!appMode?.startsWith('PQA') && eng.tier && <TierBadge tier={eng.tier} size="sm" />}
+            <div className={`text-xl md:text-3xl font-black italic tracking-tighter ${scoreTone}`}>
+              {sc != null ? parseFloat(sc).toFixed(1) : '—'}
+            </div>
+            <div className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{scoreLabelStr}</div>
+          </div>
+          <div
+            className={`w-full rounded-t-2xl border-t border-x border-white/10 bg-gradient-to-b from-zinc-800/90 to-zinc-950/90 shadow-inner ${stepClass}`}
+          />
+        </div>
+      );
+    };
+    return (
+      <div className="mb-8 md:mb-10" aria-label="Top three podium">
+        <p className="text-center text-[9px] font-black text-zinc-600 uppercase tracking-[0.35em] mb-4">Podium — Top 3</p>
+        <div className="flex flex-row justify-center items-end gap-2 md:gap-5 max-w-4xl mx-auto">
+          {top.length >= 2 && <PodiumCol eng={top[1]} stepClass="h-[5.5rem] md:h-[7rem]" />}
+          {top.length >= 1 && <PodiumCol eng={top[0]} stepClass="h-[7.5rem] md:h-[9.5rem]" champion />}
+          {top.length >= 3 && <PodiumCol eng={top[2]} stepClass="h-[4.5rem] md:h-[5.5rem]" />}
+        </div>
+      </div>
+    );
+  };
 
   // Record visit on mount & session end on tab close
   const isLoggedRef = React.useRef(isLogged);
@@ -2190,37 +2243,42 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </h3>
                     {hofTop10.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">No data for this period.</div>
-                    ) : hofTop10.map((eng, idx) => {
-                      const displayRank = eng.displayRank || idx + 1;
-                      const isFirst = displayRank === 1;
-                      const isSecond = displayRank === 2;
-                      const isThird = displayRank === 3;
-                      const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
-                      const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
-                      const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score';
-                      return (
-                        <div key={eng.id || eng.code} className={`glass-card rounded-[2.5rem] p-4 md:p-8 flex items-center gap-4 md:gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
-                          <div className={`flex-shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl border flex items-center justify-center font-black text-[10px] md:text-lg italic ${rankColor}`}>
-                            #{displayRank}
-                          </div>
-                          <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl ${getLogoStyle(getPhotoUrl(eng))} flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
-                          <div className="flex-1 min-w-0">
-                            <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
-                            {!appMode?.startsWith('PQA') && (
-                              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                <TierBadge tier={eng.tier} size="sm" />
+                    ) : (
+                      <>
+                        {renderHomeRankingPodium(hofTop10, 'tcsScore', appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score')}
+                        {hofTop10.slice(3).map((eng, idx) => {
+                          const displayRank = eng.displayRank ?? idx + 4;
+                          const isFirst = displayRank === 1;
+                          const isSecond = displayRank === 2;
+                          const isThird = displayRank === 3;
+                          const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
+                          const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
+                          const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score';
+                          return (
+                            <div key={eng.id || eng.code} className={`glass-card rounded-[2.5rem] p-4 md:p-8 flex items-center gap-4 md:gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
+                              <div className={`flex-shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl border flex items-center justify-center font-black text-[10px] md:text-lg italic ${rankColor}`}>
+                                #{displayRank}
                               </div>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 text-right">
-                            <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                              {eng.tcsScore != null ? parseFloat(eng.tcsScore).toFixed(1) : '—'}
-                            </span>
-                            <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
+                              <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl ${getLogoStyle(getPhotoUrl(eng))} flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
+                              <div className="flex-1 min-w-0">
+                                <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
+                                {!appMode?.startsWith('PQA') && (
+                                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                    <TierBadge tier={eng.tier} size="sm" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-shrink-0 text-right">
+                                <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
+                                  {eng.tcsScore != null ? parseFloat(eng.tcsScore).toFixed(1) : '—'}
+                                </span>
+                                <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -2253,36 +2311,44 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         No accumulated data — upload Excel with ★Partner Ranking sheet.
                       </div>
-                    ) : quarterlyRanking.slice(0, appMode?.startsWith('PQA') ? 500 : 10).map((eng, idx) => {
-                      const displayRank = eng.displayRank || idx + 1;
-                      const isFirst = displayRank === 1;
-                      const isSecond = displayRank === 2;
-                      const isThird = displayRank === 3;
-                      const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
-                      const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
+                    ) : (() => {
+                      const accLimit = appMode?.startsWith('PQA') ? 500 : 10;
+                      const accList = quarterlyRanking.slice(0, accLimit);
                       const avgLabel = appMode?.startsWith('PQA') ? 'Acc. Avg PQA' : 'Avg TCS';
                       return (
-                        <div key={`${eng.id || eng.code}-acc`} className={`glass-card rounded-[2.5rem] p-4 md:p-8 flex items-center gap-4 md:gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
-                          <div className={`flex-shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl border flex items-center justify-center font-black text-[10px] md:text-lg italic ${rankColor}`}>
-                            #{displayRank}
-                          </div>
-                          <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl ${getLogoStyle(getPhotoUrl(eng))} flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
-                          <div className="flex-1 min-w-0">
-                            <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              {!appMode?.startsWith('PQA') && <TierBadge tier={eng.tier} size="sm" />}
-                              {/* months tracked removed */}
-                            </div>
-                          </div>
-                          <div className="flex-shrink-0 text-right">
-                            <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                              {eng.avgScore != null ? parseFloat(eng.avgScore).toFixed(1) : '—'}
-                            </span>
-                            <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{avgLabel}</p>
-                          </div>
-                        </div>
+                        <>
+                          {renderHomeRankingPodium(accList, 'avgScore', avgLabel)}
+                          {accList.slice(3).map((eng, idx) => {
+                            const displayRank = eng.displayRank ?? idx + 4;
+                            const isFirst = displayRank === 1;
+                            const isSecond = displayRank === 2;
+                            const isThird = displayRank === 3;
+                            const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-500 bg-zinc-800/60 border-white/5';
+                            const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
+                            return (
+                              <div key={`${eng.id || eng.code}-acc`} className={`glass-card rounded-[2.5rem] p-4 md:p-8 flex items-center gap-4 md:gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
+                                <div className={`flex-shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-2xl border flex items-center justify-center font-black text-[10px] md:text-lg italic ${rankColor}`}>
+                                  #{displayRank}
+                                </div>
+                                <img src={getPhotoUrl(eng)} className={`w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-2xl ${getLogoStyle(getPhotoUrl(eng))} flex-shrink-0 ${isFirst ? 'border-2 border-yellow-500' : 'border border-white/10'}`} alt={eng.name} />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className={`text-[11px] xs:text-xs sm:text-sm md:text-lg font-black uppercase tracking-tight line-clamp-2 sm:truncate break-words ${isFirst ? 'text-yellow-400' : 'text-white'}`}>{eng.name}</h4>
+                                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                    {!appMode?.startsWith('PQA') && <TierBadge tier={eng.tier} size="sm" />}
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 text-right">
+                                  <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
+                                    {eng.avgScore != null ? parseFloat(eng.avgScore).toFixed(1) : '—'}
+                                  </span>
+                                  <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{avgLabel}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
                       );
-                    })}
+                    })()}
                   </div>
 
                   {/* Summary Stats – only shown for TCS quarterly mode, hidden for PQA accumulated */}
