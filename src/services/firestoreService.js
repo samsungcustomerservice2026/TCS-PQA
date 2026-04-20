@@ -4,6 +4,15 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from '
 const ENGINEERS_COLLECTION = 'engineers';
 const ADMINS_COLLECTION = 'admins';
 
+/** Only these collections may be archived from the admin UI (prevents arbitrary path writes). */
+const ALLOWED_ENGINEER_COLLECTIONS = new Set([
+  'engineers',
+  'tcs_da_engineers',
+  'tcs_vd_engineers',
+  'pqa_mx_centers',
+  'pqa_ce_centers',
+]);
+
 // Engineers
 export const getEngineers = async (collectionName = ENGINEERS_COLLECTION) => {
     const snapshot = await getDocs(collection(db, collectionName));
@@ -41,13 +50,15 @@ export const saveEngineer = async (engineer, collectionName = ENGINEERS_COLLECTI
 };
 
 export const archiveEngineer = async (id, collectionName = ENGINEERS_COLLECTION) => {
-    // Call the API route for soft delete
-    const response = await fetch(`/api/engineers/${id}?col=${collectionName}`, {
-        method: 'DELETE',
-    });
-    if (!response.ok) {
-        throw new Error('Failed to delete engineer via API');
+    if (!ALLOWED_ENGINEER_COLLECTIONS.has(collectionName)) {
+        throw new Error('Invalid engineer collection');
     }
+    const engineerRef = doc(db, collectionName, id);
+    await updateDoc(engineerRef, { hidden: true });
+};
+
+export const deleteEngineerPermanent = async (id, collectionName = ENGINEERS_COLLECTION) => {
+    await deleteDoc(doc(db, collectionName, id));
 };
 
 

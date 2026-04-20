@@ -27,6 +27,14 @@ export const calculateDRNPS = (promoters, detractors) => {
     return Math.min(100, Math.max(0, raw));
 };
 
+const resolveDrnpsScore = (eng) => {
+    const direct = parseFloat(eng?.drnpsScore);
+    if (Number.isFinite(direct)) {
+        return Math.min(100, Math.max(0, direct));
+    }
+    return calculateDRNPS(eng?.promoters, eng?.detractors);
+};
+
 /**
  * Returns a capped proportional score for a "lower is better" KPI.
  * actual <= target → full score; otherwise proportionally reduced.
@@ -82,11 +90,46 @@ export const calculateTCS = (eng) => {
     const examContribution = Math.min(20, (n(eng.examScore) / 100) * 20);
 
     // ── DRNPS Score → 30 pts  [30% weight] ──────────────────────
-    const drNPS = calculateDRNPS(eng.promoters, eng.detractors);
+    const drNPS = resolveDrnpsScore(eng);
     const drnpsContribution = Math.min(30, (drNPS / 100) * 30);
 
     const finalScore = kpiContribution + examContribution + drnpsContribution;
     return Number(finalScore.toFixed(1));
+};
+
+const Q1_MONTHS = new Set(['jan', 'feb', 'mar', 'january', 'february', 'march']);
+
+const isQ1Month = (monthValue) => {
+    const key = String(monthValue || '').trim().toLowerCase();
+    return Q1_MONTHS.has(key);
+};
+
+/**
+ * Q1 weighted formula using direct Engineer Evaluation score:
+ *   Engineer Evaluation (0-100) -> 50%
+ *   DRNPS (0-100)               -> 30%
+ *   Exam (0-100)                -> 20%
+ */
+export const calculateTCSQ1Weighted = (eng) => {
+    const n = (v) => parseFloat(v) || 0;
+    const evalContribution = Math.min(50, (n(eng.engineerEvaluation) / 100) * 50);
+    const drNPS = resolveDrnpsScore(eng);
+    const drnpsContribution = Math.min(30, (drNPS / 100) * 30);
+    const examContribution = Math.min(20, (n(eng.examScore) / 100) * 20);
+    return Number((evalContribution + drnpsContribution + examContribution).toFixed(1));
+};
+
+/**
+ * Hybrid scorer:
+ * - Jan/Feb/Mar with engineerEvaluation provided -> Q1 weighted formula
+ * - Otherwise -> existing KPI-based TCS formula (used by Apr+ criteria)
+ */
+export const calculateTCSFinalScore = (eng) => {
+    const hasQ1Eval = eng?.engineerEvaluation !== undefined && eng?.engineerEvaluation !== null && eng?.engineerEvaluation !== '';
+    if (hasQ1Eval && isQ1Month(eng?.month)) {
+        return calculateTCSQ1Weighted(eng);
+    }
+    return calculateTCS(eng);
 };
 
 export const calculatePQAScore = (pqa) => {
