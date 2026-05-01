@@ -2425,6 +2425,10 @@ const PageContent = () => {
   // ─── Engineer history: all records for the selected engineer's code, latest 3 months ───
   const engineerHistory = useMemo(() => {
     if (!selectedEngineer) return [];
+    const profileRankScore = (row) => {
+      if (appMode === 'TCS_MX') return parseFloat(row?.engineerEvaluation || 0);
+      return parseFloat(row?.tcsScore || 0);
+    };
     return engineers
       .filter(e => e.code?.toUpperCase() === selectedEngineer.code?.toUpperCase())
       .sort((a, b) => {
@@ -2437,7 +2441,7 @@ const PageContent = () => {
         // compute rank within that month
         const cohort = engineers
           .filter(e => e.month?.toLowerCase() === record.month?.toLowerCase() && sameCalendarYear(e.year, record.year))
-          .sort((a, b) => b.tcsScore - a.tcsScore);
+          .sort((a, b) => profileRankScore(b) - profileRankScore(a));
         const rank = cohort.findIndex(e => e.id === record.id) + 1;
         const qKey = `${getQuarter(record.month)}-${record.year}`;
         const qCohort = (() => {
@@ -2447,7 +2451,7 @@ const PageContent = () => {
             if (!e.month || !e.year) return;
             if (getQuarter(e.month) === q && sameCalendarYear(e.year, yr)) {
               if (!bucket[e.code]) bucket[e.code] = { code: e.code, scores: [] };
-              bucket[e.code].scores.push(e.tcsScore);
+              bucket[e.code].scores.push(profileRankScore(e));
             }
           });
           return Object.values(bucket)
@@ -2457,14 +2461,18 @@ const PageContent = () => {
         const qRank = qCohort.findIndex(e => e.code === record.code) + 1;
         return { ...record, monthRank: rank, monthTotal: cohort.length, qRank, qTotal: qCohort.length, qKey };
       });
-  }, [engineers, selectedEngineer]);
+  }, [engineers, selectedEngineer, appMode]);
 
   // ─── Summary ranks for the currently selected engineer ──────────────────────────
   const engineerSummaryRanks = useMemo(() => {
     if (!selectedEngineer) return null;
+    const profileRankScore = (row) => {
+      if (appMode === 'TCS_MX') return parseFloat(row?.engineerEvaluation || 0);
+      return parseFloat(row?.tcsScore || 0);
+    };
     const monthCohort = engineers
       .filter(e => e.month?.toLowerCase() === selectedEngineer.month?.toLowerCase() && sameCalendarYear(e.year, selectedEngineer.year))
-      .sort((a, b) => b.tcsScore - a.tcsScore);
+      .sort((a, b) => profileRankScore(b) - profileRankScore(a));
     const monthRank = monthCohort.findIndex(e => e.id === selectedEngineer.id) + 1;
     const q = getQuarter(selectedEngineer.month);
     const y = selectedEngineer.year;
@@ -2473,7 +2481,7 @@ const PageContent = () => {
       if (!e.month || !e.year) return;
       if (getQuarter(e.month) === q && sameCalendarYear(e.year, y)) {
         if (!qBucket[e.code]) qBucket[e.code] = { code: e.code, scores: [] };
-        qBucket[e.code].scores.push(e.tcsScore);
+        qBucket[e.code].scores.push(profileRankScore(e));
       }
     });
     const qList = Object.values(qBucket)
@@ -2486,7 +2494,7 @@ const PageContent = () => {
       quarter: q, year: y,
       month: selectedEngineer.month,
     };
-  }, [engineers, selectedEngineer]);
+  }, [engineers, selectedEngineer, appMode]);
 
 
   /** Digits-only comparison for long numeric service center / engineer IDs (handles spaced display). */
@@ -5755,8 +5763,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               {/* 3D Rank Reveal Overlay */}
               {showRankReveal && appMode !== 'PQA_MX' && (
                 <RankReveal3D
-                  tier={selectedEngineer.tier}
-                  score={isPqaMode ? resolvePqaTcsScore(pqaProfileSubject) : selectedEngineer.tcsScore}
+                  tier={resolveTierByMode(selectedEngineer)}
+                  score={isPqaMode ? resolvePqaTcsScore(pqaProfileSubject) : resolveTcsDashboardScore(selectedEngineer)}
                   name={isPqaMode ? selectedEngineer.name : tcsDisplayPrimary(selectedEngineer)}
                   onDismiss={() => setShowRankReveal(false)}
                   isPqaMode={isPqaMode}
@@ -5784,7 +5792,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       {/* Only show tier emblem for TCS mode */}
                       {!isPqaMode && (
                         <div className="absolute -bottom-2 -right-2 md:-bottom-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black z-20 bg-black">
-                          <img src={TIER_META[selectedEngineer.tier]?.img || TIER_META.Bronze.img} alt={selectedEngineer.tier} className="w-7 h-7 md:w-9 md:h-9 object-contain tier-emblem-blend" />
+                          <img src={TIER_META[resolveTierByMode(selectedEngineer)]?.img || TIER_META.Bronze.img} alt={resolveTierByMode(selectedEngineer)} className="w-7 h-7 md:w-9 md:h-9 object-contain tier-emblem-blend" />
                         </div>
                       )}
                     </div>
@@ -5845,7 +5853,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           ? ((profileOpenedByExactCode && pqaAccumulatedScore > 0)
                             ? Number(pqaAccumulatedScore.toFixed(1))
                             : resolvePqaTcsScore(pqaProfileSubject))
-                          : selectedEngineer.tcsScore}
+                          : resolveTcsDashboardScore(selectedEngineer)}
                       </span>
                       <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">
                         {isPqaMode
@@ -6097,7 +6105,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       else if (nr === np && parseFloat(r.tcsScore || 0) <= 100 && parseFloat(prev.tcsScore || 0) > 100) {
                         dedupByMonth[k] = r;
                       }
-                    } else if (r.tcsScore > prev.tcsScore) {
+                    } else if (resolveTcsDashboardScore(r) > resolveTcsDashboardScore(prev)) {
                       dedupByMonth[k] = r;
                     }
                   });
@@ -6148,7 +6156,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     r => getQuarter(r.month) === effQ && r.year === effQY
                   );
                   const qAvgScore = qRecords.length > 0
-                    ? parseFloat((qRecords.reduce((s, r) => s + r.tcsScore, 0) / qRecords.length).toFixed(1))
+                    ? parseFloat((qRecords.reduce((s, r) => s + resolveTcsDashboardScore(r), 0) / qRecords.length).toFixed(1))
                     : 0;
                   const qAvgDrnps = qRecords.length > 0
                     ? parseFloat((qRecords.reduce((s, r) => s + calculateDRNPS(r.promoters, r.detractors), 0) / qRecords.length).toFixed(1))
@@ -6187,7 +6195,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   })();
                   const dispScore = (() => {
                     if (!isPqaMode) {
-                      return profileViewMode === 'QUARTERLY' ? qAvgScore : effRecord.tcsScore;
+                      return profileViewMode === 'QUARTERLY' ? qAvgScore : resolveTcsDashboardScore(effRecord);
                     }
                     if (profileViewMode === 'QUARTERLY' && qRecords.length > 0) {
                       return parseFloat(
@@ -6498,7 +6506,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 {isPqaMode ? (
                                   <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Numeric Only</span>
                                 ) : (
-                                  <TierBadge tier={selectedEngineer.tier} size="sm" />
+                                  <TierBadge tier={resolveTierByMode(selectedEngineer)} size="sm" />
                                 )}
                               </div>
                               <div className="flex items-center justify-between">
@@ -6620,7 +6628,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           </div>
                           <div className="flex items-center gap-6">
                             {/* TCS: tier badge | PQA: no badge */}
-                            {!isPqaMode && <TierBadge tier={activeRecord.tier} size="lg" />}
+                            {!isPqaMode && <TierBadge tier={resolveTierByMode(activeRecord)} size="lg" />}
                             <div className="text-right">
                               <span className="text-5xl font-black text-white italic tracking-tighter">{activeRecord.tcsScore}</span>
                               <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score'}</p>
