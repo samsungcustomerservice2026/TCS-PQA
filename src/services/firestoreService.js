@@ -3,6 +3,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from '
 
 const ENGINEERS_COLLECTION = 'engineers';
 const ADMINS_COLLECTION = 'admins';
+const TCS_DASHBOARD_WINNERS_COLLECTION = 'tcs_dashboard_winners';
 
 /** Only these collections may be archived from the admin UI (prevents arbitrary path writes). */
 const ALLOWED_ENGINEER_COLLECTIONS = new Set([
@@ -81,6 +82,40 @@ export const saveAdmin = async (admin) => {
 
 export const deleteAdmin = async (id) => {
     await deleteDoc(doc(db, ADMINS_COLLECTION, id));
+};
+
+// TCS Dashboard Winners (Top 6 by quarter/product)
+export const getTcsDashboardWinners = async () => {
+    const snapshot = await getDocs(collection(db, TCS_DASHBOARD_WINNERS_COLLECTION));
+    return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+};
+
+export const saveTcsDashboardWinners = async (payload) => {
+    const quarterKey = String(payload?.quarterKey || '').toUpperCase().trim();
+    const product = String(payload?.product || '').toUpperCase().trim();
+    if (!/^Q[1-4]-\d{4}$/.test(quarterKey)) {
+        throw new Error('Invalid quarterKey. Expected format Q1-2026.');
+    }
+    if (!['MX', 'DA', 'AV'].includes(product)) {
+        throw new Error('Invalid product. Expected MX, DA, or AV.');
+    }
+    const winners = Array.isArray(payload?.winners)
+        ? payload.winners.map((code) => String(code || '').trim()).filter(Boolean)
+        : [];
+    if (winners.length !== 0 && winners.length !== 6) {
+        throw new Error('Provide exactly 6 winner engineer codes, or 0 codes to clear.');
+    }
+    const docId = `${quarterKey}-${product}`;
+    const docRef = doc(db, TCS_DASHBOARD_WINNERS_COLLECTION, docId);
+    const normalizedPayload = {
+        quarterKey,
+        product,
+        winners,
+        updatedAt: new Date().toISOString(),
+        updatedBy: payload?.updatedBy || 'admin',
+    };
+    await setDoc(docRef, normalizedPayload, { merge: true });
+    return docId;
 };
 
 // Feedback

@@ -46,7 +46,7 @@ import {
 
 import { INITIAL_ENGINEERS, calculateDRNPS, getTier, getTierColor, calculatePQAScore } from '../constants';
 import * as XLSX from 'xlsx';
-import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb } from '../services/firestoreService';
+import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, getTcsDashboardWinners, saveTcsDashboardWinners } from '../services/firestoreService';
 import { normalizePqaPartnerKey, mapPqaSheetPartnerKeyToOfficial, PQA_OFFICIAL_MX_PARTNERS } from '../lib/pqaPartnerMap.js';
 
 import { uploadPhoto, uploadTcsAllProductImagesFromPublic } from '../services/storageService';
@@ -849,7 +849,7 @@ function parsePqaEvaluationPointRows(evalRows, appMode) {
 const TIER_META = {
   Masters: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FMaster%201.png?alt=media&token=a8eb8d46-5351-4b02-9f4e-e16def338ce6', border: 'border-purple-500', text: 'text-purple-300', glow: 'shadow-purple-500/40' },
   Diamond: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FDiamond%202.png?alt=media&token=2310388b-3281-4357-b202-677788b29c25', border: 'border-blue-400', text: 'text-blue-200', glow: 'shadow-blue-400/40' },
-  Platinum: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FPlat%202.png?alt=media&token=8bbcfe60-0c97-4cc9-8d59-dec38f04eaba', border: 'border-zinc-300', text: 'text-zinc-100', glow: 'shadow-zinc-300/30' },
+  Platinum: { img: '/ranking-tiers/platinum.png', border: 'border-zinc-300', text: 'text-zinc-100', glow: 'shadow-zinc-300/30' },
   Gold: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FGold%202.png?alt=media&token=f153076b-6c3a-4a1a-8b46-b65c94c593bf', border: 'border-yellow-500', text: 'text-yellow-300', glow: 'shadow-yellow-500/40' },
   Silver: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FSilver%202.png?alt=media&token=05ebda06-4011-4920-ac19-dd0b9fa9e3fb', border: 'border-zinc-400', text: 'text-zinc-300', glow: 'shadow-zinc-400/30' },
   Bronze: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FBronze%202.png?alt=media&token=ec56f9b5-f567-4778-b0b2-4df15fe0a840', border: 'border-orange-600', text: 'text-orange-400', glow: 'shadow-orange-600/30' },
@@ -880,6 +880,72 @@ function isSamsungEngineerPhotoUrl(url) {
 
 /** Home dashboard (TCS): monthly Hall of Fame + quarterly ladder list length (podium + rows below). */
 const TCS_HOME_LEADERBOARD_LIMIT = 20;
+const TCS_WINNERS_PER_PRODUCT = 6;
+
+const quarterKeyToIndex = (quarterKey) => {
+  const m = String(quarterKey || '').toUpperCase().match(/^Q([1-4])-(\d{4})$/);
+  if (!m) return null;
+  return (parseInt(m[2], 10) * 4) + (parseInt(m[1], 10) - 1);
+};
+
+const quarterIndexToKey = (index) => {
+  if (!Number.isFinite(index) || index < 0) return null;
+  const year = Math.floor(index / 4);
+  const quarterNum = (index % 4) + 1;
+  return `Q${quarterNum}-${year}`;
+};
+
+const normalizeEngineerCodeKey = (value) => String(value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+const normalizeEngineerDigits = (value) => String(value || '').replace(/\D/g, '');
+const getTcsEngineerIdentityKey = (entry) =>
+  normalizeEngineerCodeKey(entry?.engineerCode) ||
+  normalizeEngineerCodeKey(entry?.code) ||
+  normalizeEngineerCodeKey(entry?.id);
+const winnerCodeEqualsStrict = (a, b) => {
+  const na = normalizeEngineerCodeKey(a);
+  const nb = normalizeEngineerCodeKey(b);
+  return Boolean(na && nb && na === nb);
+};
+const getWinnerCodeCandidates = (entry) => {
+  const candidates = [entry?.engineerCode, entry?.code]
+    .map((v) => normalizeEngineerCodeKey(v))
+    .filter(Boolean);
+  return [...new Set(candidates)];
+};
+
+const engineerCodeEquals = (a, b) => {
+  const na = normalizeEngineerCodeKey(a);
+  const nb = normalizeEngineerCodeKey(b);
+  if (na && nb && na === nb) return true;
+
+  const da = normalizeEngineerDigits(a);
+  const db = normalizeEngineerDigits(b);
+  if (da.length >= 4 && db.length >= 4 && da === db) return true;
+
+  const af = parseFloat(String(a ?? '').replace(/,/g, '').trim());
+  const bf = parseFloat(String(b ?? '').replace(/,/g, '').trim());
+  if (Number.isFinite(af) && Number.isFinite(bf) && af === bf) return true;
+  return false;
+};
+const recordMatchesWinnerCode = (entry, winnerCode) =>
+  getWinnerCodeCandidates(entry).includes(normalizeEngineerCodeKey(winnerCode));
+
+const resolveTcsDashboardProduct = (mode) => {
+  if (mode === 'TCS_DA') return 'DA';
+  if (mode === 'TCS_AV' || mode === 'TCS_VD') return 'AV';
+  if (mode === 'TCS_MX') return 'MX';
+  return null;
+};
+const getMxEvaluationTier = (score) => {
+  const s = parseFloat(score);
+  if (!Number.isFinite(s)) return 'Bronze';
+  if (s >= 100) return 'Masters';
+  if (s >= 90) return 'Diamond';
+  if (s >= 80) return 'Platinum';
+  if (s >= 70) return 'Gold';
+  if (s >= 60) return 'Silver';
+  return 'Bronze';
+};
 
 /** After swapping to the Samsung fallback in the DOM, apply cover styling (React className does not update). */
 function handleEngineerPhotoError(e) {
@@ -1398,6 +1464,41 @@ const PageContent = () => {
     setLogsLoading(true);
     fetchLogs(100).then(data => { setActivityLogs(data); setLogsLoading(false); });
   }, []);
+  const [tcsWinnersConfigs, setTcsWinnersConfigs] = useState([]);
+  const [tcsWinnersLoading, setTcsWinnersLoading] = useState(false);
+  const [tcsWinnersSaving, setTcsWinnersSaving] = useState(false);
+  const [winnerHubQuarter, setWinnerHubQuarter] = useState('Q1');
+  const [winnerHubYear, setWinnerHubYear] = useState(String(new Date().getFullYear()));
+  const [winnerHubProduct, setWinnerHubProduct] = useState('MX');
+  const [winnerHubCodes, setWinnerHubCodes] = useState(Array.from({ length: TCS_WINNERS_PER_PRODUCT }, () => ''));
+  const winnerHubQuarterKey = `${winnerHubQuarter}-${winnerHubYear}`;
+  const winnersConfigMap = useMemo(() => {
+    const map = new Map();
+    tcsWinnersConfigs.forEach((cfg) => {
+      const key = `${String(cfg.quarterKey || '').toUpperCase()}-${String(cfg.product || '').toUpperCase()}`;
+      map.set(key, cfg);
+    });
+    return map;
+  }, [tcsWinnersConfigs]);
+
+  const loadTcsWinnersConfigs = React.useCallback(async (silent = false) => {
+    setTcsWinnersLoading(true);
+    try {
+      const rows = await getTcsDashboardWinners();
+      setTcsWinnersConfigs(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      console.error('Failed to load TCS winners config.', e);
+      if (!silent) message.error('Failed to load TCS winners config.');
+    } finally {
+      setTcsWinnersLoading(false);
+    }
+  }, [message]);
+  useEffect(() => {
+    if (adminModal !== 'winners') return;
+    const cfg = winnersConfigMap.get(`${winnerHubQuarterKey}-${winnerHubProduct}`);
+    const nextCodes = Array.from({ length: TCS_WINNERS_PER_PRODUCT }, (_, idx) => String(cfg?.winners?.[idx] || ''));
+    setWinnerHubCodes(nextCodes);
+  }, [adminModal, winnersConfigMap, winnerHubQuarterKey, winnerHubProduct]);
 
   // Scroll to top on every view change
   useEffect(() => {
@@ -1410,6 +1511,17 @@ const PageContent = () => {
       return () => clearTimeout(t);
     }
   }, [view]);
+
+  useEffect(() => {
+    if (!isLogged || !currentUser) return;
+    const canManageTcs = currentUser.role === 'SUPER_ADMIN' || currentUser.access === 'TCS_ONLY' || currentUser.access === 'ALL';
+    if (!canManageTcs) return;
+    loadTcsWinnersConfigs();
+  }, [isLogged, currentUser, loadTcsWinnersConfigs]);
+  useEffect(() => {
+    if (!appMode?.startsWith('TCS')) return;
+    loadTcsWinnersConfigs(true);
+  }, [appMode, loadTcsWinnersConfigs]);
 
   // Helper to ensure PQA Service Center photo is displayed correctly
   const getPhotoUrl = (eng) => {
@@ -1498,15 +1610,27 @@ const PageContent = () => {
     return 'engineers';
   };
 
-  /** TCS: tier emblem only (no duplicate Rank label). PQA: # only. */
+  /** TCS: tier emblem + numeric rank. PQA: # only. */
   const renderRankBadgePodium = (displayRank, eng, compact = false) => {
     if (isTcsMode && eng) {
-      const meta = TIER_META[eng.tier] || TIER_META.Bronze;
+      const tier = resolveTierByMode(eng);
+      const meta = TIER_META[tier] || TIER_META.Bronze;
+      const rankTone =
+        displayRank === 1
+          ? 'text-yellow-300 border-yellow-500/50 bg-yellow-500/10'
+          : displayRank === 2
+            ? 'text-zinc-200 border-zinc-300/40 bg-zinc-300/10'
+            : displayRank === 3
+              ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+              : 'text-zinc-300 border-zinc-500/30 bg-zinc-500/10';
       return (
         <div className="mb-1 flex flex-col items-center sm:mb-2">
+          <div className={`mb-1 px-2.5 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${rankTone}`}>
+            #{displayRank}
+          </div>
           <img
             src={meta.img}
-            alt={eng.tier || 'Tier'}
+            alt={tier || 'Tier'}
             className={`object-contain drop-shadow-[0_8px_28px_rgba(0,0,0,0.5)] tier-emblem-blend ${
               compact
                 ? 'h-9 w-9 sm:h-14 sm:w-14 md:h-[4.25rem] md:w-[4.25rem]'
@@ -1525,12 +1649,13 @@ const PageContent = () => {
   const renderRankBadgeList = (displayRank, isFirst, isSecond, isThird, eng) => {
     const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-400 bg-zinc-800/60 border-white/10';
     if (isTcsMode && eng) {
-      const meta = TIER_META[eng.tier] || TIER_META.Bronze;
+      const tier = resolveTierByMode(eng);
+      const meta = TIER_META[tier] || TIER_META.Bronze;
       return (
         <div className="flex flex-shrink-0 items-center">
           <img
             src={meta.img}
-            alt={eng.tier || ''}
+            alt={tier || ''}
             className="h-12 w-12 sm:h-14 sm:w-14 md:h-[4.25rem] md:w-[4.25rem] object-contain tier-emblem-blend"
           />
         </div>
@@ -1547,9 +1672,13 @@ const PageContent = () => {
   const renderHomeRankingPodium = (entries, scoreField, scoreLabelStr) => {
     const top = entries.slice(0, 3);
     if (top.length === 0) return null;
-    const scoreOf = (eng) => (scoreField === 'avgScore' ? eng?.avgScore : eng?.tcsScore);
-    const PodiumCol = ({ eng, stepClass, champion }) => {
-      const displayRank = eng.displayRank ?? 0;
+    const scoreOf = (eng) => {
+      if (scoreField === 'avgScore') return eng?.avgScore;
+      if (scoreField === 'engineerEvaluation') return eng?.engineerEvaluation;
+      return eng?.tcsScore;
+    };
+    const PodiumCol = ({ eng, stepClass, champion, forcedRank }) => {
+      const displayRank = eng.displayRank ?? forcedRank ?? 0;
       const url = getPhotoUrl(eng);
       const sc = scoreOf(eng);
       const scoreTone = champion
@@ -1595,9 +1724,9 @@ const PageContent = () => {
       <div className="mb-6 w-full min-w-0 max-w-full md:mb-10" aria-label="Top three podium">
         <p className="mb-3 text-center text-[9px] font-black uppercase tracking-[0.35em] text-zinc-600">Podium — Top 3</p>
         <div className="mx-auto grid w-full min-w-0 max-w-4xl grid-cols-3 items-end gap-1 px-1 sm:gap-3 sm:px-3 md:gap-5">
-          {top.length >= 2 && <PodiumCol eng={top[1]} stepClass="h-12 sm:h-[5.5rem] md:h-[7rem]" />}
-          {top.length >= 1 && <PodiumCol eng={top[0]} stepClass="h-16 sm:h-[7.5rem] md:h-[9.5rem]" champion />}
-          {top.length >= 3 && <PodiumCol eng={top[2]} stepClass="h-10 sm:h-[4.5rem] md:h-[5.5rem]" />}
+          {top.length >= 2 && <PodiumCol eng={top[1]} forcedRank={2} stepClass="h-12 sm:h-[5.5rem] md:h-[7rem]" />}
+          {top.length >= 1 && <PodiumCol eng={top[0]} forcedRank={1} stepClass="h-16 sm:h-[7.5rem] md:h-[9.5rem]" champion />}
+          {top.length >= 3 && <PodiumCol eng={top[2]} forcedRank={3} stepClass="h-10 sm:h-[4.5rem] md:h-[5.5rem]" />}
         </div>
       </div>
     );
@@ -1808,6 +1937,18 @@ const PageContent = () => {
   // ─── Hall of Fame: top N for selected month (deduplicated by code); TCS uses TCS_HOME_LEADERBOARD_LIMIT ─────────
   // Default to the LAST element = latest month (ascending sort → last = newest)
   const effectiveHofMonth = selectedHofMonth || allMonthPeriods[allMonthPeriods.length - 1]?.key || null;
+  const resolveTierByMode = React.useCallback((eng) => {
+    if (appMode === 'TCS_MX') return getMxEvaluationTier(eng?.engineerEvaluation);
+    return getTier(parseFloat(eng?.tcsScore) || 0);
+  }, [appMode]);
+  const resolveTcsDashboardScore = React.useCallback((eng) => {
+    if (appMode === 'TCS_MX') {
+      const evalScore = parseFloat(eng?.engineerEvaluation);
+      if (Number.isFinite(evalScore)) return Number(evalScore.toFixed(1));
+    }
+    const tcs = parseFloat(eng?.tcsScore);
+    return Number.isFinite(tcs) ? Number(tcs.toFixed(1)) : 0;
+  }, [appMode]);
   const hofTop10 = useMemo(() => {
     if (!effectiveHofMonth) return [];
     const [m, y] = effectiveHofMonth.split('-');
@@ -1913,7 +2054,7 @@ const PageContent = () => {
           ? asNum((asNum(byCode[code].tcsScore) > 0 ? byCode[code].tcsScore : (byCode[code].centerMonthlyScore ?? byCode[code].monthlyScore ?? byCode[code].evalMonthlyScore ?? 0)))
           : -1;
         if (!byCode[code] || score > prevScore) byCode[code] = e;
-      } else if (!byCode[code] || e.tcsScore > byCode[code].tcsScore) {
+      } else if (!byCode[code] || resolveTcsDashboardScore(e) > resolveTcsDashboardScore(byCode[code])) {
         byCode[code] = e;
       }
     });
@@ -1932,6 +2073,9 @@ const PageContent = () => {
         if (appMode === 'PQA_CE') {
           const ceScore = asNum((asNum(e.tcsScore) > 0 ? e.tcsScore : (e.centerMonthlyScore ?? e.monthlyScore ?? e.evalMonthlyScore ?? 0)));
           return { ...e, tcsScore: ceScore };
+        }
+        if (appMode === 'TCS_MX') {
+          return { ...e, tcsScore: resolveTcsDashboardScore(e) };
         }
         return e;
       })
@@ -1954,7 +2098,28 @@ const PageContent = () => {
       }
       return { ...e, displayRank: currentRank };
     });
-  }, [engineers, effectiveHofMonth, appMode, pqaMxGroupBy]);
+  }, [engineers, effectiveHofMonth, appMode, pqaMxGroupBy, resolveTcsDashboardScore]);
+  const tcsMonthlyWinnersSource = useMemo(() => {
+    if (!isTcsMode || !effectiveHofMonth) return [];
+    const [month, year] = String(effectiveHofMonth || '').split('-');
+    const byEngineer = {};
+    engineers
+      .filter((e) => e.month?.toLowerCase() === String(month || '').toLowerCase() && sameCalendarYear(e.year, year))
+      .forEach((e) => {
+        const engineerKey = getTcsEngineerIdentityKey(e);
+        if (!engineerKey) return;
+        const score = resolveTcsDashboardScore(e);
+        if (!byEngineer[engineerKey] || score > resolveTcsDashboardScore(byEngineer[engineerKey])) byEngineer[engineerKey] = e;
+      });
+    const sorted = Object.values(byEngineer).sort((a, b) => resolveTcsDashboardScore(b) - resolveTcsDashboardScore(a));
+    let denseRank = 1;
+    return sorted.map((e, i) => {
+      const cur = resolveTcsDashboardScore(e);
+      const prev = i > 0 ? resolveTcsDashboardScore(sorted[i - 1]) : null;
+      if (i > 0 && cur < prev) denseRank = i + 1;
+      return { ...e, displayRank: denseRank };
+    });
+  }, [isTcsMode, effectiveHofMonth, engineers, resolveTcsDashboardScore]);
 
   // ─── Quarterly: all unique quarter keys, sorted latest-first ─────────────────
   const allQuarterKeys = useMemo(() => {
@@ -1981,6 +2146,99 @@ const PageContent = () => {
   }, [engineers]);
 
   const effectiveQuarterKey = selectedQuarterKey || allQuarterKeys[0] || null;
+  const effectiveHomeQuarterKey = useMemo(() => {
+    if (homeViewMode === 'QUARTERLY') return effectiveQuarterKey;
+    const parsed = parseMonthYearKey(effectiveHofMonth);
+    const monthQuarter = getQuarter(parsed.month);
+    const yearKey = normalizeYearKey(parsed.year);
+    if (monthQuarter && yearKey) return `${monthQuarter}-${yearKey}`;
+    return effectiveQuarterKey;
+  }, [homeViewMode, effectiveQuarterKey, effectiveHofMonth]);
+  const winnersScopeQuarterKey = useMemo(() => {
+    if (effectiveHomeQuarterKey) return effectiveHomeQuarterKey;
+    if (effectiveQuarterKey) return effectiveQuarterKey;
+    if (!isTcsMode) return null;
+    const keys = Array.from(winnersConfigMap.keys())
+      .filter((k) => k.endsWith(`-${resolveTcsDashboardProduct(appMode) || ''}`))
+      .map((k) => k.split('-').slice(0, 2).join('-'))
+      .filter((k) => /^Q[1-4]-\d{4}$/.test(k))
+      .sort((a, b) => quarterKeyToIndex(b) - quarterKeyToIndex(a));
+    return keys[0] || null;
+  }, [effectiveHomeQuarterKey, effectiveQuarterKey, isTcsMode, winnersConfigMap, appMode]);
+  const tcsDashboardProduct = resolveTcsDashboardProduct(appMode);
+  const resolvedTcsWinnersConfig = useMemo(() => {
+    if (!isTcsMode || !tcsDashboardProduct || !winnersScopeQuarterKey) return null;
+    const key = `${winnersScopeQuarterKey}-${tcsDashboardProduct}`;
+    let cfg = winnersConfigMap.get(key);
+    let resolvedQuarter = winnersScopeQuarterKey;
+    if (!cfg || !Array.isArray(cfg.winners) || cfg.winners.length === 0) {
+      const productConfigs = Array.from(winnersConfigMap.values())
+        .filter((item) =>
+          String(item?.product || '').toUpperCase() === tcsDashboardProduct &&
+          Array.isArray(item?.winners) &&
+          item.winners.length > 0 &&
+          /^Q[1-4]-\d{4}$/.test(String(item?.quarterKey || '').toUpperCase())
+        )
+        .sort((a, b) => (quarterKeyToIndex(String(b.quarterKey).toUpperCase()) || -1) - (quarterKeyToIndex(String(a.quarterKey).toUpperCase()) || -1));
+      if (productConfigs.length > 0) {
+        cfg = productConfigs[0];
+        resolvedQuarter = String(cfg.quarterKey || winnersScopeQuarterKey).toUpperCase();
+      }
+    }
+    if (!cfg || !Array.isArray(cfg.winners) || cfg.winners.length === 0) return null;
+    return {
+      ...cfg,
+      resolvedQuarterKey: resolvedQuarter,
+      fallbackUsed: resolvedQuarter !== winnersScopeQuarterKey,
+    };
+  }, [isTcsMode, tcsDashboardProduct, winnersScopeQuarterKey, winnersConfigMap]);
+  const applyConfiguredTcsWinners = React.useCallback((entries) => {
+    if (!isTcsMode) return entries;
+    if (!resolvedTcsWinnersConfig || !Array.isArray(resolvedTcsWinnersConfig.winners)) return [];
+    const configuredWinners = resolvedTcsWinnersConfig.winners.map((w) => normalizeEngineerCodeKey(w)).filter(Boolean);
+    const normalizeDigits = (value) => String(value || '').replace(/\D/g, '');
+    const rowMatchesWinner = (row, winnerCode) => {
+      if (recordMatchesWinnerCode(row, winnerCode)) return true;
+      const wd = normalizeDigits(winnerCode);
+      if (!wd || wd.length < 6) return false;
+      const rowDigits = [row?.engineerCode, row?.code].map((v) => normalizeDigits(v));
+      return rowDigits.some((d) => d && d === wd);
+    };
+    const recencyKey = (row) => {
+      const y = parseInt(String(row?.year || '0'), 10) || 0;
+      const m = getMonthIndex(row?.month);
+      return (y * 100) + (Number.isFinite(m) ? m : 0);
+    };
+    const pickBest = (rows) =>
+      [...rows].sort((a, b) => {
+        const ra = recencyKey(a);
+        const rb = recencyKey(b);
+        if (rb !== ra) return rb - ra;
+        return resolveTcsDashboardScore(b) - resolveTcsDashboardScore(a);
+      })[0];
+
+    const ranked = [];
+    const usedIds = new Set();
+    configuredWinners.forEach((winnerCode, idx) => {
+      const fromEntries = entries.filter((row) => {
+        const key = row?.id || `${row?.code}-${row?.month}-${row?.year}`;
+        return !usedIds.has(key) && rowMatchesWinner(row, winnerCode);
+      });
+      const fromAllRows = engineers.filter((row) => {
+        const key = row?.id || `${row?.code}-${row?.month}-${row?.year}`;
+        return !usedIds.has(key) && rowMatchesWinner(row, winnerCode);
+      });
+      const pick = pickBest(fromEntries.length > 0 ? fromEntries : fromAllRows);
+      if (pick) {
+        const key = pick?.id || `${pick?.code}-${pick?.month}-${pick?.year}`;
+        usedIds.add(key);
+        ranked.push({ ...pick, displayRank: idx + 1 });
+      }
+    });
+    ranked.sort((a, b) => (a.displayRank || 999) - (b.displayRank || 999));
+    // Strict behavior: when config exists, only configured winners should appear.
+    return ranked;
+  }, [isTcsMode, resolvedTcsWinnersConfig, engineers, resolveTcsDashboardScore]);
 
   /** TCS quarterly pill: Q1 · MX when product is uniform; otherwise Q1 · 2025 */
   const tcsQuarterPeriodLabel = useMemo(() => {
@@ -2126,10 +2384,10 @@ const PageContent = () => {
       if (/^[1-4]$/.test(qField)) qField = `Q${qField}`;
       const inQuarter = monthQ === q || qField === q;
       if (!inQuarter) return;
-      const codeKey = String(e.code || '').trim().toUpperCase() || e.id;
-      if (!codeKey) return;
-      if (!bucket[codeKey]) bucket[codeKey] = [];
-      bucket[codeKey].push(e);
+      const engineerKey = getTcsEngineerIdentityKey(e);
+      if (!engineerKey) return;
+      if (!bucket[engineerKey]) bucket[engineerKey] = [];
+      bucket[engineerKey].push(e);
     });
     return Object.values(bucket)
       .map((rows) => {
@@ -2140,7 +2398,7 @@ const PageContent = () => {
           return getMonthIndex(b.month) - getMonthIndex(a.month);
         });
         const pick = sorted[0];
-        const ts = parseFloat(pick.tcsScore);
+        const ts = resolveTcsDashboardScore(pick);
         return {
           ...pick,
           avgScore: Number.isFinite(ts) ? Number(ts.toFixed(1)) : 0,
@@ -2154,7 +2412,15 @@ const PageContent = () => {
         else e.displayRank = arr[i - 1].displayRank;
         return e;
       });
-  }, [engineers, deduplicatedEngineers, effectiveQuarterKey, appMode, pqaMxGroupBy]);
+  }, [engineers, deduplicatedEngineers, effectiveQuarterKey, appMode, pqaMxGroupBy, resolveTcsDashboardScore]);
+  const monthlyDashboardList = useMemo(() => {
+    if (isTcsMode) return applyConfiguredTcsWinners(quarterlyRanking);
+    return hofTop10;
+  }, [isTcsMode, applyConfiguredTcsWinners, quarterlyRanking, hofTop10]);
+  const quarterlyDashboardList = useMemo(() => {
+    if (!isTcsMode) return quarterlyRanking;
+    return applyConfiguredTcsWinners(quarterlyRanking);
+  }, [isTcsMode, applyConfiguredTcsWinners, quarterlyRanking]);
 
   // ─── Engineer history: all records for the selected engineer's code, latest 3 months ───
   const engineerHistory = useMemo(() => {
@@ -2474,6 +2740,66 @@ const PageContent = () => {
     }
   };
 
+  const openTcsWinnersHub = async () => {
+    const preferredQuarter = String((effectiveQuarterKey || 'Q1-2026')).toUpperCase();
+    const m = preferredQuarter.match(/^Q([1-4])-(\d{4})$/);
+    if (m) {
+      setWinnerHubQuarter(`Q${m[1]}`);
+      setWinnerHubYear(m[2]);
+    }
+    setWinnerHubProduct(resolveTcsDashboardProduct(appMode) || 'MX');
+    setAdminModal('winners');
+    await loadTcsWinnersConfigs();
+  };
+
+  const handleSaveTcsWinnersConfig = async () => {
+    const year = String(winnerHubYear || '').replace(/[^0-9]/g, '').slice(0, 4);
+    if (!/^\d{4}$/.test(year)) {
+      message.warning('Please enter a valid 4-digit year.');
+      return;
+    }
+    const cleaned = winnerHubCodes.map((code) => normalizeEngineerCodeKey(code)).filter(Boolean);
+    if (cleaned.length !== 0 && cleaned.length !== TCS_WINNERS_PER_PRODUCT) {
+      message.warning(`Provide exactly ${TCS_WINNERS_PER_PRODUCT} engineer codes, or clear all fields to disable winners.`);
+      return;
+    }
+    if (cleaned.length > 0 && new Set(cleaned).size !== cleaned.length) {
+      message.warning('Winner codes must be unique.');
+      return;
+    }
+    setTcsWinnersSaving(true);
+    try {
+      const quarterKey = `${winnerHubQuarter}-${year}`;
+      await saveTcsDashboardWinners({
+        quarterKey,
+        product: winnerHubProduct,
+        winners: cleaned,
+        updatedBy: currentUser?.username || currentUser?.name || 'admin',
+      });
+      await loadTcsWinnersConfigs();
+      setSelectedQuarterKey(quarterKey);
+      setHomeViewMode('QUARTERLY');
+      setWinnerHubYear(year);
+      if (cleaned.length === 0) {
+        message.success(`Cleared dashboard winners for ${winnerHubProduct} (${quarterKey}).`);
+      } else {
+        message.success(`Saved Top ${TCS_WINNERS_PER_PRODUCT} winners for ${winnerHubProduct} (${quarterKey}).`);
+      }
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        action: cleaned.length === 0 ? 'Cleared TCS dashboard winners' : 'Saved TCS dashboard winners',
+        details: { product: winnerHubProduct, quarterKey, winners: cleaned.join(',') || 'none' },
+        severity: 'info',
+      });
+    } catch (e) {
+      console.error(e);
+      message.error(e?.message || 'Failed to save winners config.');
+    } finally {
+      setTcsWinnersSaving(false);
+    }
+  };
+
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
     if (file && editingEng) {
@@ -2502,7 +2828,9 @@ const PageContent = () => {
             if (!Number.isFinite(manual)) return 0;
             return Math.min(100, Math.max(0, Number(manual.toFixed(1))));
           })();
-      const newTier = getTier(newScore);
+      const newTier = appMode === 'TCS_MX'
+        ? getMxEvaluationTier(updated?.engineerEvaluation)
+        : getTier(newScore);
 
       let finalPhotoUrl = updated.photoUrl;
 
@@ -2878,18 +3206,67 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
   const downloadTcsDivisionTemplate = (division) => {
     const short =
       division === 'TCS_MX' ? 'MX' : division === 'TCS_DA' ? 'DA' : division === 'TCS_AV' || division === 'TCS_VD' ? 'AV' : 'MX';
+    const isDaAvTemplate = division === 'TCS_DA' || division === 'TCS_AV' || division === 'TCS_VD';
     const wb = XLSX.utils.book_new();
-    const tcsHeaders = [
-      ["Quarter", "Engineer Code", "SBA ID", "ASC Engineer", "PhotoURL", "ASC", "PartnerName", "Product", "Month", "Year", "EngineerEvaluation", "SSR", "RRR", "IQCSkipRatio", "CoreParts", "Q1Training", "DRNPS", "ExamScore", "Promoters", "Detractors", "TCS Score"]
-    ];
+    const tcsHeaders =
+      isDaAvTemplate
+        ? [[
+          "Quarter",
+          "Rank",
+          "Country key",
+          "ASC CODE",
+          "ASC Name",
+          "ENGINEER code",
+          "SBA ID",
+          "SSR (20%)",
+          "REDO (10%)",
+          "Chatbot (20%)",
+          "HASS (10%)",
+          "Acc Core Parts (VD) (10%)",
+          "Training Attendance (10%)",
+          "Linkage ratio (10%)",
+          "Final Score",
+          "OFS (5%)",
+          "R-CXE (5%)",
+          "NPS DR (5%)",
+          "NPS (5%)",
+          "Appointments (5%)",
+          "Audit (-5)",
+          "PR (-5)"
+        ]]
+        : [[
+          "Quarter",
+          "Engineer Code",
+          "SBA ID",
+          "ASC Engineer",
+          "PhotoURL",
+          "ASC",
+          "PartnerName",
+          "Product",
+          "Month",
+          "Year",
+          "EngineerEvaluation",
+          "SSR",
+          "RRR",
+          "IQCSkipRatio",
+          "CoreParts",
+          "Q1Training",
+          "DRNPS",
+          "ExamScore",
+          "Promoters",
+          "Detractors",
+          "TCS Score"
+        ]];
     const ws = XLSX.utils.aoa_to_sheet(tcsHeaders);
-    XLSX.utils.book_append_sheet(wb, ws, "TCS Scores");
+    XLSX.utils.book_append_sheet(wb, ws, isDaAvTemplate ? "TCS_DA_AV_UNIFIED_V4" : "TCS Scores");
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
     const url = window.URL.createObjectURL(data);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `TCS_Score_Template_${short}_2026.xlsx`;
+    link.download = isDaAvTemplate
+      ? `TCS_DA_AV_UNIFIED_V4_QUARTER_FIRST_${short}_${Date.now()}.xlsx`
+      : `TCS_Score_Template_${short}_2026.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2944,12 +3321,17 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
       const isPqaMode = appMode?.startsWith('PQA');
       const uploadCol = resolveFirestoreCollection(isPqaMode ? appMode : (targetTcsMode || appMode));
-      let mergeList = engineers;
-      try {
-        mergeList = await getEngineers(uploadCol);
-      } catch (err) {
-        console.error('merge list fetch', err);
-      }
+      const existingByCollection = {};
+      const getExistingForCollection = async (collectionName) => {
+        if (existingByCollection[collectionName]) return existingByCollection[collectionName];
+        try {
+          existingByCollection[collectionName] = await getEngineers(collectionName);
+        } catch (err) {
+          console.error('merge list fetch', err);
+          existingByCollection[collectionName] = [];
+        }
+        return existingByCollection[collectionName];
+      };
 
       let uploadedRecords = [];
 
@@ -3444,7 +3826,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         const targetSheet = workbook.Sheets["TCS Scores"] || workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(targetSheet, { header: 1, raw: false });
         let headerRow = -1;
-        let cName=-1, cCode=-1, cPhoto=2, cAsc=3, cPartner=4, cMonth=5, cYear=6, cQuarter=-1, cSbaId=-1, cEval=7, cRedo=8, cSsr=-1, cRrr=-1, cSk=9, cMaint=10, cOqc=11, cTrain=12, cPba=13, cOcta=14, cCoreParts=-1, cMulti=15, cExam=16, cProm=17, cDet=18, cDrnps=-1;
+        let cName=-1, cCode=-1, cEngineerCode=-1, cAscCode=-1, cPhoto=2, cAsc=3, cPartner=4, cMonth=5, cYear=6, cQuarter=-1, cSbaId=-1, cEval=7, cRedo=8, cSsr=-1, cRrr=-1, cSk=9, cMaint=10, cOqc=11, cTrain=12, cPba=13, cOcta=14, cCoreParts=-1, cMulti=15, cExam=16, cProm=17, cDet=18, cDrnps=-1;
         let cAscEngineer=-1, cProduct=-1, cTcsScore=-1;
         const normalizeHeader = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const parseNum = (value) => {
@@ -3473,8 +3855,18 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           const r = rows[i] || [];
           for (let j = 0; j < r.length; j++) {
             const v = normalizeHeader(r[j]);
-            if (v === 'engineercode' || (v.includes('engineer') && v.includes('code') && v.length <= 24)) cCode = j;
-            else if ((v === 'code' || v === 'asccode') && cCode < 0) cCode = j;
+            if (
+              v === 'engineercode' ||
+              v === 'engineer' ||
+              v === 'engineerid' ||
+              (v.includes('engineer') && v.includes('code') && v.length <= 24)
+            ) {
+              cEngineerCode = j;
+              cCode = j;
+            } else if (v === 'asccode') {
+              cAscCode = j;
+              if (cCode < 0) cCode = j;
+            } else if (v === 'code' && cCode < 0) cCode = j;
             if (v === 'name' || v === 'engineername') cName = j;
             if (v === 'photourl') cPhoto = j;
             if (v === 'asc' || v === 'ascname') cAsc = j;
@@ -3485,19 +3877,21 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             if (v === 'quarter' || v === 'q') cQuarter = j;
             if (v === 'sbaid' || v === 'sba') cSbaId = j;
             if (v === 'product') cProduct = j;
-            if (v === 'tcsscore' || v === 'tcsscorepercent' || v === 'finaltcs' || v === 'totalscore') cTcsScore = j;
+            if (v === 'tcsscore' || v === 'tcsscorepercent' || v === 'finaltcs' || v === 'totalscore' || v === 'finalscore') cTcsScore = j;
             if (v === 'engineerevaluation' || v === 'evaluation') cEval = j;
             if (v === 'redoratio' || v === 'redo') cRedo = j;
             if (v === 'ssr' || v === 'ssrpercent') cSsr = j;
             if (cSsr < 0 && (v === 'ssrscore' || v === 'ssrutilization')) cSsr = j;
+            if (v === 'chatbot') cMaint = j;
+            if (v === 'hass') cOqc = j;
             if (v === 'rrr' || v === 'rrr90') cRrr = j;
-            if (v === 'iqcskipratio' || v === 'iqcskip' || v === 'iqcskippercent') cSk = j;
+            if (v === 'iqcskipratio' || v === 'iqcskip' || v === 'iqcskippercent' || v === 'linkageratio') cSk = j;
             if (v === 'maintenancemoderatio') cMaint = j;
             if (v === 'oqcpassrate') cOqc = j;
             if (v === 'trainingattendance' || v === 'q1training' || v === 'q1trainingscore' || v === 'q1trainin' || v === 'training') cTrain = j;
             if (v === 'corepartspba') cPba = j;
             if (v === 'corepartsocta') cOcta = j;
-            if (v === 'coreparts' || v === 'corepartspercent') cCoreParts = j;
+            if (v === 'coreparts' || v === 'corepartspercent' || v.includes('coreparts')) cCoreParts = j;
             if (v === 'multipartsratio') cMulti = j;
             if (v === 'examscore' || v === 'exam') cExam = j;
             if (v === 'promoters') cProm = j;
@@ -3562,19 +3956,32 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
           if (cProduct > -1) {
             const prod = String(r[cProduct] || '').trim().toUpperCase();
-            if (prod && prod !== expectedProduct && !(expectedProduct === 'AV' && prod === 'VD')) continue;
+            const isDaAvUnifiedUpload =
+              tcsModeForProduct === 'TCS_DA' || tcsModeForProduct === 'TCS_AV' || tcsModeForProduct === 'TCS_VD';
+            if (isDaAvUnifiedUpload) {
+              if (prod && !['DA', 'AV', 'VD'].includes(prod)) continue;
+            } else if (prod && prod !== expectedProduct && !(expectedProduct === 'AV' && prod === 'VD')) {
+              continue;
+            }
           }
 
           const nameFromSheet = cAscEngineer > -1 ? r[cAscEngineer] : (cName > -1 ? r[cName] : '');
           const ascNameFromSheet = cAsc > -1 ? r[cAsc] : '';
           const sheetTcs = cTcsScore > -1 ? parseExcelTcsScore(r[cTcsScore]) : null;
 
-          const rawCode = cCode > -1 ? r[cCode] : '';
-          const codeNormalized = String(rawCode ?? '').trim();
+          const rawEngineerCode = cEngineerCode > -1 ? r[cEngineerCode] : (cCode > -1 ? r[cCode] : '');
+          const rawAscCode = cAscCode > -1 ? r[cAscCode] : '';
+          const engineerCodeNormalized = String(rawEngineerCode ?? '').trim();
+          const ascCodeNormalized = String(rawAscCode ?? '').trim();
+          const finalCodeRaw = engineerCodeNormalized || ascCodeNormalized;
+          const codeKey = finalCodeRaw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+          if (!codeKey || codeKey === 'ENGINEERCODE' || codeKey === 'ASCCODE' || codeKey === 'CODE') continue;
           let eng = {
             id: '',
             name: String(nameFromSheet || "Unknown").trim(),
-            code: /^\d+$/.test(codeNormalized) ? codeNormalized : codeNormalized.toUpperCase(),
+            code: /^\d+$/.test(finalCodeRaw) ? finalCodeRaw : finalCodeRaw.toUpperCase(),
+            engineerCode: /^\d+$/.test(engineerCodeNormalized) ? engineerCodeNormalized : engineerCodeNormalized.toUpperCase(),
+            ascCode: /^\d+$/.test(ascCodeNormalized) ? ascCodeNormalized : ascCodeNormalized.toUpperCase(),
             photoUrl: cPhoto > -1 ? String(r[cPhoto] || "https://picsum.photos/200") : "https://picsum.photos/200",
             sbaId: cSbaId > -1 ? String(r[cSbaId] || '').trim() : '',
             asc: (ascNameFromSheet ? String(ascNameFromSheet).trim() : 'N/A'),
@@ -3601,7 +4008,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             detractors: parseNum(r[cDet]),
           };
           eng.tcsScore = sheetTcs != null ? sheetTcs : 0;
-          eng.tier = getTier(eng.tcsScore);
+          eng.tier = tcsModeForProduct === 'TCS_MX'
+            ? getMxEvaluationTier(eng.engineerEvaluation)
+            : getTier(eng.tcsScore);
           uploadedRecords.push(eng);
         }
       }
@@ -3611,25 +4020,44 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         return;
       }
 
-      const finalUploadSet = [];
-      uploadedRecords.forEach(rec => {
-        const existing = mergeList.find(e => e.code?.toUpperCase() === rec.code?.toUpperCase() && e.month?.toLowerCase() === rec.month?.toLowerCase() && e.year === rec.year);
-        if (existing) finalUploadSet.push({ ...rec, id: existing.id });
-        else finalUploadSet.push(rec);
-      });
+      const resolveCollectionForRecord = (rec) => {
+        if (isPqaMode) return uploadCol;
+        const product = String(rec?.product || '').toUpperCase().trim();
+        if (product === 'DA') return resolveFirestoreCollection('TCS_DA');
+        if (product === 'AV' || product === 'VD') return resolveFirestoreCollection('TCS_AV');
+        if (product === 'MX') return resolveFirestoreCollection('TCS_MX');
+        return uploadCol;
+      };
+      const groupedUploadSet = {};
+      for (const rec of uploadedRecords) {
+        const targetCol = resolveCollectionForRecord(rec);
+        const existingRows = await getExistingForCollection(targetCol);
+        const existing = existingRows.find(
+          (e) =>
+            e.code?.toUpperCase() === rec.code?.toUpperCase() &&
+            e.month?.toLowerCase() === rec.month?.toLowerCase() &&
+            String(e.year) === String(rec.year)
+        );
+        const finalRec = existing ? { ...rec, id: existing.id } : rec;
+        if (!groupedUploadSet[targetCol]) groupedUploadSet[targetCol] = [];
+        groupedUploadSet[targetCol].push(finalRec);
+      }
 
       try {
-        const promises = finalUploadSet.map(async (rec) => {
-          const savedId = await saveEngineerToDb(rec, uploadCol);
-          return { ...rec, id: savedId || rec.id };
-        });
-        const savedRecords = await Promise.all(promises);
-
-        const sameViewCollection = resolveFirestoreCollection(appMode) === uploadCol;
-        if (sameViewCollection) {
+        const savedByCollection = {};
+        for (const [targetCol, records] of Object.entries(groupedUploadSet)) {
+          const promises = records.map(async (rec) => {
+            const savedId = await saveEngineerToDb(rec, targetCol);
+            return { ...rec, id: savedId || rec.id };
+          });
+          savedByCollection[targetCol] = await Promise.all(promises);
+        }
+        const currentCollection = resolveFirestoreCollection(appMode);
+        const savedCurrent = savedByCollection[currentCollection] || [];
+        if (savedCurrent.length > 0) {
           setEngineers(prev => {
             const next = [...prev];
-            savedRecords.forEach(rec => {
+            savedCurrent.forEach(rec => {
               const idx = next.findIndex(e => e.id === rec.id);
               if (idx !== -1) next[idx] = rec;
               else next.push(rec);
@@ -3637,14 +4065,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             return next;
           });
         }
+        const totalSaved = Object.values(savedByCollection).reduce((sum, arr) => sum + arr.length, 0);
+        const summary = Object.entries(savedByCollection)
+          .map(([col, arr]) => `${col}: ${arr.length}`)
+          .join(' | ');
 
         const label = targetTcsMode || appMode;
-        message.success(
-          sameViewCollection
-            ? `Success: ${savedRecords.length} records processed and saved (${label}).`
-            : `Success: ${savedRecords.length} records saved to ${targetTcsMode || label}. Switch the division selector above to view or edit that list.`
-        );
-        writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: `Excel Bulk Import (${targetTcsMode || appMode})`, details: { count: savedRecords.length, collection: uploadCol }, severity: 'info' });
+        message.success(`Success: ${totalSaved} records processed (${label}). ${summary}`);
+        writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: `Excel Bulk Import (${targetTcsMode || appMode})`, details: { count: totalSaved, collectionSummary: summary }, severity: 'info' });
       } catch (error) {
         console.error("Error uploading Excel data:", error);
         message.error("Error saving Excel data to database.");
@@ -3957,20 +4385,29 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         ? 'All 7 Partners — Monthly Ranking'
                         : appMode?.startsWith('PQA')
                           ? 'All Service Centers — Monthly Ranking'
-                          : `Top ${TCS_HOME_LEADERBOARD_LIMIT} Engineers`}
+                          : `Top ${TCS_WINNERS_PER_PRODUCT} Winners`}
                     </h3>
-                    {hofTop10.length === 0 ? (
-                      <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">No data for this period.</div>
+                    {monthlyDashboardList.length === 0 ? (
+                      <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
+                        {isTcsMode
+                          ? `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${TCS_WINNERS_PER_PRODUCT} in Admin Portal → Dashboard Winners.`
+                          : 'No data for this period.'}
+                      </div>
                     ) : (
                       <>
-                        {renderHomeRankingPodium(hofTop10, 'tcsScore', appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score')}
-                        {hofTop10.slice(3).map((eng, idx) => {
+                        {renderHomeRankingPodium(
+                          monthlyDashboardList,
+                          appMode === 'TCS_MX' ? 'engineerEvaluation' : 'tcsScore',
+                          appMode?.startsWith('PQA') ? 'PQA Score' : appMode === 'TCS_MX' ? 'Engineer Evaluation' : 'TCS Score'
+                        )}
+                        {monthlyDashboardList.slice(3).map((eng, idx) => {
                           const displayRank = eng.displayRank ?? idx + 4;
                           const isFirst = displayRank === 1;
                           const isSecond = displayRank === 2;
                           const isThird = displayRank === 3;
                           const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
-                          const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score';
+                          const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : appMode === 'TCS_MX' ? 'Engineer Evaluation' : 'TCS Score';
+                          const displayScore = appMode === 'TCS_MX' ? parseFloat(eng.engineerEvaluation) : parseFloat(eng.tcsScore);
                           return (
                             <div key={eng.id || eng.code} className={`glass-card rounded-[2.5rem] p-4 md:p-8 flex items-center gap-4 md:gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
                               {renderRankBadgeList(displayRank, isFirst, isSecond, isThird, eng)}
@@ -3993,7 +4430,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                               </div>
                               <div className="flex-shrink-0 text-right">
                                 <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                                  {eng.tcsScore != null ? parseFloat(eng.tcsScore).toFixed(1) : '—'}
+                                  {Number.isFinite(displayScore) ? displayScore.toFixed(1) : '—'}
                                 </span>
                                 <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
                               </div>
@@ -4027,19 +4464,19 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <h3 className="text-center text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">
                         {appMode?.startsWith('PQA')
                           ? (pqaMxGroupBy === 'PARTNER' ? 'All 7 Partners — Accumulated Average' : 'All Service Centers — Accumulated Average')
-                          : `Top ${TCS_HOME_LEADERBOARD_LIMIT} Engineers (Quarterly)`}
+                          : `Top ${TCS_WINNERS_PER_PRODUCT} Winners (Quarterly)`}
                       </h3>
                     )}
-                    {quarterlyRanking.length === 0 ? (
+                    {quarterlyDashboardList.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         {appMode?.startsWith('PQA')
                           ? 'No accumulated data — upload Excel with ★Partner Ranking sheet.'
-                          : 'No quarterly data for this period — upload TCS Excel (Quarter, Year, Product=MX, SBA ID, ASC Name, TCS Score) or pick a quarter that exists in your data.'}
+                          : `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${TCS_WINNERS_PER_PRODUCT} in Admin Portal → Dashboard Winners.`}
                       </div>
                     ) : (() => {
                       const accLimit = appMode?.startsWith('PQA') ? 500 : TCS_HOME_LEADERBOARD_LIMIT;
-                      const accList = quarterlyRanking.slice(0, accLimit);
-                      const avgLabel = appMode?.startsWith('PQA') ? 'Acc. Avg PQA' : 'TCS Score';
+                      const accList = isTcsMode ? quarterlyDashboardList : quarterlyDashboardList.slice(0, accLimit);
+                      const avgLabel = appMode?.startsWith('PQA') ? 'Acc. Avg PQA' : appMode === 'TCS_MX' ? 'Engineer Evaluation' : 'TCS Score';
                       return (
                         <>
                           {renderHomeRankingPodium(accList, 'avgScore', avgLabel)}
@@ -4457,6 +4894,16 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </button>
                   )}
 
+                  {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.access === 'TCS_ONLY' || currentUser?.access === 'ALL') && (
+                    <button
+                      onClick={openTcsWinnersHub}
+                      className="flex flex-col items-center gap-2 bg-zinc-900 border border-blue-500/20 text-blue-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-blue-600/10 transition-all"
+                    >
+                      <Award className="w-5 h-5" />
+                      Dashboard Winners
+                    </button>
+                  )}
+
                   <button
                     onClick={() => (isPqaMode ? setView('PQA_INFO') : setAdminModal('guide'))}
                     className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
@@ -4706,6 +5153,97 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       className="w-full py-3 rounded-2xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
                     >
                       Open full directory view
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+
+              <Modal
+                title={<span className="text-[11px] font-black uppercase tracking-[0.25em] text-zinc-300">TCS dashboard winners</span>}
+                open={adminModal === 'winners'}
+                onCancel={() => setAdminModal(null)}
+                footer={null}
+                width="min(820px, 96vw)"
+                destroyOnHidden
+              >
+                <div className="space-y-6">
+                  <p className="text-[10px] font-bold text-zinc-500">
+                    Configure fixed Top {TCS_WINNERS_PER_PRODUCT} engineer codes per quarter/product for TCS dashboard ranking.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Quarter</label>
+                      <select
+                        value={winnerHubQuarter}
+                        onChange={(e) => setWinnerHubQuarter(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white"
+                      >
+                        <option value="Q1">Q1</option>
+                        <option value="Q2">Q2</option>
+                        <option value="Q3">Q3</option>
+                        <option value="Q4">Q4</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Year</label>
+                      <input
+                        value={winnerHubYear}
+                        onChange={(e) => setWinnerHubYear(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                        placeholder="2026"
+                        className="w-full bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white outline-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Product</label>
+                      <select
+                        value={winnerHubProduct}
+                        onChange={(e) => setWinnerHubProduct(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white"
+                      >
+                        <option value="MX">MX</option>
+                        <option value="DA">DA</option>
+                        <option value="AV">AV</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+                    {Array.from({ length: TCS_WINNERS_PER_PRODUCT }, (_, idx) => (
+                      <div key={`winner-rank-${idx + 1}`} className="grid grid-cols-[56px_1fr] gap-2 items-center">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-zinc-400">#{idx + 1}</div>
+                        <input
+                          value={winnerHubCodes[idx] || ''}
+                          onChange={(e) => {
+                            const v = normalizeEngineerCodeKey(e.target.value);
+                            setWinnerHubCodes((prev) => prev.map((code, i) => (i === idx ? v : code)));
+                          }}
+                          placeholder="Engineer Code"
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {isTcsMode && resolvedTcsWinnersConfig && (
+                    <p className="text-[10px] font-bold text-zinc-500">
+                      Dashboard currently uses winners from <span className="text-zinc-300">{resolvedTcsWinnersConfig.resolvedQuarterKey}</span>
+                      {resolvedTcsWinnersConfig.fallbackUsed ? ' (fallback from latest configured quarter).' : '.'}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3 justify-end">
+                    <button
+                      type="button"
+                      onClick={loadTcsWinnersConfigs}
+                      disabled={tcsWinnersLoading}
+                      className="px-5 py-3 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:bg-white/5 transition-all disabled:opacity-40"
+                    >
+                      {tcsWinnersLoading ? 'Loading…' : 'Reload'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveTcsWinnersConfig}
+                      disabled={tcsWinnersSaving}
+                      className="px-5 py-3 rounded-xl bg-blue-600/20 border border-blue-500/30 text-[10px] font-black uppercase tracking-widest text-blue-200 hover:bg-blue-600/30 transition-all disabled:opacity-40"
+                    >
+                      {tcsWinnersSaving ? 'Saving…' : `Save Top ${TCS_WINNERS_PER_PRODUCT}`}
                     </button>
                   </div>
                 </div>
@@ -5383,6 +5921,12 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     const dispTrain = parseFloat(eng.q1TrainingScore ?? eng.trainingAttendance ?? 0);
                     const dispExam = parseFloat(eng.examScore || 0);
                     const dispDrnpsSheet = parseFloat(eng.drnpsScore ?? calculateDRNPS(eng.promoters, eng.detractors));
+                    const isDaAvExactProfile = !isPqaMode && (
+                      appMode === 'TCS_DA' ||
+                      appMode === 'TCS_AV' ||
+                      appMode === 'TCS_VD' ||
+                      ['DA', 'AV', 'VD'].includes(String(eng?.product || selectedEngineer?.product || '').toUpperCase())
+                    );
                     return (
                       <div className="rounded-[2rem] border border-blue-500/20 bg-zinc-900/50 p-8 md:p-10 max-w-4xl mx-auto space-y-8">
                         <div>
@@ -5390,7 +5934,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           <p className="text-xs text-zinc-500 leading-relaxed">
                             {isPqaMode
                               ? `KPIs from the ★Evaluation point sheet — ${(eng.pqaBranch || appMode) === 'PQA_CE' ? 'CE' : 'MX'} registry only (MX vs CE are stored separately). Targets follow headers such as SSR (20), D-RNPS (10).`
-                              : 'SSR % is imported from Excel column H. Engineer evaluation groups SSR, RRR, IQC skip, Core parts, and Q1 training (0–20 points). DRNPS and Exam are separate top-level scores. IQC % uses the cell before the IQC header when present.'}
+                              : isDaAvExactProfile
+                                ? 'DA/AV criteria from uploaded sheet: SSR, REDO, Chatbot, HASS, Acc Core Parts (VD), Training Attendance, Linkage ratio. Ranking score uses Final Score.'
+                                : 'SSR % is imported from Excel column H. Engineer evaluation groups SSR, RRR, IQC skip, Core parts, and Q1 training (0–20 points). DRNPS and Exam are separate top-level scores. IQC % uses the cell before the IQC header when present.'}
                           </p>
                         </div>
                         {isPqaMode && pqaExactMonthPeriods.length > 0 && (
@@ -5412,33 +5958,59 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         )}
                         {!isPqaMode ? (
                           <div className="space-y-8">
-                            <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
-                              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
-                                <div>
-                                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.35em]">Engineer evaluation</p>
-                                  <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">Sub-metrics: SSR · RRR · IQC skip · Core parts · Q1 training</p>
+                            {isDaAvExactProfile ? (
+                              <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
+                                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
+                                  <div>
+                                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.35em]">DA / AV criteria</p>
+                                    <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">SSR · REDO · CHATBOT · HASS · ACC CORE PARTS (VD) · TRAINING ATTENDANCE · LINKAGE RATIO</p>
+                                  </div>
+                                  <div className="text-left sm:text-right">
+                                    <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">{parseFloat(eng.tcsScore || 0).toFixed(1)}</span>
+                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Final score</p>
+                                  </div>
                                 </div>
-                                <div className="text-left sm:text-right">
-                                  <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">{dispEval.toFixed(1)}</span>
-                                  <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Target ≥ 90</p>
+                                <div className="space-y-5 pl-2 md:pl-4 border-l-2 border-emerald-500/35">
+                                  <MetricBar label="SSR" value={dispSsr} max={100} suffix="%" target={0} inverse={false} />
+                                  <MetricBar label="REDO" value={parseFloat(eng.redoRatio || 0)} max={100} suffix="%" target={0} inverse />
+                                  <MetricBar label="Chatbot" value={parseFloat(eng.maintenanceModeRatio || 0)} max={100} suffix="%" target={0} inverse={false} />
+                                  <MetricBar label="HASS" value={parseFloat(eng.oqcPassRate || 0)} max={100} suffix="%" target={0} inverse={false} />
+                                  <MetricBar label="Acc Core Parts (VD)" value={dispCore} max={100} suffix="%" target={0} inverse={false} />
+                                  <MetricBar label="Training Attendance" value={dispTrain} max={100} suffix="%" target={0} inverse={false} />
+                                  <MetricBar label="Linkage ratio" value={dispIqc} max={100} suffix="%" target={0} inverse={false} />
                                 </div>
                               </div>
-                              <div className="space-y-5 pl-2 md:pl-4 border-l-2 border-emerald-500/35">
-                                <MetricBar label="SSR %" value={dispSsr} max={100} suffix="%" target={0} inverse />
-                                <MetricBar label="RRR (RRR90)" value={dispRrr} max={100} suffix="%" target={0} inverse />
-                                <MetricBar label="IQC skip %" value={dispIqc} max={100} suffix="%" target={25} inverse />
-                                <MetricBar label="Core parts %" value={dispCore} max={100} suffix="%" target={30} inverse />
-                                <MetricBar label="Q1 training (max 20 pts)" value={Math.min(20, dispTrain)} max={20} suffix=" pts" target={20} />
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-purple-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-4">
-                              <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.35em]">DRNPS</p>
-                              <MetricBar label="DRNPS" value={dispDrnpsSheet} max={100} suffix="" target={80} />
-                            </div>
-                            <div className="rounded-2xl border border-blue-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-4">
-                              <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.35em]">Exam</p>
-                              <MetricBar label="Exam" value={dispExam} max={100} suffix="%" target={90} />
-                            </div>
+                            ) : (
+                              <>
+                                <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
+                                  <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
+                                    <div>
+                                      <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.35em]">Engineer evaluation</p>
+                                      <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">Sub-metrics: SSR · RRR · IQC skip · Core parts · Q1 training</p>
+                                    </div>
+                                    <div className="text-left sm:text-right">
+                                      <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">{dispEval.toFixed(1)}</span>
+                                      <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Target ≥ 90</p>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-5 pl-2 md:pl-4 border-l-2 border-emerald-500/35">
+                                    <MetricBar label="SSR %" value={dispSsr} max={100} suffix="%" target={0} inverse />
+                                    <MetricBar label="RRR (RRR90)" value={dispRrr} max={100} suffix="%" target={0} inverse />
+                                    <MetricBar label="IQC skip %" value={dispIqc} max={100} suffix="%" target={25} inverse />
+                                    <MetricBar label="Core parts %" value={dispCore} max={100} suffix="%" target={30} inverse />
+                                    <MetricBar label="Q1 training (max 20 pts)" value={Math.min(20, dispTrain)} max={20} suffix=" pts" target={20} />
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl border border-purple-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-4">
+                                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.35em]">DRNPS</p>
+                                  <MetricBar label="DRNPS" value={dispDrnpsSheet} max={100} suffix="" target={80} />
+                                </div>
+                                <div className="rounded-2xl border border-blue-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-4">
+                                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.35em]">Exam</p>
+                                  <MetricBar label="Exam" value={dispExam} max={100} suffix="%" target={90} />
+                                </div>
+                              </>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-6">
@@ -5642,12 +6214,22 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
                   const examPts = isPqaMode ? 0 : parseFloat(Math.min(20, (dispExam / 100) * 20).toFixed(1));
                   const drnpsPts = isPqaMode ? 0 : parseFloat(Math.min(30, (dispDrnps / 100) * 30).toFixed(1));
+                  const isDaAvModePre = !isPqaMode && (
+                    appMode === 'TCS_DA' ||
+                    appMode === 'TCS_AV' ||
+                    appMode === 'TCS_VD' ||
+                    ['DA', 'AV', 'VD'].includes(String(effRecord?.product || selectedEngineer?.product || '').toUpperCase())
+                  );
                   const isQ1Record = ['jan', 'january', 'feb', 'february', 'mar', 'march'].includes(String(effRecord.month || '').toLowerCase());
                   const isQ1Quarter = String(effQ || '').toUpperCase() === 'Q1';
                   const hasQ1Eval = profileViewMode === 'QUARTERLY'
                     ? qRecords.some(r => r.engineerEvaluation !== undefined && r.engineerEvaluation !== null && r.engineerEvaluation !== '')
                     : (effRecord.engineerEvaluation !== undefined && effRecord.engineerEvaluation !== null && effRecord.engineerEvaluation !== '');
-                  const useQ1EvalBreakdown = !isPqaMode && hasQ1Eval && ((profileViewMode === 'QUARTERLY' && isQ1Quarter) || (profileViewMode === 'MONTHLY' && isQ1Record));
+                  const useQ1EvalBreakdown =
+                    !isPqaMode &&
+                    appMode === 'TCS_MX' &&
+                    hasQ1Eval &&
+                    ((profileViewMode === 'QUARTERLY' && isQ1Quarter) || (profileViewMode === 'MONTHLY' && isQ1Record));
                   const dispEval = profileViewMode === 'QUARTERLY' ? qAvgEval : parseFloat(effRecord.engineerEvaluation || 0);
                   const evalPts = isPqaMode ? 0 : parseFloat(Math.min(50, (dispEval / 100) * 50).toFixed(1));
                   const kpiPts = isPqaMode
@@ -5655,6 +6237,25 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     : (useQ1EvalBreakdown
                       ? evalPts
                       : parseFloat(((dispScore - (examPts || 0) - (drnpsPts || 0))).toFixed(1)));
+                  const isDaAvProfile = isDaAvModePre;
+                  const daAvCriteriaBars = [
+                    { label: 'SSR', value: parseFloat(dispRecord.ssrScore ?? dispSsr ?? 0), max: 100, suffix: '%', target: 0, inverse: false },
+                    { label: 'REDO', value: parseFloat(dispRecord.redoRatio ?? 0), max: 100, suffix: '%', target: 0, inverse: true },
+                    { label: 'Chatbot', value: parseFloat(dispRecord.maintenanceModeRatio ?? 0), max: 100, suffix: '%', target: 0, inverse: false },
+                    { label: 'HASS', value: parseFloat(dispRecord.oqcPassRate ?? 0), max: 100, suffix: '%', target: 0, inverse: false },
+                    { label: 'Acc Core Parts (VD)', value: parseFloat(dispRecord.corePartsScore ?? dispRecord.corePartsPBA ?? dispCoreParts ?? 0), max: 100, suffix: '%', target: 0, inverse: false },
+                    { label: 'Training Attendance', value: parseFloat(dispRecord.q1TrainingScore ?? dispRecord.trainingAttendance ?? dispQ1Training ?? 0), max: 100, suffix: '%', target: 0, inverse: false },
+                    { label: 'Linkage ratio', value: parseFloat(dispRecord.iqcSkipRatio ?? dispIqc ?? 0), max: 100, suffix: '%', target: 0, inverse: false },
+                  ];
+                  const daAvCriteriaCards = [
+                    { label: 'SSR', value: `${parseFloat(activeRecord.ssrScore ?? 0).toFixed(1)}%` },
+                    { label: 'REDO', value: `${parseFloat(activeRecord.redoRatio ?? 0).toFixed(1)}%` },
+                    { label: 'Chatbot', value: `${parseFloat(activeRecord.maintenanceModeRatio ?? 0).toFixed(1)}%` },
+                    { label: 'HASS', value: `${parseFloat(activeRecord.oqcPassRate ?? 0).toFixed(1)}%` },
+                    { label: 'Acc Core Parts (VD)', value: `${parseFloat(activeRecord.corePartsScore ?? activeRecord.corePartsPBA ?? 0).toFixed(1)}%` },
+                    { label: 'Training Attendance', value: `${parseFloat(activeRecord.trainingAttendance ?? activeRecord.q1TrainingScore ?? 0).toFixed(1)}%` },
+                    { label: 'Linkage ratio', value: `${parseFloat(activeRecord.iqcSkipRatio ?? 0).toFixed(1)}%` },
+                  ];
 
                   return (
                     <div className="space-y-8">
@@ -5731,7 +6332,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                               <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">PQA Score</span>
                             </div>
                           ) : (
-                            <TierBadge tier={getTier(dispScore)} size="lg" />
+                            <TierBadge tier={appMode === 'TCS_MX' ? getMxEvaluationTier(dispEval) : getTier(dispScore)} size="lg" />
                           )}
                         </div>
 
@@ -5839,14 +6440,22 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 <div className="border-t border-white/5 pt-8 space-y-5">
                                   <p className="text-[8px] font-black text-yellow-400 uppercase tracking-widest">KPI Breakdown (50% of Total)</p>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
-                                    <MetricBar label="Training Attendance" value={parseFloat(dispRecord.trainingAttendance || 0)} max={100} suffix="%" target={100} />
-                                    <MetricBar label="OQC Pass Rate" value={parseFloat(dispRecord.oqcPassRate || 0)} max={100} suffix="%" target={85} />
-                                    <MetricBar label="Maintenance Mode" value={parseFloat(dispRecord.maintenanceModeRatio || 0)} max={100} suffix="%" target={65} />
-                                    <MetricBar label="REDO Ratio" value={parseFloat(dispRecord.redoRatio || 0)} max={3} suffix="%" target={0.7} inverse />
-                                    <MetricBar label="IQC Skip Ratio" value={parseFloat(dispRecord.iqcSkipRatio || 0)} max={50} suffix="%" target={25} inverse />
-                                    <MetricBar label="Core Parts PBA" value={parseFloat(dispRecord.corePartsPBA || 0)} max={80} suffix="%" target={30} inverse />
-                                    <MetricBar label="Core Parts Octa" value={parseFloat(dispRecord.corePartsOcta || 0)} max={80} suffix="%" target={40} inverse />
-                                    <MetricBar label="Multi Parts Ratio" value={parseFloat(dispRecord.multiPartsRatio || 0)} max={5} suffix="%" target={1} inverse />
+                                    {isDaAvProfile ? (
+                                      daAvCriteriaBars.map((k) => (
+                                        <MetricBar key={k.label} label={k.label} value={k.value} max={k.max} suffix={k.suffix} target={k.target} inverse={k.inverse} />
+                                      ))
+                                    ) : (
+                                      <>
+                                        <MetricBar label="Training Attendance" value={parseFloat(dispRecord.trainingAttendance || 0)} max={100} suffix="%" target={100} />
+                                        <MetricBar label="OQC Pass Rate" value={parseFloat(dispRecord.oqcPassRate || 0)} max={100} suffix="%" target={85} />
+                                        <MetricBar label="Maintenance Mode" value={parseFloat(dispRecord.maintenanceModeRatio || 0)} max={100} suffix="%" target={65} />
+                                        <MetricBar label="REDO Ratio" value={parseFloat(dispRecord.redoRatio || 0)} max={3} suffix="%" target={0.7} inverse />
+                                        <MetricBar label="IQC Skip Ratio" value={parseFloat(dispRecord.iqcSkipRatio || 0)} max={50} suffix="%" target={25} inverse />
+                                        <MetricBar label="Core Parts PBA" value={parseFloat(dispRecord.corePartsPBA || 0)} max={80} suffix="%" target={30} inverse />
+                                        <MetricBar label="Core Parts Octa" value={parseFloat(dispRecord.corePartsOcta || 0)} max={80} suffix="%" target={40} inverse />
+                                        <MetricBar label="Multi Parts Ratio" value={parseFloat(dispRecord.multiPartsRatio || 0)} max={5} suffix="%" target={1} inverse />
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               </>
@@ -6045,21 +6654,23 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
                         {/* KPI Numbers Grid */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-white/5">
-                          {[
-                            { label: 'REDO Ratio', value: `${activeRecord.redoRatio}%`, target: '≤0.7', bad: parseFloat(activeRecord.redoRatio) > 0.7 },
-                            { label: 'IQC Skip', value: `${activeRecord.iqcSkipRatio}%`, target: '≤25', bad: parseFloat(activeRecord.iqcSkipRatio) > 25 },
-                            { label: 'Maint. Mode', value: `${activeRecord.maintenanceModeRatio}%`, target: '≥65', bad: parseFloat(activeRecord.maintenanceModeRatio) < 65 },
-                            { label: 'OQC Pass', value: `${activeRecord.oqcPassRate}%`, target: '≥85', bad: parseFloat(activeRecord.oqcPassRate) < 85 },
-                            { label: 'Training', value: `${activeRecord.trainingAttendance}%`, target: '=100', bad: parseFloat(activeRecord.trainingAttendance) < 100 },
-                            { label: 'Core PBA', value: `${activeRecord.corePartsPBA}%`, target: '≤30', bad: parseFloat(activeRecord.corePartsPBA) > 30 },
-                            { label: 'Core Octa', value: `${activeRecord.corePartsOcta}%`, target: '≤40', bad: parseFloat(activeRecord.corePartsOcta) > 40 },
-                            { label: 'Multi Parts', value: `${activeRecord.multiPartsRatio}%`, target: '≤1', bad: parseFloat(activeRecord.multiPartsRatio) > 1 },
-                          ].map(kpi => (
+                          {(isDaAvProfile
+                            ? daAvCriteriaCards.map((k) => ({ ...k, target: '', bad: false }))
+                            : [
+                              { label: 'REDO Ratio', value: `${activeRecord.redoRatio}%`, target: '≤0.7', bad: parseFloat(activeRecord.redoRatio) > 0.7 },
+                              { label: 'IQC Skip', value: `${activeRecord.iqcSkipRatio}%`, target: '≤25', bad: parseFloat(activeRecord.iqcSkipRatio) > 25 },
+                              { label: 'Maint. Mode', value: `${activeRecord.maintenanceModeRatio}%`, target: '≥65', bad: parseFloat(activeRecord.maintenanceModeRatio) < 65 },
+                              { label: 'OQC Pass', value: `${activeRecord.oqcPassRate}%`, target: '≥85', bad: parseFloat(activeRecord.oqcPassRate) < 85 },
+                              { label: 'Training', value: `${activeRecord.trainingAttendance}%`, target: '=100', bad: parseFloat(activeRecord.trainingAttendance) < 100 },
+                              { label: 'Core PBA', value: `${activeRecord.corePartsPBA}%`, target: '≤30', bad: parseFloat(activeRecord.corePartsPBA) > 30 },
+                              { label: 'Core Octa', value: `${activeRecord.corePartsOcta}%`, target: '≤40', bad: parseFloat(activeRecord.corePartsOcta) > 40 },
+                              { label: 'Multi Parts', value: `${activeRecord.multiPartsRatio}%`, target: '≤1', bad: parseFloat(activeRecord.multiPartsRatio) > 1 },
+                            ]).map(kpi => (
                             <div key={kpi.label} className={`rounded-xl p-3 border transition-all ${kpi.bad ? 'bg-red-500/5 border-red-500/20' : 'bg-emerald-500/5 border-emerald-500/20'
                               }`}>
                               <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{kpi.label}</p>
                               <p className={`text-base font-black ${kpi.bad ? 'text-red-400' : 'text-emerald-400'}`}>{kpi.value}</p>
-                              <p className="text-[7px] text-zinc-700">target {kpi.target}</p>
+                              {kpi.target ? <p className="text-[7px] text-zinc-700">target {kpi.target}</p> : null}
                             </div>
                           ))}
                         </div>
