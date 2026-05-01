@@ -849,7 +849,7 @@ function parsePqaEvaluationPointRows(evalRows, appMode) {
 const TIER_META = {
   Masters: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FMaster%201.png?alt=media&token=a8eb8d46-5351-4b02-9f4e-e16def338ce6', border: 'border-purple-500', text: 'text-purple-300', glow: 'shadow-purple-500/40' },
   Diamond: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FDiamond%202.png?alt=media&token=2310388b-3281-4357-b202-677788b29c25', border: 'border-blue-400', text: 'text-blue-200', glow: 'shadow-blue-400/40' },
-  Platinum: { img: '/ranking-tiers/platinum.png', border: 'border-zinc-300', text: 'text-zinc-100', glow: 'shadow-zinc-300/30' },
+  Platinum: { img: '/ranking-tiers/platinum.png?v=platinum-live-20260501', border: 'border-zinc-300', text: 'text-zinc-100', glow: 'shadow-zinc-300/30' },
   Gold: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FGold%202.png?alt=media&token=f153076b-6c3a-4a1a-8b46-b65c94c593bf', border: 'border-yellow-500', text: 'text-yellow-300', glow: 'shadow-yellow-500/40' },
   Silver: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FSilver%202.png?alt=media&token=05ebda06-4011-4920-ac19-dd0b9fa9e3fb', border: 'border-zinc-400', text: 'text-zinc-300', glow: 'shadow-zinc-400/30' },
   Bronze: { img: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/Ranking%20Tiers%2FBronze%202.png?alt=media&token=ec56f9b5-f567-4778-b0b2-4df15fe0a840', border: 'border-orange-600', text: 'text-orange-400', glow: 'shadow-orange-600/30' },
