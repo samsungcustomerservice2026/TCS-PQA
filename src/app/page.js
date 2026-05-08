@@ -1002,6 +1002,17 @@ const TierBadge = ({ tier, size = 'md' }) => {
   );
 };
 
+const TierLogo = ({ tier, size = 'lg' }) => {
+  const meta = TIER_META[tier] || TIER_META.Bronze;
+  const boxSize = size === 'xl' ? 'h-28 w-28 md:h-32 md:w-32' : size === 'lg' ? 'h-20 w-20 md:h-24 md:w-24' : 'h-14 w-14 md:h-16 md:w-16';
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <img src={meta.img} alt={tier || 'Tier'} className={`${boxSize} object-contain tier-emblem-blend`} />
+      <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{tier || 'Rank'}</p>
+    </div>
+  );
+};
+
 // ─── 3D Rank Reveal Component ─────────────────────────────────────────────────
 const TIER_GLOW_COLORS = {
   Masters: { from: 'rgba(168, 85, 247, 0.6)', to: 'rgba(192, 132, 252, 0.3)', ring: 'border-purple-500', particle: 'bg-purple-400', text: 'text-purple-300', gradient: 'from-purple-600 via-purple-400 to-fuchsia-300' },
@@ -1649,15 +1660,18 @@ const PageContent = () => {
   const renderRankBadgeList = (displayRank, isFirst, isSecond, isThird, eng) => {
     const rankColor = isFirst ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' : isSecond ? 'text-zinc-200 bg-zinc-300/10 border-zinc-300/30' : isThird ? 'text-orange-400 bg-orange-600/10 border-orange-600/30' : 'text-zinc-400 bg-zinc-800/60 border-white/10';
     if (isTcsMode && eng) {
-      const tier = resolveTierByMode(eng);
-      const meta = TIER_META[tier] || TIER_META.Bronze;
+      const rankTone = isFirst
+        ? 'text-yellow-300 border-yellow-500/50 bg-yellow-500/10'
+        : isSecond
+          ? 'text-zinc-200 border-zinc-300/40 bg-zinc-300/10'
+          : isThird
+            ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+            : 'text-zinc-300 border-zinc-500/30 bg-zinc-500/10';
       return (
-        <div className="flex flex-shrink-0 items-center">
-          <img
-            src={meta.img}
-            alt={tier || ''}
-            className="h-12 w-12 sm:h-14 sm:w-14 md:h-[4.25rem] md:w-[4.25rem] object-contain tier-emblem-blend"
-          />
+        <div className={`flex h-10 min-w-[3.2rem] flex-shrink-0 items-center justify-center rounded-full border px-3 text-xs font-black italic tracking-widest uppercase md:h-12 md:min-w-[3.6rem] md:text-sm ${rankTone}`}>
+          <span>
+            #{displayRank}
+          </span>
         </div>
       );
     }
@@ -1709,10 +1723,14 @@ const PageContent = () => {
               ) : null}
             </div>
             {!appMode?.startsWith('PQA') && eng.tier && !isTcsMode && <TierBadge tier={eng.tier} size="sm" />}
-            <div className={`text-base font-black italic tracking-tighter sm:text-xl md:text-3xl ${scoreTone}`}>
-              {sc != null ? parseFloat(sc).toFixed(1) : '—'}
-            </div>
-            <div className="text-[6px] font-black uppercase tracking-widest text-zinc-600 sm:text-[7px]">{scoreLabelStr}</div>
+            {!isTcsMode && (
+              <>
+                <div className={`text-base font-black italic tracking-tighter sm:text-xl md:text-3xl ${scoreTone}`}>
+                  {sc != null ? parseFloat(sc).toFixed(1) : '—'}
+                </div>
+                <div className="text-[6px] font-black uppercase tracking-widest text-zinc-600 sm:text-[7px]">{scoreLabelStr}</div>
+              </>
+            )}
           </div>
           <div
             className={`w-full rounded-t-xl border-x border-t border-white/10 bg-gradient-to-b from-zinc-800/90 to-zinc-950/90 shadow-inner sm:rounded-t-2xl ${stepClass}`}
@@ -4437,10 +4455,20 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 )}
                               </div>
                               <div className="flex-shrink-0 text-right">
-                                <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                                  {Number.isFinite(displayScore) ? displayScore.toFixed(1) : '—'}
-                                </span>
-                                <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
+                                {isTcsMode ? (
+                                  <img
+                                    src={(TIER_META[resolveTierByMode(eng)] || TIER_META.Bronze).img}
+                                    alt={resolveTierByMode(eng) || 'Rank'}
+                                    className="h-12 w-12 md:h-[4.25rem] md:w-[4.25rem] object-contain tier-emblem-blend"
+                                  />
+                                ) : (
+                                  <>
+                                    <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
+                                      {Number.isFinite(displayScore) ? displayScore.toFixed(1) : '—'}
+                                    </span>
+                                    <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{scoreLabel}</p>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -4513,10 +4541,20 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                   </div>
                                 </div>
                                 <div className="flex-shrink-0 text-right">
-                                  <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
-                                    {eng.avgScore != null ? parseFloat(eng.avgScore).toFixed(1) : '—'}
-                                  </span>
-                                  <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{avgLabel}</p>
+                                  {isTcsMode ? (
+                                    <img
+                                      src={(TIER_META[resolveTierByMode(eng)] || TIER_META.Bronze).img}
+                                      alt={resolveTierByMode(eng) || 'Rank'}
+                                      className="h-12 w-12 md:h-[4.25rem] md:w-[4.25rem] object-contain tier-emblem-blend"
+                                    />
+                                  ) : (
+                                    <>
+                                      <span className={`text-xl md:text-4xl font-black italic tracking-tighter ${isFirst ? 'text-yellow-400' : isSecond ? 'text-zinc-300' : isThird ? 'text-orange-500' : 'text-white'}`}>
+                                        {eng.avgScore != null ? parseFloat(eng.avgScore).toFixed(1) : '—'}
+                                      </span>
+                                      <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1">{avgLabel}</p>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -5974,8 +6012,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                     <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">SSR · REDO · CHATBOT · HASS · ACC CORE PARTS (VD) · TRAINING ATTENDANCE · LINKAGE RATIO</p>
                                   </div>
                                   <div className="text-left sm:text-right">
-                                    <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">{parseFloat(eng.tcsScore || 0).toFixed(1)}</span>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Final score</p>
+                                    <TierLogo tier={resolveTierByMode(eng)} size="lg" />
                                   </div>
                                 </div>
                                 <div className="space-y-5 pl-2 md:pl-4 border-l-2 border-emerald-500/35">
@@ -6325,22 +6362,26 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
                       {/* Score breakdown + TCS total */}
                       <div className="glass-card rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center gap-8 border-blue-500/10">
-                        {/* Big TCS total */}
+                        {/* TCS rank logo / PQA total */}
                     <div className="flex flex-col items-center md:border-r border-white/5 md:pr-8 flex-shrink-0">
                           <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">
                             {profileViewMode === 'QUARTERLY' ? `Avg ${isPqaMode ? 'Points' : 'TCS'} — ${effQKey?.replace('-', ' ')}` : `${isPqaMode ? 'Monthly Sum' : 'TCS Score'} — ${effM ? `${effM} ${effY}` : '—'}`}
                           </span>
-                          <span className="text-6xl font-black text-white italic tracking-tighter">{dispScore}</span>
+                          {isPqaMode ? (
+                            <span className="text-6xl font-black text-white italic tracking-tighter">{dispScore}</span>
+                          ) : (
+                            <TierLogo tier={appMode === 'TCS_MX' ? getMxEvaluationTier(dispEval) : getTier(dispScore)} size="xl" />
+                          )}
                           {dispRecord.monthlyRank > 0 && profileViewMode === 'MONTHLY' && (
                             <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-2">Monthly Rank: #{dispRecord.monthlyRank}</span>
                           )}
-                          {/* TCS: show tier badge | PQA: show numeric rank */}
+                          {/* TCS: rank logo in main block | PQA: keep score metadata */}
                           {isPqaMode ? (
                             <div className="mt-3 flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-600/10 border border-blue-500/20">
                               <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">PQA Score</span>
                             </div>
                           ) : (
-                            <TierBadge tier={appMode === 'TCS_MX' ? getMxEvaluationTier(dispEval) : getTier(dispScore)} size="lg" />
+                            <p className="mt-2 text-[8px] font-black text-zinc-600 uppercase tracking-widest">Rank Logo</p>
                           )}
                         </div>
 
@@ -6627,11 +6668,15 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                             </div>
                           </div>
                           <div className="flex items-center gap-6">
-                            {/* TCS: tier badge | PQA: no badge */}
-                            {!isPqaMode && <TierBadge tier={resolveTierByMode(activeRecord)} size="lg" />}
+                            {/* TCS: rank logo | PQA: no badge */}
+                            {!isPqaMode && <TierLogo tier={resolveTierByMode(activeRecord)} size="lg" />}
                             <div className="text-right">
-                              <span className="text-5xl font-black text-white italic tracking-tighter">{activeRecord.tcsScore}</span>
-                              <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA Score' : 'TCS Score'}</p>
+                              {isPqaMode && (
+                                <>
+                                  <span className="text-5xl font-black text-white italic tracking-tighter">{activeRecord.tcsScore}</span>
+                                  <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">PQA Score</p>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
