@@ -120,6 +120,12 @@ export const saveTcsDashboardWinners = async (payload) => {
 
 // Feedback
 const FEEDBACK_COLLECTION = 'feedback';
+/** Firestore folder-like path:
+ *  samsung_academy_survey (collection) / records (doc) / responses (subcollection)
+ */
+const SAMSUNG_ACADEMY_SURVEY_ROOT = 'samsung_academy_survey';
+const SAMSUNG_ACADEMY_SURVEY_DOC = 'records';
+const SAMSUNG_ACADEMY_SURVEYS_SUBCOLLECTION = 'responses';
 
 export const saveFeedback = async (feedbackData) => {
     const docRef = await addDoc(collection(db, FEEDBACK_COLLECTION), {
@@ -127,5 +133,24 @@ export const saveFeedback = async (feedbackData) => {
         createdAt: new Date().toISOString(),
     });
     return docRef.id;
+};
+
+export const saveSamsungAcademySurvey = async (surveyData) => {
+    // Ensure root document exists so the structure is clear in Firebase console.
+    await setDoc(doc(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC), {
+        updatedAt: new Date().toISOString(),
+        type: 'SAMSUNG_ACADEMY_SURVEY_CONTAINER',
+    }, { merge: true });
+
+    const docRef = await addDoc(collection(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC, SAMSUNG_ACADEMY_SURVEYS_SUBCOLLECTION), {
+        ...surveyData,
+        createdAt: new Date().toISOString(),
+    });
+    return docRef.id;
+};
+
+export const getSamsungAcademySurveys = async () => {
+    const snapshot = await getDocs(collection(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC, SAMSUNG_ACADEMY_SURVEYS_SUBCOLLECTION));
+    return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
 };
 

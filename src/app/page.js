@@ -41,12 +41,14 @@ import {
   Info,
   RefreshCw,
   Building2,
-  Shield
+  Shield,
+  ExternalLink,
+  Copy
 } from 'lucide-react';
 
 import { INITIAL_ENGINEERS, calculateDRNPS, getTier, getTierColor, calculatePQAScore } from '../constants';
 import * as XLSX from 'xlsx';
-import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, getTcsDashboardWinners, saveTcsDashboardWinners } from '../services/firestoreService';
+import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, saveSamsungAcademySurvey as saveSamsungAcademySurveyToDb, getSamsungAcademySurveys as getSamsungAcademySurveysFromDb, getTcsDashboardWinners, saveTcsDashboardWinners } from '../services/firestoreService';
 import { normalizePqaPartnerKey, mapPqaSheetPartnerKeyToOfficial, PQA_OFFICIAL_MX_PARTNERS } from '../lib/pqaPartnerMap.js';
 
 import { uploadPhoto, uploadTcsAllProductImagesFromPublic } from '../services/storageService';
@@ -114,6 +116,8 @@ const getQuarter = (monthName) => {
   if (idx < 0) return null;
   return `Q${Math.floor(idx / 3) + 1}`;
 };
+
+const UI_STATE_STORAGE_KEY = 'tcs_ui_state_v1';
 const getMonthIndex = (monthName) => {
   if (monthName === undefined || monthName === null || monthName === '') return 0;
   if (typeof monthName === 'number' && monthName >= 1 && monthName <= 12) return monthName - 1;
@@ -881,6 +885,10 @@ function isSamsungEngineerPhotoUrl(url) {
 /** Home dashboard (TCS): monthly Hall of Fame + quarterly ladder list length (podium + rows below). */
 const TCS_HOME_LEADERBOARD_LIMIT = 20;
 const TCS_WINNERS_PER_PRODUCT = 6;
+const SAMSUNG_ACADEMY_LOCATIONS = ['الإسكندرية', 'أسيوط', 'طنطا'];
+const ACADEMY_PRODUCTS = ['موبايل', 'تلفزيون', 'أجهزة منزلية'];
+const ACADEMY_EVAL_OPTIONS = ['ممتاز', 'جيد جدا', 'جيد', 'مقبول', 'يحتاج تحسين'];
+const ACADEMY_YES_MAYBE_NO_OPTIONS = ['نعم', 'إلى حد ما', 'لا'];
 
 const quarterKeyToIndex = (quarterKey) => {
   const m = String(quarterKey || '').toUpperCase().match(/^Q([1-4])-(\d{4})$/);
@@ -1253,10 +1261,51 @@ const MetricBar = ({ label, value, max = 100, suffix = "", target = null, color 
 
 const PageContent = () => {
   const { message, modal, notification } = App.useApp();
-  const [view, setView] = useState('APP_SELECTION');
-  const [appMode, setAppMode] = useState(null); // 'TCS_MX' | 'TCS_DA' | 'TCS_AV' | 'TCS_VD' (legacy) | 'PQA_MX' | 'PQA_CE'
+  const [view, setView] = useState(() => {
+    if (typeof window === 'undefined') return 'APP_SELECTION';
+    try {
+      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      if (!raw) return 'APP_SELECTION';
+      const parsed = JSON.parse(raw);
+      return parsed?.view || 'APP_SELECTION';
+    } catch {
+      return 'APP_SELECTION';
+    }
+  });
+  const [isAdminPortal, setIsAdminPortal] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return !!parsed?.isAdminPortal;
+    } catch {
+      return false;
+    }
+  });
+  const [appMode, setAppMode] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.appMode || null;
+    } catch {
+      return null;
+    }
+  }); // 'TCS_MX' | 'TCS_DA' | 'TCS_AV' | 'TCS_VD' (legacy) | 'PQA_MX' | 'PQA_CE'
   /** Set when user picks TCS vs PQA at gateway — keeps search screen aligned (engineer code vs service center code). */
-  const [portalRealm, setPortalRealm] = useState(null);
+  const [portalRealm, setPortalRealm] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.portalRealm || null;
+    } catch {
+      return null;
+    }
+  });
 
   // ─── View history stack for swipe-back / browser-back support ────────────
   const viewStackRef = React.useRef(['APP_SELECTION']);
@@ -1294,6 +1343,24 @@ const PageContent = () => {
 
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigateBack]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.setItem(
+        UI_STATE_STORAGE_KEY,
+        JSON.stringify({
+          view,
+          appMode: appMode || null,
+          portalRealm: portalRealm || null,
+          isAdminPortal: !!isAdminPortal,
+        })
+      );
+    } catch {
+      // Ignore persistence failures
+    }
+  }, [view, appMode, portalRealm, isAdminPortal]);
+
   const isPqaMode = appMode?.startsWith('PQA');
   /** Search / lookup copy: PQA portal → service center code; TCS portal → engineer code. Falls back to appMode when portalRealm unset. */
   const searchIsPqaContext = portalRealm === 'PQA' || (portalRealm === null && isPqaMode);
@@ -1319,6 +1386,15 @@ const PageContent = () => {
   const [searchCode, setSearchCode] = useState('');
   const [pqaDefaultUrl, setPqaDefaultUrl] = useState(PQA_SERVICE_CENTER_PHOTO);
   const [partnerLogoUrls, setPartnerLogoUrls] = useState({});
+
+  useEffect(() => {
+    if (view === 'ENGINEER_PROFILE' && !selectedEngineer) {
+      setView('ENGINEER_LOOKUP');
+    }
+    if (view === 'ENGINEER_HISTORY' && !selectedEngineer) {
+      setView('ENGINEER_LOOKUP');
+    }
+  }, [selectedEngineer, view]);
 
   useEffect(() => {
     // Dynamically fetch the real download URL (with token) for the PQA Service Center photo
@@ -1429,12 +1505,26 @@ const PageContent = () => {
   const [profileOpenedByExactCode, setProfileOpenedByExactCode] = useState(false);
 
   // Feedback form state
-  const [feedbackCode, setFeedbackCode] = useState('');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [academySurveySent, setAcademySurveySent] = useState(false);
+  const [isSubmittingAcademySurvey, setIsSubmittingAcademySurvey] = useState(false);
+  const [academySurveyExporting, setAcademySurveyExporting] = useState(false);
+  const [showSurveyShortcut, setShowSurveyShortcut] = useState(true);
+  const [academySurvey, setAcademySurvey] = useState({
+    fullName: '',
+    phoneNumber: '',
+    product: '',
+    academyLocation: '',
+    contentValue: '',
+    trainerClarity: '',
+    needMoreSessions: '',
+    periodSuitable: '',
+    placeAccommodation: '',
+    notes: '',
+  });
 
   // Activity log panel toggle
   /** Admin dashboard: modal shortcuts (accounts / TCS guide / action log) */
@@ -1451,6 +1541,71 @@ const PageContent = () => {
 
   // Rank reveal state
   const [showRankReveal, setShowRankReveal] = useState(false);
+
+  const resetAcademySurvey = () => {
+    setAcademySurvey({
+      fullName: '',
+      phoneNumber: '',
+      product: '',
+      academyLocation: '',
+      contentValue: '',
+      trainerClarity: '',
+      needMoreSessions: '',
+      periodSuitable: '',
+      placeAccommodation: '',
+      notes: '',
+    });
+    setAcademySurveySent(false);
+    setIsSubmittingAcademySurvey(false);
+  };
+
+  const exportSamsungAcademySurveys = async () => {
+    setAcademySurveyExporting(true);
+    try {
+      const surveys = await getSamsungAcademySurveysFromDb();
+      if (!surveys.length) {
+        message.warning('No Samsung Academy survey data found.');
+        return;
+      }
+      const rows = surveys
+        .slice()
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+        .map((item, idx) => ({
+          '#': idx + 1,
+          Name: item.fullName || '',
+          Phone: item.phoneNumber || '',
+          Product: item.product || '',
+          'Academy Location': item.academyLocation || '',
+          'Content Valuable': item.contentValue || '',
+          'Trainer Clear & Good': item.trainerClarity || '',
+          'Need More Sessions': item.needMoreSessions || '',
+          'Training Period Suitable': item.periodSuitable || '',
+          'Place Accommodation Suitable': item.placeAccommodation || '',
+          Notes: item.notes || '',
+          'Submitted At': item.createdAt || '',
+          'Source App Mode': item.appMode || '',
+        }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Samsung Academy Survey');
+      const stamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `samsung_academy_survey_${stamp}.xlsx`);
+      message.success('Samsung Academy survey exported successfully.');
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        category: 'EXPORT',
+        action: 'Exported Samsung Academy survey',
+        details: { count: surveys.length },
+        severity: 'info',
+      });
+    } catch (e) {
+      console.error(e);
+      message.error('Failed to export Samsung Academy survey.');
+    } finally {
+      setAcademySurveyExporting(false);
+    }
+  };
 
   // Analytics
   const [sessionStart, setSessionStart] = useState(null);
@@ -1471,10 +1626,170 @@ const PageContent = () => {
   // Activity log
   const [activityLogs, setActivityLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logTypeFilter, setLogTypeFilter] = useState('ALL');
+  const [logSeverityFilter, setLogSeverityFilter] = useState('ALL');
+  const [logCategoryFilter, setLogCategoryFilter] = useState('ALL');
+  const [logActorQuery, setLogActorQuery] = useState('');
+  const [logActionQuery, setLogActionQuery] = useState('');
   const loadLogs = React.useCallback(() => {
     setLogsLoading(true);
     fetchLogs(100).then(data => { setActivityLogs(data); setLogsLoading(false); });
   }, []);
+  const externalLogsPath = '/admin?logs=external';
+  const userActionSessionRef = React.useRef('');
+  const lastLoggedViewRef = React.useRef(null);
+
+  const detectLogCategory = React.useCallback((log) => {
+    if (log?.category) return String(log.category).toUpperCase();
+    const t = String(log?.type || '').toUpperCase();
+    if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('FAILED') || t.includes('ERROR')) return 'SECURITY';
+    if (t.includes('ADMIN')) return 'ADMIN';
+    if (t.includes('VISITOR') || t.includes('USER')) return 'VISITOR';
+    return 'OTHER';
+  }, []);
+
+  const filteredActivityLogs = React.useMemo(() => {
+    const actorNeedle = logActorQuery.trim().toLowerCase();
+    const actionNeedle = logActionQuery.trim().toLowerCase();
+    return activityLogs.filter((log) => {
+      const type = String(log?.type || '').toUpperCase();
+      const severity = String(log?.severity || 'info').toLowerCase();
+      const category = detectLogCategory(log);
+      const actor = String(log?.actor || '').toLowerCase();
+      const action = String(log?.action || '').toLowerCase();
+      const detailsText = Object.entries(log?.details || {}).map(([k, v]) => `${k}:${String(v)}`).join(' ').toLowerCase();
+
+      if (logTypeFilter !== 'ALL' && type !== logTypeFilter) return false;
+      if (logSeverityFilter !== 'ALL' && severity !== logSeverityFilter.toLowerCase()) return false;
+      if (logCategoryFilter !== 'ALL' && category !== logCategoryFilter) return false;
+      if (actorNeedle && !actor.includes(actorNeedle)) return false;
+      if (actionNeedle && !(action.includes(actionNeedle) || detailsText.includes(actionNeedle))) return false;
+      return true;
+    });
+  }, [activityLogs, detectLogCategory, logActionQuery, logActorQuery, logCategoryFilter, logSeverityFilter, logTypeFilter]);
+
+  const exportFilteredActivityLogs = React.useCallback(() => {
+    if (!filteredActivityLogs.length) {
+      message.warning('No logs match current filters.');
+      return;
+    }
+    const rows = filteredActivityLogs.map((log, idx) => ({
+      '#': idx + 1,
+      Timestamp: log.timestamp ? log.timestamp.toISOString() : '',
+      Type: log.type || '',
+      Category: detectLogCategory(log),
+      Severity: log.severity || '',
+      Actor: log.actor || '',
+      Action: log.action || '',
+      Details: Object.entries(log.details || {}).map(([k, v]) => `${k}: ${String(v)}`).join(' | '),
+      IP: log.ip || '',
+      Location: log.location || '',
+      UserAgent: log.userAgent || '',
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Action Log');
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `action_log_filtered_${stamp}.xlsx`);
+    message.success('Exported filtered action logs.');
+  }, [detectLogCategory, filteredActivityLogs, message]);
+
+  const logUserAction = React.useCallback(({ action, category = 'VISITOR', details = {}, severity = 'info' }) => {
+    const actor =
+      (isLogged && currentUser?.username)
+        ? currentUser.username
+        : `visitor:${userActionSessionRef.current || 'session'}`;
+    writeLog({
+      type: 'USER_ACTION',
+      actor,
+      category,
+      action,
+      details: {
+        ...details,
+        view,
+        appMode: appMode || null,
+        portalRealm: portalRealm || null,
+        sessionId: userActionSessionRef.current || null,
+      },
+      severity,
+    });
+  }, [appMode, currentUser?.username, isLogged, portalRealm, view]);
+
+  // Direct URL support: /?survey=samsung-academy
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const portal = String(params.get('portal') || '').toLowerCase();
+    const logs = String(params.get('logs') || '').toLowerCase();
+    if (portal === 'admin') {
+      setIsAdminPortal(true);
+      if (isLogged && (logs === 'external' || logs === '1')) {
+        setView('EXTERNAL_LOGS');
+        viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'EXTERNAL_LOGS'];
+      } else if (isLogged) {
+        setView('ADMIN_DASHBOARD');
+        viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD'];
+      } else {
+        setView('ADMIN_LOGIN');
+        viewStackRef.current = ['ADMIN_LOGIN'];
+      }
+      params.delete('portal');
+      const nextPortalQuery = params.toString();
+      const nextPortalUrl = `${window.location.pathname}${nextPortalQuery ? `?${nextPortalQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', nextPortalUrl);
+      return;
+    }
+    const survey = String(params.get('survey') || '').toLowerCase();
+    if (survey !== 'samsung-academy' && survey !== 'academy') return;
+
+    setPortalRealm('TCS');
+    setAppMode((prev) => prev || 'TCS_MX');
+    setShowSurveyShortcut(false);
+    resetAcademySurvey();
+    setView('SAMSUNG_ACADEMY_SURVEY');
+    viewStackRef.current = ['APP_SELECTION', 'SAMSUNG_ACADEMY_SURVEY'];
+
+    params.delete('survey');
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', nextUrl);
+  }, []);
+
+  useEffect(() => {
+    if (view === 'EXTERNAL_LOGS') loadLogs();
+  }, [loadLogs, view]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = 'visitorActionSessionId';
+    const existing = sessionStorage.getItem(key);
+    if (existing) {
+      userActionSessionRef.current = existing;
+      return;
+    }
+    const sid = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    userActionSessionRef.current = sid;
+    sessionStorage.setItem(key, sid);
+  }, []);
+
+  useEffect(() => {
+    const previous = lastLoggedViewRef.current;
+    if (previous === view) return;
+    lastLoggedViewRef.current = view;
+    if (!previous) {
+      logUserAction({
+        action: 'Opened app view',
+        category: 'NAVIGATION',
+        details: { to: view },
+      });
+      return;
+    }
+    logUserAction({
+      action: 'Changed view',
+      category: 'NAVIGATION',
+      details: { from: previous, to: view },
+    });
+  }, [logUserAction, view]);
   const [tcsWinnersConfigs, setTcsWinnersConfigs] = useState([]);
   const [tcsWinnersLoading, setTcsWinnersLoading] = useState(false);
   const [tcsWinnersSaving, setTcsWinnersSaving] = useState(false);
@@ -2565,20 +2880,39 @@ const PageContent = () => {
     const trimmed = searchCode.trim();
     if (!trimmed) {
       message.warning("Please enter a code or name to verify.");
+      logUserAction({ action: 'Rejected empty search', category: 'SEARCH', severity: 'warning' });
       return;
     }
 
     if (portalRealm === 'TCS' && !appMode?.startsWith('TCS')) {
       message.error('You are in the TCS portal — open the Dashboard and select TCS MX, DA, or AV (top strip), then search by engineer code.');
+      logUserAction({
+        action: 'Portal/app mismatch on search',
+        category: 'SECURITY',
+        severity: 'warning',
+        details: { query: trimmed, portalRealm, appMode },
+      });
       return;
     }
     if (portalRealm === 'PQA' && !appMode?.startsWith('PQA')) {
       message.error('You are in the PQA portal — open the Dashboard and select PQA MX or CE, then search by service center code.');
+      logUserAction({
+        action: 'Portal/app mismatch on search',
+        category: 'SECURITY',
+        severity: 'warning',
+        details: { query: trimmed, portalRealm, appMode },
+      });
       return;
     }
 
     if (engineers.length === 0) {
       message.error(`No data loaded for ${appMode}. Please check admin portal.`);
+      logUserAction({
+        action: 'Search attempted without loaded data',
+        category: 'SEARCH',
+        severity: 'warning',
+        details: { query: trimmed, appMode: appMode || null },
+      });
       return;
     }
 
@@ -2597,6 +2931,12 @@ const PageContent = () => {
         message.error(
           `Service center "${trimmed}" may exist in the other PQA division (MX vs CE). Use the top strip to select ${appMode === 'PQA_CE' ? 'PQA MX' : 'PQA CE'} if the data was uploaded there, or re-import the correct workbook.`
         );
+        logUserAction({
+          action: 'PQA division mismatch search',
+          category: 'SEARCH',
+          severity: 'warning',
+          details: { query: trimmed, appMode },
+        });
         return;
       }
     }
@@ -2614,6 +2954,12 @@ const PageContent = () => {
 
     if (matchingRecords.length === 0) {
       message.error(`${searchIsPqaContext ? 'Service center' : 'Engineer'} "${trimmed}" not found in current records for ${appMode || 'this division'}.`);
+      logUserAction({
+        action: 'Search not found',
+        category: 'SEARCH',
+        severity: 'warning',
+        details: { query: trimmed, appMode: appMode || null, context: searchIsPqaContext ? 'PQA' : 'TCS' },
+      });
       return;
     }
 
@@ -2658,6 +3004,16 @@ const PageContent = () => {
     navigateTo('ENGINEER_PROFILE');
     setShowRankReveal(appMode !== 'PQA_MX');
     message.success(`Dossier found: ${String(newestRecord.code || newestRecord.name || '').trim()}`);
+    logUserAction({
+      action: 'Search opened profile',
+      category: 'SEARCH',
+      details: {
+        query: trimmed,
+        openedCode: newestRecord?.code || null,
+        openedName: newestRecord?.name || null,
+        exactCode: openedByExactCode,
+      },
+    });
   };
 
   const handleAdminLogin = async () => {
@@ -2737,7 +3093,12 @@ const PageContent = () => {
     localStorage.removeItem('adminSession');
     localStorage.removeItem('userName');
     setIsLogged(false);
-    setView('HOME');
+    if (isAdminPortal) {
+      setView('ADMIN_LOGIN');
+      viewStackRef.current = ['ADMIN_LOGIN'];
+    } else {
+      setView('HOME');
+    }
   };
 
   const handleClearTcsDivisionData = async (mode) => {
@@ -4125,8 +4486,24 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
   return (
     <div className="min-h-screen bg-black text-white flex flex-col pb-24 selection:bg-blue-600 selection:text-white">
       <Header
-        onHome={() => setView('HOME')}
-        onLogoClick={() => { viewStackRef.current = ['APP_SELECTION']; setAppMode(null); setPortalRealm(null); setView('APP_SELECTION'); }}
+        onHome={() => {
+          if (isAdminPortal) {
+            setView(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN');
+          } else {
+            setView('HOME');
+          }
+        }}
+        onLogoClick={() => {
+          if (isAdminPortal) {
+            viewStackRef.current = [isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN'];
+            setView(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN');
+          } else {
+            viewStackRef.current = ['APP_SELECTION'];
+            setAppMode(null);
+            setPortalRealm(null);
+            setView('APP_SELECTION');
+          }
+        }}
         appMode={appMode}
       />
 
@@ -4161,7 +4538,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-5xl px-4">
                 {/* TCS Portal (Engineers) */}
                 <button
-                  onClick={() => { setPortalRealm('TCS'); navigateTo('TCS_DIVISION_SELECTION'); }}
+                  onClick={() => {
+                    setPortalRealm('TCS');
+                    setShowSurveyShortcut(true);
+                    navigateTo('TCS_DIVISION_SELECTION');
+                  }}
                   className="group relative h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -4951,6 +5332,15 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   )}
 
                   <button
+                    onClick={exportSamsungAcademySurveys}
+                    disabled={academySurveyExporting}
+                    className="flex flex-col items-center gap-2 bg-zinc-900 border border-emerald-500/20 text-emerald-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-emerald-600/10 transition-all disabled:opacity-40"
+                  >
+                    {academySurveyExporting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                    Export Academy Survey
+                  </button>
+
+                  <button
                     onClick={() => (isPqaMode ? setView('PQA_INFO') : setAdminModal('guide'))}
                     className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
                   >
@@ -5345,32 +5735,101 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     FAILED_LOGIN: 'text-yellow-400',
                     ERROR: 'text-red-400',
                     VISITOR_EVENT: 'text-purple-400',
+                    USER_ACTION: 'text-cyan-300',
                   };
+                  const typeOptions = ['ALL', ...Array.from(new Set(activityLogs.map((log) => String(log?.type || '').toUpperCase()).filter(Boolean)))];
+                  const categoryOptions = ['ALL', ...Array.from(new Set(activityLogs.map((log) => detectLogCategory(log)).filter(Boolean)))];
                   return (
                     <div className="space-y-4">
                       <div className="flex items-center gap-2 flex-wrap border-b border-white/5 pb-3">
                         <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Last 100 events</span>
                         <button
                           type="button"
+                          onClick={exportFilteredActivityLogs}
+                          className="ml-auto flex items-center gap-1 px-3 py-1 bg-emerald-600/10 border border-emerald-500/20 rounded-full text-[8px] font-black text-emerald-300 uppercase tracking-widest hover:bg-emerald-600/20 transition-all"
+                        >
+                          <Download className="w-3 h-3" />
+                          Export Filtered
+                        </button>
+                        <button
+                          type="button"
                           onClick={loadLogs}
                           disabled={logsLoading}
-                          className="ml-auto flex items-center gap-1 px-3 py-1 bg-zinc-800 border border-white/10 rounded-full text-[8px] font-black text-zinc-400 uppercase tracking-widest hover:bg-zinc-700 transition-all disabled:opacity-40"
+                          className="flex items-center gap-1 px-3 py-1 bg-zinc-800 border border-white/10 rounded-full text-[8px] font-black text-zinc-400 uppercase tracking-widest hover:bg-zinc-700 transition-all disabled:opacity-40"
                         >
                           <RefreshCw className={`w-3 h-3 ${logsLoading ? 'animate-spin' : ''}`} />
                           {logsLoading ? 'Loading…' : 'Refresh'}
                         </button>
                       </div>
-                      {activityLogs.length === 0 ? (
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input
+                          value={logActorQuery}
+                          onChange={(e) => setLogActorQuery(e.target.value)}
+                          placeholder="Filter by actor (who)"
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2 text-[10px] font-bold text-white outline-none"
+                        />
+                        <input
+                          value={logActionQuery}
+                          onChange={(e) => setLogActionQuery(e.target.value)}
+                          placeholder="Filter by action/details"
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2 text-[10px] font-bold text-white outline-none"
+                        />
+                        <select
+                          value={logCategoryFilter}
+                          onChange={(e) => setLogCategoryFilter(e.target.value)}
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2 text-[10px] font-black text-white uppercase tracking-widest outline-none"
+                        >
+                          {categoryOptions.map((c) => (
+                            <option key={`cat-${c}`} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={logTypeFilter}
+                          onChange={(e) => setLogTypeFilter(e.target.value)}
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2 text-[10px] font-black text-white uppercase tracking-widest outline-none"
+                        >
+                          {typeOptions.map((t) => (
+                            <option key={`typ-${t}`} value={t}>{t}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={logSeverityFilter}
+                          onChange={(e) => setLogSeverityFilter(e.target.value)}
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2 text-[10px] font-black text-white uppercase tracking-widest outline-none"
+                        >
+                          <option value="ALL">ALL SEVERITY</option>
+                          <option value="info">INFO</option>
+                          <option value="warning">WARNING</option>
+                          <option value="error">ERROR</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLogTypeFilter('ALL');
+                            setLogSeverityFilter('ALL');
+                            setLogCategoryFilter('ALL');
+                            setLogActorQuery('');
+                            setLogActionQuery('');
+                          }}
+                          className="w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+                        >
+                          Clear Filters
+                        </button>
+                      </div>
+
+                      {filteredActivityLogs.length === 0 ? (
                         <p className="text-center text-zinc-700 text-[10px] uppercase tracking-widest py-8">{logsLoading ? 'Loading logs…' : 'No activity recorded yet.'}</p>
                       ) : (
                         <div className="space-y-2 max-h-[min(65vh,620px)] overflow-y-auto pr-2">
-                          {activityLogs.map(log => (
+                          {filteredActivityLogs.map(log => (
                             <div key={log.id} className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${SEVERITY_STYLES[log.severity] || SEVERITY_STYLES.info}`}>
                               <div className="flex-shrink-0 mt-0.5">
                                 <span className={`text-[8px] font-black uppercase tracking-widest ${TYPE_COLORS[log.type] || 'text-zinc-400'}`}>{log.type?.replace('_', ' ')}</span>
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-black text-white">{log.action}</p>
+                                <p className="text-[8px] text-cyan-300/80 uppercase tracking-widest mt-0.5">{detectLogCategory(log)}</p>
                                 {log.details && Object.keys(log.details).length > 0 && (
                                   <p className="text-[9px] text-zinc-500 mt-0.5 break-words">
                                     {Object.entries(log.details).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}
@@ -6734,18 +7193,16 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest">No history records found.</div>
                 )}
 
-                {/* Feedback button */}
+                {/* Survey button */}
                 <button
                   onClick={() => {
-                    setFeedbackName(selectedEngineer.name);
-                    setFeedbackSent(false);
-                    setFeedbackText('');
-                    setFeedbackRating(0);
-                    setView('FEEDBACK');
+                    resetAcademySurvey();
+                    setAcademySurvey((prev) => ({ ...prev, fullName: selectedEngineer?.name || '' }));
+                    setView('SAMSUNG_ACADEMY_SURVEY');
                   }}
                   className="w-full flex items-center justify-center gap-3 py-5 bg-zinc-900 border border-white/5 rounded-[2rem] text-[10px] font-black text-zinc-400 uppercase tracking-widest hover:bg-purple-600/10 hover:border-purple-500/30 hover:text-purple-400 transition-all"
                 >
-                  <MessageSquare className="w-4 h-4" /> Share Feedback & Suggestions
+                  <BookOpen className="w-4 h-4" /> Samsung Academy Survey
                 </button>
               </div>
             );
@@ -6969,6 +7426,393 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               >
                 Return to Dashboard
               </button>
+            </div>
+          )}
+
+          {/* ─── SAMSUNG ACADEMY SURVEY ───────────────────────────────────── */}
+          {view === 'SAMSUNG_ACADEMY_SURVEY' && (
+            <div dir="rtl" className="max-w-3xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-700 pb-20">
+              <div className="text-center space-y-3">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="h-[1px] w-16 bg-blue-500/50" />
+                  <span className="text-[10px] font-black tracking-[0.35em] text-blue-400">SAMSUNG ACADEMY</span>
+                  <div className="h-[1px] w-16 bg-blue-500/50" />
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white">استبيان أكاديمية سامسونج</h2>
+                <p className="text-zinc-400 text-sm md:text-base">رأيك مهم جدا لتحسين جودة المحتوى وتجربة التدريب.</p>
+              </div>
+
+              {academySurveySent ? (
+                <div className="glass-card rounded-[2.5rem] p-10 md:p-14 flex flex-col items-center text-center space-y-5">
+                  <div className="w-20 h-20 rounded-full border border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle className="w-10 h-10 text-emerald-400" />
+                  </div>
+                  <h3 className="text-2xl font-black text-white">شكرا لمشاركتك</h3>
+                  <p className="text-zinc-400">تم إرسال الاستبيان بنجاح.</p>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <button
+                      onClick={() => {
+                        resetAcademySurvey();
+                        setView('SAMSUNG_ACADEMY_SURVEY');
+                      }}
+                      className="px-6 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm hover:bg-blue-500 transition-all"
+                    >
+                      إرسال استبيان جديد
+                    </button>
+                    <button
+                      onClick={() => navigateTo('HOME')}
+                      className="px-6 py-3 rounded-2xl bg-zinc-900 text-zinc-300 border border-white/10 font-black text-sm hover:text-white hover:border-white/20 transition-all"
+                    >
+                      العودة للرئيسية
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="glass-card rounded-[2.5rem] p-6 md:p-10 space-y-7">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">الاسم</label>
+                      <input
+                        type="text"
+                        value={academySurvey.fullName}
+                        onChange={(e) => setAcademySurvey((prev) => ({ ...prev, fullName: e.target.value }))}
+                        placeholder="اكتب الاسم بالكامل"
+                        className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">رقم الهاتف</label>
+                      <input
+                        type="tel"
+                        value={academySurvey.phoneNumber}
+                        onChange={(e) => setAcademySurvey((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                        placeholder="مثال: 01012345678"
+                        className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-zinc-400">المنتج</label>
+                    <select
+                      value={academySurvey.product}
+                      onChange={(e) => setAcademySurvey((prev) => ({ ...prev, product: e.target.value }))}
+                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="">اختر المنتج</option>
+                      {ACADEMY_PRODUCTS.map((product) => (
+                        <option key={product} value={product}>{product}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-zinc-400">موقع أكاديمية سامسونج</label>
+                    <select
+                      value={academySurvey.academyLocation}
+                      onChange={(e) => setAcademySurvey((prev) => ({ ...prev, academyLocation: e.target.value }))}
+                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="">اختر الموقع</option>
+                      {SAMSUNG_ACADEMY_LOCATIONS.map((loc) => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-5 border-t border-white/10 pt-6">
+                    <p className="text-sm font-black text-blue-400">تقييم التدريب</p>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">هل كان المحتوى مفيد وقيم؟</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ACADEMY_EVAL_OPTIONS.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, contentValue: opt }))}
+                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.contentValue === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">هل كان شرح المدرب واضح وجيد؟</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ACADEMY_EVAL_OPTIONS.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, trainerClarity: opt }))}
+                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.trainerClarity === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">هل تحتاج جلسات إضافية مثل هذه؟</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, needMoreSessions: opt }))}
+                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.needMoreSessions === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">هل فترة التدريب كانت مناسبة؟</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, periodSuitable: opt }))}
+                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.periodSuitable === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-zinc-400">هل مكان التدريب والتجهيزات كانت مناسبة؟</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, placeAccommodation: opt }))}
+                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.placeAccommodation === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-zinc-400">ملاحظات إضافية (اختياري)</label>
+                    <textarea
+                      value={academySurvey.notes}
+                      onChange={(e) => setAcademySurvey((prev) => ({ ...prev, notes: e.target.value }))}
+                      rows={4}
+                      placeholder="اكتب أي اقتراحات أو ملاحظات إضافية..."
+                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      const cleanPhone = String(academySurvey.phoneNumber || '').replace(/\s+/g, '');
+                      const cleanName = String(academySurvey.fullName || '').trim().replace(/\s+/g, ' ');
+                      if (!cleanName) { message.warning('من فضلك اكتب الاسم بالكامل.'); return; }
+                      const nameParts = cleanName.split(' ').filter(Boolean);
+                      if (nameParts.length < 2) {
+                        message.warning('الاسم يجب أن يكون ثنائي (الاسم الأول واسم العائلة).');
+                        return;
+                      }
+                      if (!/^01(0|1|2|5)\d{8}$/.test(cleanPhone)) {
+                        message.warning('رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 010 أو 011 أو 012 أو 015.');
+                        return;
+                      }
+                      if (!academySurvey.product) { message.warning('من فضلك اختر المنتج.'); return; }
+                      if (!academySurvey.academyLocation) { message.warning('من فضلك اختر موقع الأكاديمية.'); return; }
+                      if (!academySurvey.contentValue || !academySurvey.trainerClarity || !academySurvey.needMoreSessions || !academySurvey.periodSuitable || !academySurvey.placeAccommodation) {
+                        message.warning('من فضلك أكمل كل أسئلة التقييم.');
+                        return;
+                      }
+
+                      setIsSubmittingAcademySurvey(true);
+                      try {
+                        await saveSamsungAcademySurveyToDb({
+                          fullName: cleanName,
+                          phoneNumber: cleanPhone,
+                          product: academySurvey.product,
+                          academyLocation: academySurvey.academyLocation,
+                          contentValue: academySurvey.contentValue,
+                          trainerClarity: academySurvey.trainerClarity,
+                          needMoreSessions: academySurvey.needMoreSessions,
+                          periodSuitable: academySurvey.periodSuitable,
+                          placeAccommodation: academySurvey.placeAccommodation,
+                          notes: academySurvey.notes.trim(),
+                          source: 'app',
+                          appMode: appMode || null,
+                        });
+                        logUserAction({
+                          action: 'Submitted Samsung Academy survey',
+                          category: 'SURVEY',
+                          details: {
+                            product: academySurvey.product,
+                            academyLocation: academySurvey.academyLocation,
+                          },
+                        });
+                        setAcademySurveySent(true);
+                        message.success('تم إرسال الاستبيان بنجاح.');
+                      } catch (e) {
+                        console.error(e);
+                        message.error('حدث خطأ أثناء إرسال الاستبيان. حاول مرة أخرى.');
+                      } finally {
+                        setIsSubmittingAcademySurvey(false);
+                      }
+                    }}
+                    disabled={isSubmittingAcademySurvey}
+                    className="w-full rounded-2xl bg-blue-600 py-4 text-sm font-black text-white transition-all hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingAcademySurvey ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
+                    {isSubmittingAcademySurvey ? 'جاري الإرسال...' : 'إرسال الاستبيان'}
+                  </button>
+
+                  <button
+                    onClick={() => navigateTo('HOME')}
+                    className="w-full rounded-2xl border border-white/10 bg-zinc-900 py-3 text-xs font-black text-zinc-400 transition-all hover:text-white"
+                  >
+                    رجوع
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── EXTERNAL LOGGING AREA ───────────────────────────────────── */}
+          {view === 'EXTERNAL_LOGS' && (
+            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.35em]">External Logging Area</p>
+                  <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Action Intelligence</h2>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}${externalLogsPath}`;
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase tracking-widest hover:bg-blue-600/30 transition-all"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open Direct Link
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const url = `${window.location.origin}${externalLogsPath}`;
+                        await navigator.clipboard.writeText(url);
+                        message.success('Direct log link copied.');
+                      } catch {
+                        message.error('Failed to copy link.');
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 text-[10px] font-black uppercase tracking-widest hover:text-white hover:bg-zinc-800 transition-all"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy Link
+                  </button>
+                  <button
+                    onClick={exportFilteredActivityLogs}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600/20 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export Filtered
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                <input
+                  value={logActorQuery}
+                  onChange={(e) => setLogActorQuery(e.target.value)}
+                  placeholder="Actor / username"
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-[10px] font-bold text-white outline-none"
+                />
+                <input
+                  value={logActionQuery}
+                  onChange={(e) => setLogActionQuery(e.target.value)}
+                  placeholder="Action or details"
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-[10px] font-bold text-white outline-none"
+                />
+                <select
+                  value={logCategoryFilter}
+                  onChange={(e) => setLogCategoryFilter(e.target.value)}
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-[10px] font-black text-white uppercase tracking-widest outline-none"
+                >
+                  {['ALL', ...Array.from(new Set(activityLogs.map((log) => detectLogCategory(log)).filter(Boolean)))].map((cat) => (
+                    <option key={`ext-cat-${cat}`} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <select
+                  value={logTypeFilter}
+                  onChange={(e) => setLogTypeFilter(e.target.value)}
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-[10px] font-black text-white uppercase tracking-widest outline-none"
+                >
+                  {['ALL', ...Array.from(new Set(activityLogs.map((log) => String(log?.type || '').toUpperCase()).filter(Boolean)))].map((typ) => (
+                    <option key={`ext-typ-${typ}`} value={typ}>{typ}</option>
+                  ))}
+                </select>
+                <select
+                  value={logSeverityFilter}
+                  onChange={(e) => setLogSeverityFilter(e.target.value)}
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-[10px] font-black text-white uppercase tracking-widest outline-none"
+                >
+                  <option value="ALL">ALL SEVERITY</option>
+                  <option value="info">INFO</option>
+                  <option value="warning">WARNING</option>
+                  <option value="error">ERROR</option>
+                </select>
+                <button
+                  onClick={loadLogs}
+                  disabled={logsLoading}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 border border-white/10 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all disabled:opacity-40"
+                >
+                  <RefreshCw className={`w-4 h-4 ${logsLoading ? 'animate-spin' : ''}`} />
+                  {logsLoading ? 'Loading...' : 'Refresh Logs'}
+                </button>
+              </div>
+
+              {filteredActivityLogs.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-zinc-900/30 p-10 text-center text-zinc-600 text-[10px] font-black uppercase tracking-widest">
+                  {logsLoading ? 'Loading logs...' : 'No logs match current filters.'}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[min(65vh,620px)] overflow-y-auto pr-1">
+                  {filteredActivityLogs.map((log) => (
+                    <div key={log.id} className="rounded-xl border border-white/10 bg-zinc-900/60 px-4 py-3 flex items-start gap-3">
+                      <div className="min-w-[7rem]">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-cyan-300">{detectLogCategory(log)}</p>
+                        <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mt-0.5">{String(log?.type || '').replace('_', ' ')}</p>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-white">{log.action}</p>
+                        {log.details && Object.keys(log.details).length > 0 && (
+                          <p className="text-[9px] text-zinc-500 mt-1 break-words">
+                            {Object.entries(log.details).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right min-w-[7rem]">
+                        <p className="text-[9px] font-black text-white">{log.actor}</p>
+                        <p className="text-[8px] text-zinc-600 mt-0.5 uppercase">{log.severity || 'info'}</p>
+                        <p className="text-[8px] text-zinc-700 mt-0.5">
+                          {log.timestamp ? log.timestamp.toLocaleString() : '—'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -7298,89 +8142,31 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         </div> {/* close animated wrapper key={view} */}
       </main>
 
-      {/* Floating Feedback Button */}
-      {view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && view !== 'TCS_DIVISION_SELECTION' && (
-      <button
-        onClick={() => { setShowFeedbackModal(true); setFeedbackSent(false); setFeedbackText(''); setFeedbackCode(''); setFeedbackRating(0); }}
-        className="fixed bottom-28 right-5 z-50 w-12 h-12 bg-purple-600 hover:bg-purple-500 rounded-2xl shadow-2xl shadow-purple-900/60 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-        title="Send Feedback"
-      >
-        <MessageSquare className="w-5 h-5 text-white" />
-      </button>
-      )}
-
-      {/* Feedback Modal */}
-      {showFeedbackModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-          <div className="bg-zinc-950 border border-white/10 rounded-[3rem] w-full max-w-lg p-8 space-y-6 shadow-[0_0_80px_rgba(0,0,0,0.8)] relative animate-in fade-in zoom-in-95 duration-300">
-            <button onClick={() => setShowFeedbackModal(false)} className="absolute top-6 right-6 p-2 bg-zinc-800 text-white rounded-xl hover:bg-white hover:text-black transition-all">
-              <X className="w-4 h-4" />
-            </button>
-            {feedbackSent ? (
-              <div className="flex flex-col items-center text-center space-y-4 py-8">
-                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/30">
-                  <CheckCircle className="w-8 h-8 text-emerald-400" />
-                </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Thank You!</h3>
-                <p className="text-zinc-400 text-sm">Your feedback has been received.</p>
-                <button onClick={() => setShowFeedbackModal(false)} className="px-8 py-3 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-zinc-200 transition-all">Close</button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-3">
-                  <MessageSquare className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-base font-black text-white uppercase tracking-widest">Send Feedback</h2>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Engineer Code</label>
-                  <input type="text" value={feedbackCode} onChange={e => setFeedbackCode(e.target.value.toUpperCase())} placeholder="e.g. SAM-2026-001"
-                    className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm focus:border-purple-500 transition-all outline-none font-bold text-white shadow-inner" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Rate TCS Overall</label>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button key={star} onClick={() => setFeedbackRating(star)}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${star <= feedbackRating ? 'bg-yellow-400/20 border border-yellow-400 text-yellow-400' : 'bg-zinc-900 border border-white/5 text-zinc-600 hover:text-yellow-400'}`}>
-                        <Star className="w-5 h-5" fill={star <= feedbackRating ? 'currentColor' : 'none'} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Your Message</label>
-                  <textarea value={feedbackText} onChange={e => setFeedbackText(e.target.value)} rows={4}
-                    placeholder="Share your thoughts or suggestions..."
-                    className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm focus:border-purple-500 transition-all outline-none font-medium text-white shadow-inner resize-none" />
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!feedbackText.trim()) { message.warning('Please write your feedback.'); return; }
-                    const trimmedCode = feedbackCode.trim().toUpperCase();
-                    if (!trimmedCode) { message.warning('Please enter an engineer code.'); return; }
-
-                    const codeExists = engineers.some(eng => eng.code?.trim().toUpperCase() === trimmedCode);
-                    if (!codeExists) {
-                      message.error('Unrecognized engineer code. Access denied.');
-                      return;
-                    }
-
-                    setIsSendingFeedback(true);
-                    try {
-                      await saveFeedbackToDb({ engineerCode: trimmedCode, message: feedbackText, rating: feedbackRating });
-                      setFeedbackSent(true);
-                    } catch (e) { console.error(e); message.error('Failed to submit feedback.'); }
-                    finally { setIsSendingFeedback(false); }
-                  }}
-                  disabled={isSendingFeedback}
-                  className="w-full bg-purple-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-[0.3em] hover:bg-purple-500 transition-all flex items-center justify-center gap-3"
-                >
-                  {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
-                  {isSendingFeedback ? 'Submitting...' : 'Submit Feedback'}
-                </button>
-              </>
-            )}
-          </div>
+      {/* Floating Samsung Academy Survey Link */}
+      {!isAdminPortal && portalRealm === 'TCS' && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
+        <div className="fixed right-5 top-1/2 -translate-y-1/2 z-50">
+          <button
+            onClick={() => setShowSurveyShortcut(false)}
+            className="absolute -top-2 -right-2 h-6 w-6 rounded-full border border-white/20 bg-zinc-900 text-white/80 hover:text-white hover:border-white/40 transition-all flex items-center justify-center"
+            title="إخفاء"
+            aria-label="Hide survey shortcut"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              setShowSurveyShortcut(false);
+              resetAcademySurvey();
+              navigateTo('SAMSUNG_ACADEMY_SURVEY');
+            }}
+            className="rounded-2xl bg-blue-600/95 px-4 py-3 shadow-[0_0_28px_rgba(37,99,235,0.85)] border border-blue-300/30 animate-pulse transition-all hover:scale-105 hover:bg-blue-500 active:scale-95"
+            title="Samsung Academy Survey"
+          >
+            <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white">
+              <BookOpen className="w-4 h-4" />
+              Samsung Academy Survey
+            </span>
+          </button>
         </div>
       )}
 
@@ -7538,25 +8324,63 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       )
       }
 
-      {view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && view !== 'TCS_DIVISION_SELECTION' && (
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-4 px-6 flex justify-around items-center shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
-        {/* Dashboard */}
-        <button onClick={() => navigateTo('HOME')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${view === 'HOME' ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
-          <BarChart3 className={`w-5 h-5 ${view === 'HOME' ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''}`} />
-          <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
-        </button>
-        {/* Search — center, elevated */}
-        <button onClick={() => { setProfileOpenedByExactCode(false); navigateTo('ENGINEER_LOOKUP'); }} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 relative ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>
-          <div className={`-mt-6 w-14 h-14 rounded-[1.25rem] flex items-center justify-center shadow-xl transition-all duration-200 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'bg-blue-600 shadow-blue-500/40 scale-110' : 'bg-zinc-800 hover:bg-zinc-700'}`}>
-            <Search className="w-6 h-6" />
+      {isAdminPortal && isLogged && (
+        <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-md bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-3 px-4 shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
+          <div className="relative">
+            <div
+              className="pointer-events-none absolute top-1 bottom-1 rounded-2xl border border-blue-400/35 bg-blue-600/20 shadow-[0_0_22px_rgba(37,99,235,0.35)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{
+                width: 'calc(50% - 0.375rem)',
+                left: view === 'PROFILE_MGMT' ? 'calc(50% + 0.125rem)' : '0.25rem',
+              }}
+            />
+            <div className="relative grid grid-cols-2 gap-2">
+              <button
+                onClick={() => navigateTo('ADMIN_DASHBOARD')}
+                className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${view === 'ADMIN_DASHBOARD' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
+              >
+                <BarChart3 className={`w-5 h-5 transition-all duration-300 ${view === 'ADMIN_DASHBOARD' ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
+                <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
+              </button>
+              <button
+                onClick={() => navigateTo('PROFILE_MGMT')}
+                className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${view === 'PROFILE_MGMT' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
+              >
+                <Search className={`w-5 h-5 transition-all duration-300 ${view === 'PROFILE_MGMT' ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
+                <span className="text-[8px] font-black uppercase tracking-tight">Search</span>
+              </button>
+            </div>
           </div>
-          <span className="text-[8px] font-black uppercase tracking-tight mt-0.5">Search</span>
-        </button>
-        {/* Secure */}
-        <button onClick={() => navigateTo(isLogged ? 'ADMIN_DASHBOARD' : 'ADMIN_LOGIN')} className={`cursor-pointer flex flex-col items-center gap-1.5 transition-all duration-200 ${['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT'].includes(view) ? 'text-white scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
-          <ShieldCheck className={`w-5 h-5 ${['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT'].includes(view) ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''}`} />
-          <span className="text-[8px] font-black uppercase tracking-tight">Secure</span>
-        </button>
+        </nav>
+      )}
+
+      {!isAdminPortal && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && view !== 'TCS_DIVISION_SELECTION' && (
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-3 px-4 shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
+        <div className="relative">
+          <div
+            className="pointer-events-none absolute top-1 bottom-1 rounded-2xl border border-blue-400/35 bg-blue-600/20 shadow-[0_0_22px_rgba(37,99,235,0.35)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{
+              width: 'calc(50% - 0.375rem)',
+              left: ['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'calc(50% + 0.125rem)' : '0.25rem',
+            }}
+          />
+          <div className="relative grid grid-cols-2 gap-2">
+            <button
+              onClick={() => navigateTo('HOME')}
+              className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${view === 'HOME' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
+            >
+              <BarChart3 className={`w-5 h-5 transition-all duration-300 ${view === 'HOME' ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
+              <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
+            </button>
+            <button
+              onClick={() => { setProfileOpenedByExactCode(false); navigateTo('ENGINEER_LOOKUP'); }}
+              className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
+            >
+              <Search className={`w-5 h-5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
+              <span className="text-[8px] font-black uppercase tracking-tight">Search</span>
+            </button>
+          </div>
+        </div>
       </nav>
       )}
 

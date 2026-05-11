@@ -6,13 +6,14 @@ const LOGS_COL = collection(db, 'logs', 'activity', 'records');
 /**
  * Write a single log entry to Firestore.
  * @param {object} entry
- *   type     - 'ADMIN_ACTION' | 'ADMIN_LOGIN' | 'ADMIN_LOGOUT' | 'ERROR' | 'FAILED_LOGIN' | 'VISITOR_EVENT'
+ *   type     - 'ADMIN_ACTION' | 'ADMIN_LOGIN' | 'ADMIN_LOGOUT' | 'ERROR' | 'FAILED_LOGIN' | 'VISITOR_EVENT' | 'USER_ACTION'
  *   actor    - username / 'visitor'
  *   action   - short human-readable string
+ *   category - optional grouping bucket (e.g. NAVIGATION, SEARCH, SURVEY, SECURITY)
  *   details  - optional key-value object
  *   severity - 'info' | 'warning' | 'error'  (default: 'info')
  */
-export const writeLog = async ({ type, actor = 'system', action, details = {}, severity = 'info', ip = null, location = null }) => {
+export const writeLog = async ({ type, actor = 'system', action, category = null, details = {}, severity = 'info', ip = null, location = null }) => {
     try {
         const entry = {
             type,
@@ -23,6 +24,7 @@ export const writeLog = async ({ type, actor = 'system', action, details = {}, s
             timestamp: serverTimestamp(),
             userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 120) : '',
         };
+        if (category) entry.category = category;
         if (ip) entry.ip = ip;
         if (location) entry.location = location;
         await addDoc(LOGS_COL, entry);
