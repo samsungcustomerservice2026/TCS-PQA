@@ -117,7 +117,8 @@ const getQuarter = (monthName) => {
   return `Q${Math.floor(idx / 3) + 1}`;
 };
 
-const UI_STATE_STORAGE_KEY = 'tcs_ui_state_v1';
+const UI_STATE_STORAGE_KEY_MAIN = 'tcs_ui_state_main_v1';
+const UI_STATE_STORAGE_KEY_ADMIN = 'tcs_ui_state_admin_v1';
 const getMonthIndex = (monthName) => {
   if (monthName === undefined || monthName === null || monthName === '') return 0;
   if (typeof monthName === 'number' && monthName >= 1 && monthName <= 12) return monthName - 1;
@@ -1261,10 +1262,20 @@ const MetricBar = ({ label, value, max = 100, suffix = "", target = null, color 
 
 const PageContent = () => {
   const { message, modal, notification } = App.useApp();
+  const adminEntryAtBoot = (() => {
+    if (typeof window === 'undefined') return false;
+    const host = window.location.hostname.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const byHost = host.includes('scora-admin');
+    const byQuery = String(params.get('portal') || '').toLowerCase() === 'admin';
+    const byPath = window.location.pathname.toLowerCase().startsWith('/admin');
+    return byHost || byQuery || byPath;
+  })();
+  const bootStorageKey = adminEntryAtBoot ? UI_STATE_STORAGE_KEY_ADMIN : UI_STATE_STORAGE_KEY_MAIN;
   const [view, setView] = useState(() => {
     if (typeof window === 'undefined') return 'APP_SELECTION';
     try {
-      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      const raw = sessionStorage.getItem(bootStorageKey);
       if (!raw) return 'APP_SELECTION';
       const parsed = JSON.parse(raw);
       return parsed?.view || 'APP_SELECTION';
@@ -1273,9 +1284,10 @@ const PageContent = () => {
     }
   });
   const [isAdminPortal, setIsAdminPortal] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return adminEntryAtBoot;
+    if (adminEntryAtBoot) return true;
     try {
-      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      const raw = sessionStorage.getItem(bootStorageKey);
       if (!raw) return false;
       const parsed = JSON.parse(raw);
       return !!parsed?.isAdminPortal;
@@ -1286,7 +1298,7 @@ const PageContent = () => {
   const [appMode, setAppMode] = useState(() => {
     if (typeof window === 'undefined') return null;
     try {
-      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      const raw = sessionStorage.getItem(bootStorageKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       return parsed?.appMode || null;
@@ -1298,7 +1310,7 @@ const PageContent = () => {
   const [portalRealm, setPortalRealm] = useState(() => {
     if (typeof window === 'undefined') return null;
     try {
-      const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY);
+      const raw = sessionStorage.getItem(bootStorageKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       return parsed?.portalRealm || null;
@@ -1331,10 +1343,29 @@ const PageContent = () => {
 
     // ── Direct Portal Links based on Domain ────────────────────────────────
     const host = window.location.hostname.toLowerCase();
+    const hasActiveAdminSession = (() => {
+      try {
+        const raw = localStorage.getItem('adminSession');
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        return Date.now() - (parsed?.loginAt || 0) < 2 * 60 * 60 * 1000;
+      } catch {
+        return false;
+      }
+    })();
     if (host.includes('scora-pqa')) {
       setPortalRealm('PQA');
       setView('PQA_DIVISION_SELECTION');
       viewStackRef.current = ['APP_SELECTION', 'PQA_DIVISION_SELECTION'];
+    } else if (host.includes('scora-admin')) {
+      setIsAdminPortal(true);
+      if (hasActiveAdminSession) {
+        setView('ADMIN_DASHBOARD');
+        viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD'];
+      } else {
+        setView('ADMIN_LOGIN');
+        viewStackRef.current = ['ADMIN_LOGIN'];
+      }
     } else if (host.includes('scora-tcs')) {
       setPortalRealm('TCS');
       setView('TCS_DIVISION_SELECTION');
@@ -1347,8 +1378,9 @@ const PageContent = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
+      const storageKey = isAdminPortal ? UI_STATE_STORAGE_KEY_ADMIN : UI_STATE_STORAGE_KEY_MAIN;
       sessionStorage.setItem(
-        UI_STATE_STORAGE_KEY,
+        storageKey,
         JSON.stringify({
           view,
           appMode: appMode || null,
@@ -1733,10 +1765,6 @@ const PageContent = () => {
         setView('ADMIN_LOGIN');
         viewStackRef.current = ['ADMIN_LOGIN'];
       }
-      params.delete('portal');
-      const nextPortalQuery = params.toString();
-      const nextPortalUrl = `${window.location.pathname}${nextPortalQuery ? `?${nextPortalQuery}` : ''}${window.location.hash || ''}`;
-      window.history.replaceState({}, '', nextPortalUrl);
       return;
     }
     const survey = String(params.get('survey') || '').toLowerCase();
@@ -8324,35 +8352,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       )
       }
 
-      {isAdminPortal && isLogged && (
-        <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-md bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-3 px-4 shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
-          <div className="relative">
-            <div
-              className="pointer-events-none absolute top-1 bottom-1 rounded-2xl border border-blue-400/35 bg-blue-600/20 shadow-[0_0_22px_rgba(37,99,235,0.35)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
-              style={{
-                width: 'calc(50% - 0.375rem)',
-                left: view === 'PROFILE_MGMT' ? 'calc(50% + 0.125rem)' : '0.25rem',
-              }}
-            />
-            <div className="relative grid grid-cols-2 gap-2">
-              <button
-                onClick={() => navigateTo('ADMIN_DASHBOARD')}
-                className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${view === 'ADMIN_DASHBOARD' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
-              >
-                <BarChart3 className={`w-5 h-5 transition-all duration-300 ${view === 'ADMIN_DASHBOARD' ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
-                <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
-              </button>
-              <button
-                onClick={() => navigateTo('PROFILE_MGMT')}
-                className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${view === 'PROFILE_MGMT' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
-              >
-                <Search className={`w-5 h-5 transition-all duration-300 ${view === 'PROFILE_MGMT' ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
-                <span className="text-[8px] font-black uppercase tracking-tight">Search</span>
-              </button>
-            </div>
-          </div>
-        </nav>
-      )}
+      {/* Admin bottom tabs intentionally hidden */}
 
       {!isAdminPortal && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && view !== 'TCS_DIVISION_SELECTION' && (
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-3 px-4 shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
