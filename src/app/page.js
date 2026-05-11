@@ -7463,11 +7463,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               <div className="text-center space-y-3">
                 <div className="flex items-center justify-center gap-3">
                   <div className="h-[1px] w-16 bg-blue-500/50" />
-                  <span className="text-[10px] font-black tracking-[0.35em] text-blue-400">SAMSUNG ACADEMY</span>
+                  <span className="text-[11px] font-black tracking-[0.35em] text-blue-300">SAMSUNG ACADEMY</span>
                   <div className="h-[1px] w-16 bg-blue-500/50" />
                 </div>
                 <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white">استبيان أكاديمية سامسونج</h2>
-                <p className="text-zinc-400 text-sm md:text-base">رأيك مهم جدا لتحسين جودة المحتوى وتجربة التدريب.</p>
+                <p className="text-zinc-300 text-base md:text-lg">رأيك مهم جدا لتحسين جودة المحتوى وتجربة التدريب.</p>
               </div>
 
               {academySurveySent ? (
@@ -7499,33 +7499,33 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <div className="glass-card rounded-[2.5rem] p-6 md:p-10 space-y-7">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">الاسم</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">الاسم</label>
                       <input
                         type="text"
                         value={academySurvey.fullName}
                         onChange={(e) => setAcademySurvey((prev) => ({ ...prev, fullName: e.target.value }))}
                         placeholder="اكتب الاسم بالكامل"
-                        className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                        className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-blue-500"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">رقم الهاتف</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">رقم الهاتف</label>
                       <input
                         type="tel"
                         value={academySurvey.phoneNumber}
                         onChange={(e) => setAcademySurvey((prev) => ({ ...prev, phoneNumber: e.target.value }))}
                         placeholder="مثال: 01012345678"
-                        className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                        className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-blue-500"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-zinc-400">المنتج</label>
+                    <label className="text-sm md:text-base font-black text-zinc-200">المنتج</label>
                     <select
                       value={academySurvey.product}
                       onChange={(e) => setAcademySurvey((prev) => ({ ...prev, product: e.target.value }))}
-                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                      className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-blue-500"
                     >
                       <option value="">اختر المنتج</option>
                       {ACADEMY_PRODUCTS.map((product) => (
@@ -7535,11 +7535,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-zinc-400">موقع أكاديمية سامسونج</label>
+                    <label className="text-sm md:text-base font-black text-zinc-200">موقع أكاديمية سامسونج</label>
                     <select
                       value={academySurvey.academyLocation}
                       onChange={(e) => setAcademySurvey((prev) => ({ ...prev, academyLocation: e.target.value }))}
-                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                      className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-blue-500"
                     >
                       <option value="">اختر الموقع</option>
                       {SAMSUNG_ACADEMY_LOCATIONS.map((loc) => (
@@ -7549,17 +7549,17 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </div>
 
                   <div className="space-y-5 border-t border-white/10 pt-6">
-                    <p className="text-sm font-black text-blue-400">تقييم التدريب</p>
+                    <p className="text-base md:text-lg font-black text-blue-300">تقييم التدريب</p>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">هل كان المحتوى مفيد وقيم؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل كان المحتوى مفيد وقيم؟</label>
                       <div className="flex flex-wrap gap-2">
                         {ACADEMY_EVAL_OPTIONS.map((opt) => (
                           <button
                             key={opt}
                             type="button"
                             onClick={() => setAcademySurvey((prev) => ({ ...prev, contentValue: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.contentValue === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.contentValue === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
@@ -7568,14 +7568,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">هل كان شرح المدرب واضح وجيد؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل كان شرح المدرب واضح وجيد؟</label>
                       <div className="flex flex-wrap gap-2">
                         {ACADEMY_EVAL_OPTIONS.map((opt) => (
                           <button
                             key={opt}
                             type="button"
                             onClick={() => setAcademySurvey((prev) => ({ ...prev, trainerClarity: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.trainerClarity === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.trainerClarity === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
@@ -7584,14 +7584,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">هل تحتاج جلسات إضافية مثل هذه؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل تؤيد تدريبات اكثر من خلال أكاديمية سامسونج ؟</label>
                       <div className="flex flex-wrap gap-2">
                         {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
                           <button
                             key={opt}
                             type="button"
                             onClick={() => setAcademySurvey((prev) => ({ ...prev, needMoreSessions: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.needMoreSessions === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.needMoreSessions === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
@@ -7600,14 +7600,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">هل فترة التدريب كانت مناسبة؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل فترة التدريب كانت مناسبة؟</label>
                       <div className="flex flex-wrap gap-2">
                         {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
                           <button
                             key={opt}
                             type="button"
                             onClick={() => setAcademySurvey((prev) => ({ ...prev, periodSuitable: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.periodSuitable === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.periodSuitable === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
@@ -7616,14 +7616,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-black text-zinc-400">هل مكان التدريب والتجهيزات كانت مناسبة؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل مكان التدريب والتجهيزات كانت مناسبة؟</label>
                       <div className="flex flex-wrap gap-2">
                         {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
                           <button
                             key={opt}
                             type="button"
                             onClick={() => setAcademySurvey((prev) => ({ ...prev, placeAccommodation: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-xs font-black transition-all ${academySurvey.placeAccommodation === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white'}`}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.placeAccommodation === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
@@ -7633,13 +7633,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black text-zinc-400">ملاحظات إضافية (اختياري)</label>
+                    <label className="text-sm md:text-base font-black text-zinc-200">ملاحظات إضافية (اختياري)</label>
                     <textarea
                       value={academySurvey.notes}
                       onChange={(e) => setAcademySurvey((prev) => ({ ...prev, notes: e.target.value }))}
                       rows={4}
                       placeholder="اكتب أي اقتراحات أو ملاحظات إضافية..."
-                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-blue-500 resize-none"
+                      className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-medium text-white outline-none focus:border-blue-500 resize-none"
                     />
                   </div>
 
