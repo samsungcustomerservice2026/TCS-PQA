@@ -888,8 +888,7 @@ const TCS_HOME_LEADERBOARD_LIMIT = 20;
 const TCS_WINNERS_PER_PRODUCT = 6;
 const SAMSUNG_ACADEMY_LOCATIONS = ['الإسكندرية', 'أسيوط', 'طنطا'];
 const ACADEMY_PRODUCTS = ['موبايل', 'تلفزيون', 'أجهزة منزلية'];
-const ACADEMY_EVAL_OPTIONS = ['ممتاز', 'جيد جدا', 'جيد', 'مقبول', 'يحتاج تحسين'];
-const ACADEMY_YES_MAYBE_NO_OPTIONS = ['نعم', 'إلى حد ما', 'لا'];
+const ACADEMY_RATING_SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 const quarterKeyToIndex = (quarterKey) => {
   const m = String(quarterKey || '').toUpperCase().match(/^Q([1-4])-(\d{4})$/);
@@ -1548,6 +1547,7 @@ const PageContent = () => {
   const [academySurvey, setAcademySurvey] = useState({
     fullName: '',
     phoneNumber: '',
+    company: '',
     product: '',
     academyLocation: '',
     contentValue: '',
@@ -1578,6 +1578,7 @@ const PageContent = () => {
     setAcademySurvey({
       fullName: '',
       phoneNumber: '',
+      company: '',
       product: '',
       academyLocation: '',
       contentValue: '',
@@ -1606,6 +1607,7 @@ const PageContent = () => {
           '#': idx + 1,
           Name: item.fullName || '',
           Phone: item.phoneNumber || '',
+          Company: item.company || '',
           Product: item.product || '',
           'Academy Location': item.academyLocation || '',
           'Content Valuable': item.contentValue || '',
@@ -1746,6 +1748,14 @@ const PageContent = () => {
       severity,
     });
   }, [appMode, currentUser?.username, isLogged, portalRealm, view]);
+
+  const getSurveyRateBand = (v) => {
+    const n = parseInt(String(v || ''), 10);
+    if (!Number.isFinite(n)) return '';
+    if (n <= 6) return 'غير راضي';
+    if (n <= 8) return 'محايد';
+    return 'راضي';
+  };
 
   // Direct URL support: /?survey=samsung-academy
   useEffect(() => {
@@ -7521,6 +7531,17 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-sm md:text-base font-black text-zinc-200">الشركة</label>
+                    <input
+                      type="text"
+                      value={academySurvey.company}
+                      onChange={(e) => setAcademySurvey((prev) => ({ ...prev, company: e.target.value }))}
+                      placeholder="اكتب اسم الشركة"
+                      className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm md:text-base font-black text-zinc-200">المنتج</label>
                     <select
                       value={academySurvey.product}
@@ -7550,85 +7571,93 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
                   <div className="space-y-5 border-t border-white/10 pt-6">
                     <p className="text-base md:text-lg font-black text-blue-300">تقييم التدريب</p>
+                    <p className="text-sm text-zinc-300 font-bold">
+                      التقييم من 1 إلى 10: <span className="text-red-300">1–6 غير راضي</span> | <span className="text-yellow-300">7–8 محايد</span> | <span className="text-emerald-300">9–10 راضي</span>
+                    </p>
 
                     <div className="space-y-2">
-                      <label className="text-sm md:text-base font-black text-zinc-200">هل كان المحتوى مفيد وقيم؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل كان المحتوى مفيد وقيم؟ (1-10)</label>
                       <div className="flex flex-wrap gap-2">
-                        {ACADEMY_EVAL_OPTIONS.map((opt) => (
+                        {ACADEMY_RATING_SCALE.map((opt) => (
                           <button
                             key={opt}
                             type="button"
-                            onClick={() => setAcademySurvey((prev) => ({ ...prev, contentValue: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.contentValue === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, contentValue: String(opt) }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.contentValue === String(opt) ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
                         ))}
                       </div>
+                      {academySurvey.contentValue ? <p className="text-xs text-zinc-300 font-bold">التصنيف: {getSurveyRateBand(academySurvey.contentValue)}</p> : null}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm md:text-base font-black text-zinc-200">هل كان شرح المدرب واضح وجيد؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل كان شرح المدرب واضح وجيد؟ (1-10)</label>
                       <div className="flex flex-wrap gap-2">
-                        {ACADEMY_EVAL_OPTIONS.map((opt) => (
+                        {ACADEMY_RATING_SCALE.map((opt) => (
                           <button
                             key={opt}
                             type="button"
-                            onClick={() => setAcademySurvey((prev) => ({ ...prev, trainerClarity: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.trainerClarity === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, trainerClarity: String(opt) }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.trainerClarity === String(opt) ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
                         ))}
                       </div>
+                      {academySurvey.trainerClarity ? <p className="text-xs text-zinc-300 font-bold">التصنيف: {getSurveyRateBand(academySurvey.trainerClarity)}</p> : null}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm md:text-base font-black text-zinc-200">هل تؤيد تدريبات اكثر من خلال أكاديمية سامسونج ؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل تؤيد تدريبات اكثر من خلال أكاديمية سامسونج ؟ (1-10)</label>
                       <div className="flex flex-wrap gap-2">
-                        {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
+                        {ACADEMY_RATING_SCALE.map((opt) => (
                           <button
                             key={opt}
                             type="button"
-                            onClick={() => setAcademySurvey((prev) => ({ ...prev, needMoreSessions: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.needMoreSessions === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, needMoreSessions: String(opt) }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.needMoreSessions === String(opt) ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
                         ))}
                       </div>
+                      {academySurvey.needMoreSessions ? <p className="text-xs text-zinc-300 font-bold">التصنيف: {getSurveyRateBand(academySurvey.needMoreSessions)}</p> : null}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm md:text-base font-black text-zinc-200">هل فترة التدريب كانت مناسبة؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل فترة التدريب كانت مناسبة؟ (1-10)</label>
                       <div className="flex flex-wrap gap-2">
-                        {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
+                        {ACADEMY_RATING_SCALE.map((opt) => (
                           <button
                             key={opt}
                             type="button"
-                            onClick={() => setAcademySurvey((prev) => ({ ...prev, periodSuitable: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.periodSuitable === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, periodSuitable: String(opt) }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.periodSuitable === String(opt) ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
                         ))}
                       </div>
+                      {academySurvey.periodSuitable ? <p className="text-xs text-zinc-300 font-bold">التصنيف: {getSurveyRateBand(academySurvey.periodSuitable)}</p> : null}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm md:text-base font-black text-zinc-200">هل مكان التدريب والتجهيزات كانت مناسبة؟</label>
+                      <label className="text-sm md:text-base font-black text-zinc-200">هل مكان التدريب والتجهيزات كانت مناسبة؟ (1-10)</label>
                       <div className="flex flex-wrap gap-2">
-                        {ACADEMY_YES_MAYBE_NO_OPTIONS.map((opt) => (
+                        {ACADEMY_RATING_SCALE.map((opt) => (
                           <button
                             key={opt}
                             type="button"
-                            onClick={() => setAcademySurvey((prev) => ({ ...prev, placeAccommodation: opt }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.placeAccommodation === opt ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
+                            onClick={() => setAcademySurvey((prev) => ({ ...prev, placeAccommodation: String(opt) }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-black transition-all ${academySurvey.placeAccommodation === String(opt) ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white'}`}
                           >
                             {opt}
                           </button>
                         ))}
                       </div>
+                      {academySurvey.placeAccommodation ? <p className="text-xs text-zinc-300 font-bold">التصنيف: {getSurveyRateBand(academySurvey.placeAccommodation)}</p> : null}
                     </div>
                   </div>
 
@@ -7653,6 +7682,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         message.warning('الاسم يجب أن يكون ثنائي (الاسم الأول واسم العائلة).');
                         return;
                       }
+                      const cleanCompany = String(academySurvey.company || '').trim();
+                      if (!cleanCompany) { message.warning('من فضلك اكتب اسم الشركة.'); return; }
                       if (!/^01(0|1|2|5)\d{8}$/.test(cleanPhone)) {
                         message.warning('رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 010 أو 011 أو 012 أو 015.');
                         return;
@@ -7669,6 +7700,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         await saveSamsungAcademySurveyToDb({
                           fullName: cleanName,
                           phoneNumber: cleanPhone,
+                          company: cleanCompany,
                           product: academySurvey.product,
                           academyLocation: academySurvey.academyLocation,
                           contentValue: academySurvey.contentValue,
@@ -7684,6 +7716,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           action: 'Submitted Samsung Academy survey',
                           category: 'SURVEY',
                           details: {
+                            company: cleanCompany,
                             product: academySurvey.product,
                             academyLocation: academySurvey.academyLocation,
                           },
