@@ -355,7 +355,7 @@ function parsePqaEvaluationPointRows(evalRows, appMode) {
 
   const monthHdr =
     /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s._'\/]*((?:20)?\d{2,4})?/i;
-  const monthNumericHdr = /^'?\s*((?:20)?\d{2,4})[.\-/](\d{1,2})\s*$/i; // e.g. '26.03, 2026-03
+  const monthNumericHdr = /^'?\s*((?:20)?\d{2,4})[.\-\s/]+(\d{1,2})\s*$/i; // e.g. '26.03, '26. 01, 2026-03
 
   let codeRowIdx = -1;
   let codeCol = -1;
@@ -407,9 +407,14 @@ function parsePqaEvaluationPointRows(evalRows, appMode) {
   // Samsung template: "Score (100)" under Acc Average may omit "Acc" in the same cell (row 7).
   if (ytdScoreCol < 0) {
     for (let j = 0; j < hdr.length; j++) {
-      const low = String(hdr[j] ?? '').toLowerCase();
+      const low = String(hdr[j] ?? '').toLowerCase().trim();
+      const nv = normHeader(hdr[j]);
       if (j === codeCol) continue;
       if (low.includes('score') && (low.includes('100') || /\bacc\b/i.test(String(hdr[j] ?? '')))) {
+        ytdScoreCol = j;
+        break;
+      }
+      if (nv === 'score' || (low.includes('score') && !low.includes('ratio') && !low.includes('partner') && !low.includes('point'))) {
         ytdScoreCol = j;
         break;
       }
@@ -3801,7 +3806,15 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           for (let i = 0; i < Math.min(prRows.length, 40); i++) {
             const r = prRows[i] || [];
             const rowText = r.map(v => String(v || '').toLowerCase().trim());
-            if (rowText.includes('asc code')) { prColRowIdx = i; break; }
+            const rowNorm = r.map(v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+            const hasAscCode =
+              rowText.some((t) => t === 'asc code' || t.replace(/[^a-z]/g, '') === 'asccode') ||
+              rowNorm.includes('asccode');
+            if (hasAscCode) {
+              prColRowIdx = i;
+              if (prGroupRowIdx < 0 && i > 0) prGroupRowIdx = i - 1;
+              break;
+            }
             // group row is the one containing "partner" in col 0 or col 1
             if ((rowText[0] === 'partner' || rowText[1] === 'partner') && prGroupRowIdx === -1) {
               prGroupRowIdx = i;
@@ -3824,38 +3837,19 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             if (String(groupRow[j] || '').toLowerCase().trim() === 'partner') { prPartnerCol = j; break; }
           }
 
-          // Scan colRow for ASC Code, ASC Name, and Partner
+          // Scan colRow for ASC Code, ASC Name, Partner, and 2026 Acc columns
           for (let j = 0; j < colRow.length; j++) {
             const v = String(colRow[j] || '').toLowerCase().trim();
             const nv = v.replace(/[^a-z]/g, '');
             if (v === 'asc code' || nv === 'asccode' || (v.includes('code') && (v.includes('asc') || v.includes('center')))) prCodeCol = j;
             if (v === 'asc name' || nv === 'ascname' || (v.includes('name') && (v.includes('asc') || v.includes('center')))) prNameCol = j;
             if (v === 'partner' || nv === 'partnername') prPartnerCol = j;
+            if ((v.includes('ave') || v.includes('avg')) && v.includes('score')) prAccScoreCol = j;
+            if (v === 'ranking' || (v.includes('ranking') && !v.includes('partner')) || (v === 'rank' && !v.includes('partner'))) prAccRankCol = j;
           }
-
-          // Scan groupRow for "2026 Acc" block, then read colRow for Ave Score + Ranking within that block
-          let accBlockStart = -1, accBlockEnd = -1;
-          for (let j = 0; j < groupRow.length; j++) {
-            const g = String(groupRow[j] || '').toLowerCase().replace(/\s/g, '');
-            if (g.includes('acc') || g.includes('2026acc')) {
-              if (accBlockStart === -1) accBlockStart = j;
-              accBlockEnd = j;
-            }
-          }
-          // Find the next non-acc group column to bound the acc block
-          if (accBlockStart !== -1) {
-            for (let j = accBlockStart; j <= Math.min(accBlockEnd + 4, colRow.length - 1); j++) {
-              const v = String(colRow[j] || '').toLowerCase().trim();
-              if ((v.includes('ave') || v.includes('avg')) && v.includes('score')) prAccScoreCol = j;
-              if (v === 'ranking' || (v.includes('rank') && !v.includes('partner'))) prAccRankCol = j;
-            }
-          }
-          // Samsung MX requirement: accumulated partner dashboard values come strictly from D/E.
-          // With ASC Code in B, D=Ave. Score and E=Ranking.
-          if (prCodeCol > -1) {
-            prAccScoreCol = prCodeCol + 2;
-            prAccRankCol = prCodeCol + 3;
-          }
+          // Fallback when Samsung sheet omits "Ave. Score" / "Ranking" labels (template layout).
+          if (prAccScoreCol < 0 && prCodeCol > -1) prAccScoreCol = prCodeCol + 2;
+          if (prAccRankCol < 0 && prCodeCol > -1) prAccRankCol = prCodeCol + 3;
 
           // ── Detect monthly blocks from groupRow ─────────────────────────────
           // Each month group: "Jan" / "Feb" etc. appears in groupRow with merged span
@@ -3882,9 +3876,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             mb.partnerRankCol  = -1;
             for (let c = mb.startCol; c < Math.min(blockEnd, colRow.length); c++) {
               const h = String(colRow[c] || '').toLowerCase().trim();
-              if ((h.includes('branch') || h === 'score' || h.includes('score')) && mb.branchScoreCol === -1) mb.branchScoreCol = c;
-              if (h.includes('partner') && h.includes('score')) mb.partnerScoreCol = c;
-              if (h.includes('partner') && h.includes('rank')) mb.partnerRankCol  = c;
+              if (h.includes('branch') && h.includes('score') && mb.branchScoreCol === -1) mb.branchScoreCol = c;
+              else if (h.includes('partner') && h.includes('score')) mb.partnerScoreCol = c;
+              else if (h.includes('partner') && h.includes('rank')) mb.partnerRankCol = c;
             }
             // Fallbacks by offset if header names didn't match
             if (mb.branchScoreCol  === -1) mb.branchScoreCol  = mb.startCol;
