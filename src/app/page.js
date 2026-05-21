@@ -3709,17 +3709,29 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
     }
 
     const wb = XLSX.utils.book_new();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
     const pqaHeaders = [
       ["Region", "ASCCode", "ASCName", "PhotoURL", "PartnerName", "Month", "Year", "LTP", "EX-LTP", "REDO", "SSR", "D-RNPS", "OFS", "R-CXE", "SDR", "Audit", "PR"]
     ];
     const ws1 = XLSX.utils.aoa_to_sheet(pqaHeaders);
     XLSX.utils.book_append_sheet(wb, ws1, "★Evaluation point");
 
+    // ★Partner Ranking — two header rows (must match upload parser)
+    const prRow1 = ['Partner', '', '', '2026 Acc'];
+    const prRow2 = ['', 'ASC Code', 'ASC Name', 'Ave Score', 'Ranking'];
+    months.forEach((m) => {
+      prRow1.push(m, '', '', '', '');
+      prRow2.push('Branch Score', 'Ratio', 'Score(Weigh)', 'Partner Score', 'Partner Rank');
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet([prRow1, prRow2]);
+    XLSX.utils.book_append_sheet(wb, ws2, "★Partner Ranking");
+
     const avgHeaders = [
       ["ASC Code", "ASC name", "Average Score by month", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     ];
-    const ws2 = XLSX.utils.aoa_to_sheet(avgHeaders);
-    XLSX.utils.book_append_sheet(wb, ws2, "★Monthly Average");
+    const ws3 = XLSX.utils.aoa_to_sheet(avgHeaders);
+    XLSX.utils.book_append_sheet(wb, ws3, "★Monthly Average");
 
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
@@ -5293,7 +5305,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-[0.35em] text-yellow-500/90 mb-1">PQA bulk data — {appMode === 'PQA_CE' ? 'CE' : 'MX'}</p>
                     <h3 className="text-lg font-black text-white uppercase tracking-tight">PQA Excel (multi-sheet)</h3>
-                    <p className="text-[10px] text-zinc-500 font-medium mt-1">Template includes ★Evaluation point and ★Monthly Average. Upload applies to <strong className="text-zinc-400">{appMode}</strong>. Full service-center list: <strong className="text-zinc-400">Live Engineer Registry</strong> below.</p>
+                    <p className="text-[10px] text-zinc-500 font-medium mt-1">Template includes ★Evaluation point, ★Partner Ranking, and ★Monthly Average. Upload applies to <strong className="text-zinc-400">{appMode}</strong>. Full service-center list: <strong className="text-zinc-400">Live Engineer Registry</strong> below.</p>
                   </div>
                   <div className="flex flex-wrap gap-3 shrink-0">
                     <button
