@@ -5608,11 +5608,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-[0.35em] text-yellow-500/90 mb-1">PQA bulk data — {appMode === 'PQA_CE' ? 'CE' : 'MX'}</p>
                     <h3 className="text-lg font-black text-white uppercase tracking-tight">PQA Excel (multi-sheet)</h3>
-<<<<<<< HEAD
-                    <p className="text-[10px] text-zinc-500 font-medium mt-1">Template includes ★Evaluation point and ★Monthly Average. Upload applies to <strong className="text-zinc-400">{appMode}</strong>. Manage centers in the registry below.</p>
-=======
                     <p className="text-[10px] text-zinc-500 font-medium mt-1">Template includes ★Evaluation point, ★Partner Ranking, and ★Monthly Average. Upload applies to <strong className="text-zinc-400">{appMode}</strong>. Full service-center list: <strong className="text-zinc-400">Live Engineer Registry</strong> below.</p>
->>>>>>> a01cb311e082080efe998dd74e379db9e0f8ae38
                   </div>
                   <div className="flex flex-wrap gap-3 shrink-0">
                     {adminCanReadData && (
