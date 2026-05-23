@@ -3,6 +3,7 @@ import {
     doc, getDoc, setDoc, updateDoc, increment,
     collection, addDoc, serverTimestamp
 } from 'firebase/firestore';
+import { ensureEngagementSchema, normalizeAnalyticsSummary } from './visitorEngagementService';
 
 const SUMMARY_REF = doc(db, 'analytics', 'summary');
 
@@ -125,20 +126,36 @@ export const recordAdminLogin = async () => {
  * Called on tab close / session end.
  * isAdmin=true → tracked separately under admin session stats.
  */
-export const recordSessionEnd = async (startMs, pagesVisited = [], isAdmin = false, appMode = null) => {
+export const recordSessionEnd = async (
+    startMs,
+    pagesVisited = [],
+    isAdmin = false,
+    appMode = null,
+    engagement = {}
+) => {
     if (!startMs) return;
     const durationMs = Date.now() - startMs;
-    if (durationMs < 3000) return; // ignore < 3s bounces
+    const clicks = Number(engagement.clicks) || 0;
+    const pendingClicks = Number(engagement.pendingClicks ?? engagement.clicks) || 0;
+    if (durationMs < 3000 && !pendingClicks && !clicks) return;
 
     const mode = sanitizeAppMode(appMode);
+    const activeMs = Number(engagement.activeMs) || 0;
+    const offlineEvents = Number(engagement.offlineEvents) || 0;
+    const lagEvents = Number(engagement.lagEvents) || 0;
 
     try {
         await addDoc(collection(db, 'analytics', 'sessions', 'records'), {
             startedAt: serverTimestamp(),
             durationMs,
+            activeMs: activeMs || undefined,
+            clicks: clicks || undefined,
+            offlineEvents: offlineEvents || undefined,
+            lagEvents: lagEvents || undefined,
             pagesVisited,
             isAdmin,
             appMode: mode || undefined,
+            sessionId: engagement.sessionId || undefined,
         });
 
         const snap = await getDoc(SUMMARY_REF);
@@ -163,6 +180,17 @@ export const recordSessionEnd = async (startMs, pagesVisited = [], isAdmin = fal
             }
             await updateDoc(SUMMARY_REF, updates);
         }
+
+        if (!isAdmin && pendingClicks > 0) {
+            const day = new Date().toISOString().slice(0, 10);
+            await ensureEngagementSchema();
+            await updateDoc(SUMMARY_REF, {
+                'visitorEngagement.totalClicks': increment(pendingClicks),
+                'visitorEngagement.visitorClicks': increment(pendingClicks),
+                [`dailyEngagement.${day}.clicks`]: increment(pendingClicks),
+                'visitorEngagement.sessionsTracked': increment(1),
+            });
+        }
     } catch (e) {
         console.warn('Analytics: recordSessionEnd failed', e);
     }
@@ -173,8 +201,9 @@ export const recordSessionEnd = async (startMs, pagesVisited = [], isAdmin = fal
  */
 export const getAnalyticsSummary = async () => {
     try {
+        await ensureEngagementSchema();
         const snap = await getDoc(SUMMARY_REF);
-        if (snap.exists()) return snap.data();
+        if (snap.exists()) return normalizeAnalyticsSummary(snap.data());
     } catch (e) {
         console.warn('Analytics: getAnalyticsSummary failed', e);
     }

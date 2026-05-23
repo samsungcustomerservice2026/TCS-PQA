@@ -51,6 +51,11 @@ import {
 import SamsungAcademySurveyDashboard from '../components/admin/SamsungAcademySurveyDashboard';
 import ArabicFeedbackDashboard from '../components/admin/ArabicFeedbackDashboard';
 import AdminAccountsPanel, { EMPTY_ADMIN_FORM } from '../components/admin/AdminAccountsPanel';
+import LogTrafficPanel from '../components/admin/LogTrafficPanel';
+import VisitorEngagementPanel from '../components/admin/VisitorEngagementPanel';
+import { useVisitorEngagement } from '../hooks/useVisitorEngagement';
+import { recordFunnelStep } from '../services/visitorEngagementService';
+import { exportAnalyticsReport } from '../lib/exportAnalyticsReport';
 import {
   canReadModule,
   canWriteModule,
@@ -963,6 +968,11 @@ const INITIAL_ENGINEER_FEEDBACK = {
   message: '',
 };
 
+/** Views where visitor engagement / funnel analytics must not run */
+const ADMIN_ANALYTICS_VIEWS = new Set(['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'PROFILE_MGMT', 'EXTERNAL_LOGS']);
+
+const isFeedbackPortalRealm = (realm) => realm === 'TCS' || realm === 'PQA';
+
 const quarterKeyToIndex = (quarterKey) => {
   const m = String(quarterKey || '').toUpperCase().match(/^Q([1-4])-(\d{4})$/);
   if (!m) return null;
@@ -1682,7 +1692,7 @@ const PageContent = () => {
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
-        category: 'EXPORT',
+        category: 'SURVEY',
         action: 'Exported Samsung Academy survey (filtered)',
         details: { count, totalLoaded, filters, fileName },
         severity: 'info',
@@ -1696,7 +1706,7 @@ const PageContent = () => {
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
-        category: 'EXPORT',
+        category: 'FEEDBACK',
         action: 'Exported Arabic feedback (filtered)',
         details: { count, totalLoaded, filters, fileName },
         severity: 'info',
@@ -1839,19 +1849,50 @@ const PageContent = () => {
   const [logActionQuery, setLogActionQuery] = useState('');
   const loadLogs = React.useCallback(() => {
     setLogsLoading(true);
-    fetchLogs(100).then(data => { setActivityLogs(data); setLogsLoading(false); });
-  }, []);
+    refreshAnalytics();
+    fetchLogs(200).then(data => { setActivityLogs(data); setLogsLoading(false); });
+  }, [refreshAnalytics]);
   const externalLogsPath = '/admin?logs=external';
   const userActionSessionRef = React.useRef('');
   const lastLoggedViewRef = React.useRef(null);
+  const visitorEngagementSnapshotRef = React.useRef(() => ({}));
+  const surveyStartedRef = React.useRef(false);
+  const surveyCompletedRef = React.useRef(false);
+  const feedbackStartedRef = React.useRef(false);
+  const feedbackCompletedRef = React.useRef(false);
+  const prevEngagementViewRef = React.useRef(null);
+  const trackFunnelStepRef = React.useRef(() => {});
 
   const detectLogCategory = React.useCallback((log) => {
     if (log?.category) return String(log.category).toUpperCase();
+    const action = String(log?.action || '').toLowerCase();
+    if (action.includes('survey')) return 'SURVEY';
+    if (action.includes('feedback')) return 'FEEDBACK';
+    if (
+      action.includes('permission')
+      || action.includes('admin account')
+      || action.includes('access scope')
+      || action.includes('added new admin')
+      || action.includes('deleted admin')
+    ) return 'PERMISSIONS';
+    if (action.includes('export')) return 'EXPORT';
     const t = String(log?.type || '').toUpperCase();
     if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('FAILED') || t.includes('ERROR')) return 'SECURITY';
     if (t.includes('ADMIN')) return 'ADMIN';
     if (t.includes('VISITOR') || t.includes('USER')) return 'VISITOR';
     return 'OTHER';
+  }, []);
+
+  const formatLogDetailValue = React.useCallback((value) => {
+    if (value == null) return '';
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
   }, []);
 
   const filteredActivityLogs = React.useMemo(() => {
@@ -1863,7 +1904,7 @@ const PageContent = () => {
       const category = detectLogCategory(log);
       const actor = String(log?.actor || '').toLowerCase();
       const action = String(log?.action || '').toLowerCase();
-      const detailsText = Object.entries(log?.details || {}).map(([k, v]) => `${k}:${String(v)}`).join(' ').toLowerCase();
+      const detailsText = Object.entries(log?.details || {}).map(([k, v]) => `${k}:${formatLogDetailValue(v)}`).join(' ').toLowerCase();
 
       if (logTypeFilter !== 'ALL' && type !== logTypeFilter) return false;
       if (logSeverityFilter !== 'ALL' && severity !== logSeverityFilter.toLowerCase()) return false;
@@ -1872,7 +1913,7 @@ const PageContent = () => {
       if (actionNeedle && !(action.includes(actionNeedle) || detailsText.includes(actionNeedle))) return false;
       return true;
     });
-  }, [activityLogs, detectLogCategory, logActionQuery, logActorQuery, logCategoryFilter, logSeverityFilter, logTypeFilter]);
+  }, [activityLogs, detectLogCategory, formatLogDetailValue, logActionQuery, logActorQuery, logCategoryFilter, logSeverityFilter, logTypeFilter]);
 
   const exportFilteredActivityLogs = React.useCallback(() => {
     if (!filteredActivityLogs.length) {
@@ -1887,7 +1928,7 @@ const PageContent = () => {
       Severity: log.severity || '',
       Actor: log.actor || '',
       Action: log.action || '',
-      Details: Object.entries(log.details || {}).map(([k, v]) => `${k}: ${String(v)}`).join(' | '),
+      Details: Object.entries(log.details || {}).map(([k, v]) => `${k}: ${formatLogDetailValue(v)}`).join(' | '),
       IP: log.ip || '',
       Location: log.location || '',
       UserAgent: log.userAgent || '',
@@ -1898,7 +1939,31 @@ const PageContent = () => {
     const stamp = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `action_log_filtered_${stamp}.xlsx`);
     message.success('Exported filtered action logs.');
-  }, [detectLogCategory, filteredActivityLogs, message]);
+  }, [detectLogCategory, filteredActivityLogs, formatLogDetailValue, message]);
+
+  const exportAnalyticsToExcel = React.useCallback(() => {
+    if (!analyticsSummary) {
+      message.warning('Tap Refresh first to load analytics.');
+      return;
+    }
+    const surveyFeedbackLogs = activityLogs
+      .filter((log) => {
+        const cat = detectLogCategory(log);
+        return cat === 'SURVEY' || cat === 'FEEDBACK';
+      })
+      .slice(0, 500)
+      .map((log, idx) => ({
+        '#': idx + 1,
+        Timestamp: log.timestamp ? log.timestamp.toISOString() : '',
+        Category: detectLogCategory(log),
+        Action: log.action || '',
+        Actor: log.actor || '',
+        Details: Object.entries(log.details || {}).map(([k, v]) => `${k}: ${formatLogDetailValue(v)}`).join(' | '),
+      }));
+    const ok = exportAnalyticsReport(analyticsSummary, { recentLogs: surveyFeedbackLogs });
+    if (ok) message.success('Analytics exported to Excel.');
+    else message.error('Could not export analytics.');
+  }, [activityLogs, analyticsSummary, detectLogCategory, formatLogDetailValue, message]);
 
   const logUserAction = React.useCallback(({ action, category = 'VISITOR', details = {}, severity = 'info' }) => {
     const actor =
@@ -1999,12 +2064,24 @@ const PageContent = () => {
     setFeedbackSent(false);
   }, []);
 
+  const canTrackVisitorAnalytics = useMemo(
+    () => !isAdminPortal && !ADMIN_ANALYTICS_VIEWS.has(view),
+    [isAdminPortal, view]
+  );
+
   const dismissFeedbackPromo = React.useCallback(() => {
+    try {
+      if (!sessionStorage.getItem('feedback_opened')) {
+        trackFunnelStepRef.current('feedback', 'promo_dismissed', 'promo_close');
+      }
+    } catch {
+      trackFunnelStepRef.current('feedback', 'promo_dismissed', 'promo_close');
+    }
     setShowFeedbackPromo(false);
   }, []);
 
   const feedbackHomePopupOpen =
-    !isAdminPortal && portalRealm === 'TCS' && feedbackEnabled && showFeedbackPromo && view === 'HOME';
+    !isAdminPortal && isFeedbackPortalRealm(portalRealm) && feedbackEnabled && showFeedbackPromo && view === 'HOME';
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -2019,14 +2096,24 @@ const PageContent = () => {
   }, [feedbackHomePopupOpen]);
 
   const openFeedbackForm = React.useCallback(() => {
-    dismissFeedbackPromo();
+    try {
+      sessionStorage.setItem('feedback_opened', '1');
+    } catch { /* ignore */ }
+    setShowFeedbackPromo(false);
     resetEngineerFeedback();
     navigateTo('FEEDBACK');
-  }, [dismissFeedbackPromo, resetEngineerFeedback, navigateTo]);
+  }, [navigateTo, resetEngineerFeedback]);
 
   const handleAcademySurveyPopupToggle = async (enabled) => {
     if (!canWriteModule(currentUser, 'survey')) {
       message.warning('You do not have write access to survey settings.');
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        category: 'SECURITY',
+        action: 'Denied survey popup toggle (insufficient permissions)',
+        severity: 'warning',
+      });
       return;
     }
     setAcademySurveySettingsSaving(true);
@@ -2038,6 +2125,7 @@ const PageContent = () => {
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
+        category: 'SURVEY',
         action: enabled ? 'Enabled Samsung Academy survey popup' : 'Disabled Samsung Academy survey popup',
         severity: 'info',
       });
@@ -2052,6 +2140,13 @@ const PageContent = () => {
   const handleFeedbackEnabledToggle = async (enabled) => {
     if (!canWriteModule(currentUser, 'feedback')) {
       message.warning('You do not have write access to feedback settings.');
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        category: 'SECURITY',
+        action: 'Denied feedback toggle (insufficient permissions)',
+        severity: 'warning',
+      });
       return;
     }
     setAcademySurveySettingsSaving(true);
@@ -2063,6 +2158,7 @@ const PageContent = () => {
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
+        category: 'FEEDBACK',
         action: enabled ? 'Enabled Arabic feedback form' : 'Disabled Arabic feedback form',
         severity: 'info',
       });
@@ -2105,6 +2201,158 @@ const PageContent = () => {
       details: { from: previous, to: view },
     });
   }, [logUserAction, view]);
+
+  const trackFunnelStep = React.useCallback((funnel, step, source) => {
+    if (!canTrackVisitorAnalytics) return;
+    const label = step.replace(/_/g, ' ');
+    logUserAction({
+      action: `${funnel === 'survey' ? 'Survey' : 'Feedback'} funnel: ${label}`,
+      category: funnel === 'survey' ? 'SURVEY' : 'FEEDBACK',
+      details: { step, source, portalRealm, appMode },
+    });
+    recordFunnelStep(funnel, step, {
+      appMode,
+      sessionId: userActionSessionRef.current,
+      source,
+    });
+  }, [appMode, canTrackVisitorAnalytics, logUserAction, portalRealm]);
+
+  trackFunnelStepRef.current = trackFunnelStep;
+
+  useVisitorEngagement({
+    enabled: canTrackVisitorAnalytics,
+    sessionId: userActionSessionRef.current,
+    appMode,
+    snapshotRef: visitorEngagementSnapshotRef,
+  });
+
+  const dismissSurveyShortcut = React.useCallback(() => {
+    try {
+      if (!sessionStorage.getItem('survey_opened')) {
+        trackFunnelStep('survey', 'promo_dismissed', 'shortcut_close');
+      }
+    } catch {
+      trackFunnelStep('survey', 'promo_dismissed', 'shortcut_close');
+    }
+    setShowSurveyShortcut(false);
+  }, [trackFunnelStep]);
+
+  const openSurveyForm = React.useCallback(() => {
+    try {
+      sessionStorage.setItem('survey_opened', '1');
+    } catch { /* ignore */ }
+    setShowSurveyShortcut(false);
+    resetAcademySurvey();
+    navigateTo('SAMSUNG_ACADEMY_SURVEY');
+  }, [navigateTo, resetAcademySurvey]);
+
+  useEffect(() => {
+    if (!canTrackVisitorAnalytics) return;
+    if (!academySurveyPopupEnabled || !showSurveyShortcut) return;
+    if (view === 'APP_SELECTION' || view === 'PQA_DIVISION_SELECTION') return;
+    try {
+      if (sessionStorage.getItem('survey_promo_shown')) return;
+      sessionStorage.setItem('survey_promo_shown', '1');
+    } catch { /* ignore */ }
+    trackFunnelStep('survey', 'promo_shown', 'floating_shortcut');
+  }, [academySurveyPopupEnabled, canTrackVisitorAnalytics, showSurveyShortcut, trackFunnelStep, view]);
+
+  useEffect(() => {
+    if (!feedbackHomePopupOpen) return;
+    try {
+      if (sessionStorage.getItem('feedback_promo_shown')) return;
+      sessionStorage.setItem('feedback_promo_shown', '1');
+    } catch { /* ignore */ }
+    trackFunnelStep('feedback', 'promo_shown', 'home_modal');
+  }, [feedbackHomePopupOpen, trackFunnelStep]);
+
+  useEffect(() => {
+    if (!canTrackVisitorAnalytics || !feedbackEnabled || !showFeedbackPromo) return;
+    if (!isFeedbackPortalRealm(portalRealm)) return;
+    if (view === 'HOME' || view === 'APP_SELECTION' || view === 'PQA_DIVISION_SELECTION' || view === 'TCS_DIVISION_SELECTION' || view === 'FEEDBACK') return;
+    try {
+      if (sessionStorage.getItem('feedback_promo_floating_shown')) return;
+      sessionStorage.setItem('feedback_promo_floating_shown', '1');
+    } catch { /* ignore */ }
+    trackFunnelStep('feedback', 'promo_shown', 'floating_shortcut');
+  }, [canTrackVisitorAnalytics, feedbackEnabled, portalRealm, showFeedbackPromo, trackFunnelStep, view]);
+
+  useEffect(() => {
+    if (view === 'SAMSUNG_ACADEMY_SURVEY' && !academySurveySent && !surveyStartedRef.current) {
+      const touched = Boolean(
+        academySurvey.fullName
+        || academySurvey.phoneNumber
+        || academySurvey.company
+        || academySurvey.product
+        || academySurvey.academyLocation
+        || academySurvey.contentValue
+        || academySurvey.trainerClarity
+        || academySurvey.needMoreSessions
+        || academySurvey.periodSuitable
+        || academySurvey.placeAccommodation
+        || academySurvey.notes
+      );
+      if (touched) {
+        surveyStartedRef.current = true;
+        trackFunnelStep('survey', 'started', 'form_interaction');
+      }
+    }
+  }, [academySurvey, academySurveySent, trackFunnelStep, view]);
+
+  useEffect(() => {
+    if (view === 'FEEDBACK' && !feedbackSent && !feedbackStartedRef.current) {
+      const touched = Boolean(
+        engineerFeedback.fullName
+        || engineerFeedback.phoneNumber
+        || engineerFeedback.company
+        || engineerFeedback.product
+        || engineerFeedback.message
+      );
+      if (touched) {
+        feedbackStartedRef.current = true;
+        trackFunnelStep('feedback', 'started', 'form_interaction');
+      }
+    }
+  }, [engineerFeedback, feedbackSent, trackFunnelStep, view]);
+
+  useEffect(() => {
+    const prev = prevEngagementViewRef.current;
+    if (prev === view) return;
+    if (prev === 'SAMSUNG_ACADEMY_SURVEY') {
+      if (!surveyCompletedRef.current) {
+        trackFunnelStep(
+          'survey',
+          'abandoned',
+          surveyStartedRef.current ? 'left_form' : 'left_without_submit'
+        );
+      }
+      surveyStartedRef.current = false;
+      surveyCompletedRef.current = false;
+    } else if (view === 'SAMSUNG_ACADEMY_SURVEY' && canTrackVisitorAnalytics && prev != null) {
+      try {
+        sessionStorage.setItem('survey_opened', '1');
+      } catch { /* ignore */ }
+      trackFunnelStep('survey', 'opened', 'form_view');
+    }
+    if (prev === 'FEEDBACK') {
+      if (!feedbackCompletedRef.current) {
+        trackFunnelStep(
+          'feedback',
+          'abandoned',
+          feedbackStartedRef.current ? 'left_form' : 'left_without_submit'
+        );
+      }
+      feedbackStartedRef.current = false;
+      feedbackCompletedRef.current = false;
+    } else if (view === 'FEEDBACK' && canTrackVisitorAnalytics && prev != null) {
+      try {
+        sessionStorage.setItem('feedback_opened', '1');
+      } catch { /* ignore */ }
+      trackFunnelStep('feedback', 'opened', 'form_view');
+    }
+    prevEngagementViewRef.current = view;
+  }, [canTrackVisitorAnalytics, trackFunnelStep, view]);
+
   const [tcsWinnersConfigs, setTcsWinnersConfigs] = useState([]);
   const [tcsWinnersLoading, setTcsWinnersLoading] = useState(false);
   const [tcsWinnersSaving, setTcsWinnersSaving] = useState(false);
@@ -2422,7 +2670,15 @@ const PageContent = () => {
       setSessionStart(t);
     });
     const handleUnload = () => {
-      if (start) recordSessionEnd(start, visitedPagesRef.current, isLoggedRef.current, appModeRef.current);
+      if (!start) return;
+      const getSnap = visitorEngagementSnapshotRef.current;
+      const engagement = typeof getSnap === 'function' ? getSnap() : {};
+      try {
+        const flushKey = `eng_flush_${engagement.sessionId || userActionSessionRef.current || 'default'}`;
+        if (sessionStorage.getItem(flushKey)) return;
+        sessionStorage.setItem(flushKey, '1');
+      } catch { /* ignore */ }
+      recordSessionEnd(start, visitedPagesRef.current, isLoggedRef.current, appModeRef.current, engagement);
     };
     window.addEventListener('beforeunload', handleUnload);
 
@@ -3686,7 +3942,20 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       setNewAdminData({ ...EMPTY_ADMIN_FORM });
       setShowAddAdmin(false);
       message.success("New admin added successfully");
-      writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: 'Added new admin', details: { username: newAdmin.username, name: newAdmin.name }, severity: 'info' });
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        category: 'PERMISSIONS',
+        action: 'Added new admin',
+        details: {
+          username: newAdmin.username,
+          name: newAdmin.name,
+          role: newAdmin.role,
+          access: newAdmin.access,
+          permissions: newAdmin.permissions,
+        },
+        severity: 'info',
+      });
     } catch (error) {
       console.error("Error adding admin:", error);
       message.error("Failed to add admin");
@@ -3727,8 +3996,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
     writeLog({
       type: 'ADMIN_ACTION',
       actor: currentUser?.username || 'admin',
+      category: 'PERMISSIONS',
       action: logAction,
-      details: { username: updated.username, role: updated.role, access: updated.access },
+      details: {
+        username: updated.username,
+        role: updated.role,
+        access: updated.access,
+        permissions: updated.permissions || null,
+      },
       severity: 'info',
     });
   };
@@ -3808,7 +4083,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           await deleteAdminFromDb(id);
           setAdmins(prev => prev.filter(a => a.id !== id));
           message.success("Admin removed");
-          writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: 'Deleted admin account', details: { id }, severity: 'warning' });
+          writeLog({
+            type: 'ADMIN_ACTION',
+            actor: currentUser?.username || 'admin',
+            category: 'PERMISSIONS',
+            action: 'Deleted admin account',
+            details: { id, username: admins.find((a) => a.id === id)?.username },
+            severity: 'warning',
+          });
         } catch (error) {
           console.error("Error deleting admin:", error);
           message.error("Failed to delete admin");
@@ -6170,6 +6452,15 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       </div>
                     );
                   })()}
+                  <VisitorEngagementPanel analyticsSummary={analyticsSummary} />
+                  <button
+                    type="button"
+                    onClick={exportAnalyticsToExcel}
+                    className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-purple-600/10 border border-purple-500/30 text-[10px] font-black uppercase tracking-widest text-purple-300 hover:bg-purple-600/20 transition-all"
+                  >
+                    <Download className="w-5 h-5" />
+                    Export analytics (Excel)
+                  </button>
                   <button
                     type="button"
                     onClick={() => { setAdminModal('logs'); loadLogs(); }}
@@ -6412,12 +6703,28 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   const categoryOptions = ['ALL', ...Array.from(new Set(activityLogs.map((log) => detectLogCategory(log)).filter(Boolean)))];
                   return (
                     <div className="space-y-4">
+                      <LogTrafficPanel
+                        analyticsSummary={analyticsSummary}
+                        loading={analyticsLoading}
+                        onRefresh={refreshAnalytics}
+                        compact
+                      />
+                      <VisitorEngagementPanel analyticsSummary={analyticsSummary} compact />
+
                       <div className="flex items-center gap-2 flex-wrap border-b border-white/5 pb-3">
-                        <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Last 100 events</span>
+                        <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Last 200 events</span>
+                        <button
+                          type="button"
+                          onClick={exportAnalyticsToExcel}
+                          className="flex items-center gap-1 px-3 py-1 bg-purple-600/10 border border-purple-500/20 rounded-full text-[8px] font-black text-purple-300 uppercase tracking-widest hover:bg-purple-600/20 transition-all"
+                        >
+                          <Download className="w-3 h-3" />
+                          Export Analytics
+                        </button>
                         <button
                           type="button"
                           onClick={exportFilteredActivityLogs}
-                          className="ml-auto flex items-center gap-1 px-3 py-1 bg-emerald-600/10 border border-emerald-500/20 rounded-full text-[8px] font-black text-emerald-300 uppercase tracking-widest hover:bg-emerald-600/20 transition-all"
+                          className="flex items-center gap-1 px-3 py-1 bg-emerald-600/10 border border-emerald-500/20 rounded-full text-[8px] font-black text-emerald-300 uppercase tracking-widest hover:bg-emerald-600/20 transition-all"
                         >
                           <Download className="w-3 h-3" />
                           Export Filtered
@@ -6430,6 +6737,34 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         >
                           <RefreshCw className={`w-3 h-3 ${logsLoading ? 'animate-spin' : ''}`} />
                           {logsLoading ? 'Loading…' : 'Refresh'}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {['SURVEY', 'FEEDBACK', 'VISITOR', 'SECURITY'].map((cat) => (
+                          <button
+                            key={`quick-${cat}`}
+                            type="button"
+                            onClick={() => setLogCategoryFilter(cat)}
+                            className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border transition-all ${
+                              logCategoryFilter === cat
+                                ? 'bg-cyan-600/20 border-cyan-500/40 text-cyan-300'
+                                : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white'
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setLogCategoryFilter('ALL')}
+                          className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border transition-all ${
+                            logCategoryFilter === 'ALL'
+                              ? 'bg-zinc-700 border-white/20 text-white'
+                              : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white'
+                          }`}
+                        >
+                          All
                         </button>
                       </div>
 
@@ -6503,7 +6838,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 <p className="text-[8px] text-cyan-300/80 uppercase tracking-widest mt-0.5">{detectLogCategory(log)}</p>
                                 {log.details && Object.keys(log.details).length > 0 && (
                                   <p className="text-[9px] text-zinc-500 mt-0.5 break-words">
-                                    {Object.entries(log.details).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}
+                                    {Object.entries(log.details).map(([k, v]) => `${k}: ${formatLogDetailValue(v)}`).join(' · ')}
                                   </p>
                                 )}
                                 {(log.ip || log.location) && (
@@ -7984,6 +8319,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           },
                         });
                         setAcademySurveySent(true);
+                        surveyCompletedRef.current = true;
+                        trackFunnelStep('survey', 'completed', 'submit_success');
                         message.success('تم إرسال الاستبيان بنجاح.');
                       } catch (e) {
                         console.error(e);
@@ -8045,6 +8382,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     Copy Link
                   </button>
                   <button
+                    onClick={exportAnalyticsToExcel}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600/10 border border-purple-500/30 text-purple-300 text-[10px] font-black uppercase tracking-widest hover:bg-purple-600/20 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export Analytics
+                  </button>
+                  <button
                     onClick={exportFilteredActivityLogs}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600/20 transition-all"
                   >
@@ -8053,6 +8397,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </button>
                 </div>
               </div>
+
+              <LogTrafficPanel
+                analyticsSummary={analyticsSummary}
+                loading={analyticsLoading}
+                onRefresh={refreshAnalytics}
+              />
+
+              <VisitorEngagementPanel analyticsSummary={analyticsSummary} />
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 <input
@@ -8121,7 +8473,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         <p className="text-xs font-black text-white">{log.action}</p>
                         {log.details && Object.keys(log.details).length > 0 && (
                           <p className="text-[9px] text-zinc-500 mt-1 break-words">
-                            {Object.entries(log.details).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}
+                            {Object.entries(log.details).map(([k, v]) => `${k}: ${formatLogDetailValue(v)}`).join(' · ')}
                           </p>
                         )}
                       </div>
@@ -8281,6 +8633,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           },
                         });
                         setFeedbackSent(true);
+                        feedbackCompletedRef.current = true;
+                        trackFunnelStep('feedback', 'completed', 'submit_success');
                         message.success('تم إرسال ملاحظتك بنجاح.');
                       } catch (e) {
                         console.error(e);
@@ -8581,7 +8935,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
       {/* Floating Arabic feedback link (other pages; hidden on HOME while promo active) */}
       {!isAdminPortal &&
-        portalRealm === 'TCS' &&
+        isFeedbackPortalRealm(portalRealm) &&
         feedbackEnabled &&
         showFeedbackPromo &&
         view !== 'HOME' &&
@@ -8617,7 +8971,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       {!isAdminPortal && portalRealm === 'TCS' && academySurveyPopupEnabled && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
         <div className="fixed right-5 top-1/2 -translate-y-1/2 z-50">
           <button
-            onClick={() => setShowSurveyShortcut(false)}
+            onClick={dismissSurveyShortcut}
             className="absolute -top-2 -right-2 h-6 w-6 rounded-full border border-white/20 bg-zinc-900 text-white/80 hover:text-white hover:border-white/40 transition-all flex items-center justify-center"
             title="إخفاء"
             aria-label="Hide survey shortcut"
@@ -8625,11 +8979,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             <X className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => {
-              setShowSurveyShortcut(false);
-              resetAcademySurvey();
-              navigateTo('SAMSUNG_ACADEMY_SURVEY');
-            }}
+            onClick={openSurveyForm}
             className="rounded-2xl bg-blue-600/95 px-4 py-3 shadow-[0_0_28px_rgba(37,99,235,0.85)] border border-blue-300/30 animate-pulse transition-all hover:scale-105 hover:bg-blue-500 active:scale-95"
             title="Samsung Academy Survey"
           >
