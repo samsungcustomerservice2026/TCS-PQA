@@ -10,6 +10,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // One-off migration scripts & generated assets (not part of the app)
+    "archive/**",
+    ".agent/**",
   ]),
 ]);
 

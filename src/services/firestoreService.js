@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 const ENGINEERS_COLLECTION = 'engineers';
 const ADMINS_COLLECTION = 'admins';
@@ -133,6 +133,41 @@ export const saveFeedback = async (feedbackData) => {
         createdAt: new Date().toISOString(),
     });
     return docRef.id;
+};
+
+export const getFeedbacks = async () => {
+    const snapshot = await getDocs(collection(db, FEEDBACK_COLLECTION));
+    return snapshot.docs
+        .map((item) => ({ ...item.data(), id: item.id }))
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+};
+
+/** Whether the floating Samsung Academy survey shortcut is shown on the TCS portal (default: on). */
+export const getAcademySurveySettings = async () => {
+    const snap = await getDoc(doc(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC));
+    if (!snap.exists()) {
+        return { academySurveyPopupEnabled: true, feedbackEnabled: true };
+    }
+    const data = snap.data() || {};
+    return {
+        academySurveyPopupEnabled: data.academySurveyPopupEnabled !== false,
+        feedbackEnabled: data.feedbackEnabled !== false,
+        updatedAt: data.updatedAt || null,
+        updatedBy: data.updatedBy || null,
+    };
+};
+
+export const saveAcademySurveySettings = async (settings, updatedBy = 'admin') => {
+    await setDoc(
+        doc(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC),
+        {
+            type: 'SAMSUNG_ACADEMY_SURVEY_CONTAINER',
+            updatedAt: new Date().toISOString(),
+            updatedBy,
+            ...settings,
+        },
+        { merge: true }
+    );
 };
 
 export const saveSamsungAcademySurvey = async (surveyData) => {

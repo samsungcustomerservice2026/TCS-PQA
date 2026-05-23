@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { App, ConfigProvider, theme, message as antdMessage, Modal } from 'antd';
+import { App, ConfigProvider, theme, message as antdMessage, Modal, Switch } from 'antd';
 import {
   Users,
   ShieldCheck,
@@ -43,14 +43,53 @@ import {
   Building2,
   Shield,
   ExternalLink,
-  Copy
+  Copy,
+  Undo2,
+  ClipboardList
 } from 'lucide-react';
 
-import { INITIAL_ENGINEERS, calculateDRNPS, getTier, getTierColor, calculatePQAScore } from '../constants';
-import * as XLSX from 'xlsx';
-import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, saveSamsungAcademySurvey as saveSamsungAcademySurveyToDb, getSamsungAcademySurveys as getSamsungAcademySurveysFromDb, getTcsDashboardWinners, saveTcsDashboardWinners } from '../services/firestoreService';
-import { normalizePqaPartnerKey, mapPqaSheetPartnerKeyToOfficial, PQA_OFFICIAL_MX_PARTNERS } from '../lib/pqaPartnerMap.js';
+import SamsungAcademySurveyDashboard from '../components/admin/SamsungAcademySurveyDashboard';
+import ArabicFeedbackDashboard from '../components/admin/ArabicFeedbackDashboard';
+import AdminAccountsPanel, { EMPTY_ADMIN_FORM } from '../components/admin/AdminAccountsPanel';
+import {
+  canReadModule,
+  canWriteModule,
+  canAccessModule,
+  canAccessTcsEnv,
+  canAccessPqaEnv,
+  buildPermissionsForSave,
+  permissionsForForm,
+  syncScopePermissions,
+} from '../lib/adminPermissions';
+import { cloneSnapshot, pushUndoEntry, popUndoEntry } from '../lib/adminUndo';
 
+import {
+  INITIAL_ENGINEERS,
+  calculateDRNPS,
+  getTier,
+  getTierColor,
+  calculatePQAScore,
+  DEFAULT_ENGINEER_PHOTO_URL,
+} from '../constants';
+import * as XLSX from 'xlsx';
+import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, saveSamsungAcademySurvey as saveSamsungAcademySurveyToDb, getSamsungAcademySurveys as getSamsungAcademySurveysFromDb, getTcsDashboardWinners, saveTcsDashboardWinners, getAcademySurveySettings, saveAcademySurveySettings } from '../services/firestoreService';
+import { normalizePqaPartnerKey, mapPqaSheetPartnerKeyToOfficial, PQA_OFFICIAL_MX_PARTNERS } from '../lib/pqaPartnerMap.js';
+import {
+  parseTcsScoreSheetRows,
+  pickBestTcsWorksheetRows,
+  resolveMxIqcSkipForDisplay,
+  TCS_MX_TEMPLATE_HEADERS,
+  TCS_MX_TEMPLATE_SHEET_NAME,
+} from '../lib/tcsExcelImport';
+import {
+  FEEDBACK_PRODUCT_OPTIONS,
+  validateArabicFeedbackForm,
+} from '../lib/arabicFeedbackValidation';
+
+import {
+  FIREBASE_STORAGE_RULES_CONSOLE_URL,
+  FIREBASE_STORAGE_RULES_SNIPPET,
+} from '../constants/firebaseStorageRules';
 import { uploadPhoto, uploadTcsAllProductImagesFromPublic } from '../services/storageService';
 import { recordVisit, recordVisitorModeSegment, recordAdminLogin, recordSessionEnd, getAnalyticsSummary } from '../services/analyticsService';
 import { writeLog, fetchLogs } from '../services/auditLogService';
@@ -872,15 +911,36 @@ const PARTNER_LOGOS = {
   ELECTRA: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FElectra%20Logo.jpg?alt=media&token=7325e6ac-2371-4741-91ee-50b44ce09845',
   MTI: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FMTI.png?alt=media&token=7ec69134-31bb-4ceb-a124-0409a824255c',
   ALSAFY: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FALSAFY.png?alt=media&token=fcb8577b-0994-4d1a-9a29-92489c872b04',
-  SAMSUNG_FALLBACK: 'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FSAMSUNG.jpg?alt=media&token=90a6b923-e8c1-4f65-96d1-0852386e73c1'
+  SAMSUNG_FALLBACK: DEFAULT_ENGINEER_PHOTO_URL,
 };
 
 /** Default Samsung mark used for engineers — match by path so token/query variants still fill the frame. */
 function isSamsungEngineerPhotoUrl(url) {
   if (!url) return false;
   const u = String(url);
-  if (u === PARTNER_LOGOS.SAMSUNG_FALLBACK) return true;
+  if (u === DEFAULT_ENGINEER_PHOTO_URL || u === PARTNER_LOGOS.SAMSUNG_FALLBACK) return true;
   return /SAMSUNG\.jpg/i.test(u);
+}
+
+/** True when the engineer uploaded their own photo (not Samsung default / placeholder). */
+function isCustomEngineerPhotoUpload(eng) {
+  if (!eng?.photoUrl) return false;
+  const u = String(eng.photoUrl);
+  if (u.includes('picsum.photos')) return false;
+  if (isSamsungEngineerPhotoUrl(u)) return false;
+  if (u.includes('Service%20centers.png')) return false;
+  if (u.startsWith('/logos/')) return false;
+  if (eng.photoUpdatedAt) return true;
+  return /firebasestorage\.googleapis\.com/i.test(u) && !/SAMSUNG\.jpg/i.test(u);
+}
+
+function resolveEngineerPhotoForImport(rec, existing) {
+  if (existing && isCustomEngineerPhotoUpload(existing)) return existing.photoUrl;
+  const fromSheet = rec?.photoUrl;
+  if (fromSheet && !String(fromSheet).includes('picsum.photos') && !isSamsungEngineerPhotoUrl(fromSheet)) {
+    return fromSheet;
+  }
+  return DEFAULT_ENGINEER_PHOTO_URL;
 }
 
 /** Home dashboard (TCS): monthly Hall of Fame + quarterly ladder list length (podium + rows below). */
@@ -889,6 +949,14 @@ const TCS_WINNERS_PER_PRODUCT = 6;
 const SAMSUNG_ACADEMY_LOCATIONS = ['الإسكندرية', 'أسيوط', 'طنطا'];
 const ACADEMY_PRODUCTS = ['موبايل', 'تلفزيون', 'أجهزة منزلية'];
 const ACADEMY_RATING_SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const INITIAL_ENGINEER_FEEDBACK = {
+  fullName: '',
+  phoneNumber: '',
+  company: '',
+  product: '',
+  position: '',
+  message: '',
+};
 
 const quarterKeyToIndex = (quarterKey) => {
   const m = String(quarterKey || '').toUpperCase().match(/^Q([1-4])-(\d{4})$/);
@@ -1500,7 +1568,9 @@ const PageContent = () => {
   const [noEngineers, setNoEngineers] = useState(false);
   const [editingEng, setEditingEng] = useState(null);
   const [showAddAdmin, setShowAddAdmin] = useState(false);
-  const [newAdminData, setNewAdminData] = useState({ username: '', password: '', name: '', role: 'ADMIN', access: 'TCS_ONLY' });
+  const [newAdminData, setNewAdminData] = useState({ ...EMPTY_ADMIN_FORM });
+  const [editingAdminId, setEditingAdminId] = useState(null);
+  const [editAdminData, setEditAdminData] = useState({ ...EMPTY_ADMIN_FORM });
   const [fetchedHiddenEngineers, setFetchedHiddenEngineers] = useState([]);
   const [bulkSelectedIds, setBulkSelectedIds] = useState([]);
   const [bulkSelectedArchivedIds, setBulkSelectedArchivedIds] = useState([]);
@@ -1535,14 +1605,19 @@ const PageContent = () => {
   /** True when user opened profile via exact engineer code from SEARCH (hide detailed metrics). */
   const [profileOpenedByExactCode, setProfileOpenedByExactCode] = useState(false);
 
-  // Feedback form state
-  const [feedbackText, setFeedbackText] = useState('');
-  const [feedbackRating, setFeedbackRating] = useState(0);
+  // Arabic engineer feedback (test form)
+  const [engineerFeedback, setEngineerFeedback] = useState(INITIAL_ENGINEER_FEEDBACK);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  /** Home popup + floating promo; dismissed in-memory until full page refresh */
+  const [showFeedbackPromo, setShowFeedbackPromo] = useState(true);
   const [academySurveySent, setAcademySurveySent] = useState(false);
   const [isSubmittingAcademySurvey, setIsSubmittingAcademySurvey] = useState(false);
-  const [academySurveyExporting, setAcademySurveyExporting] = useState(false);
+  const [academySurveyPopupEnabled, setAcademySurveyPopupEnabled] = useState(true);
+  const [academySurveySettingsLoading, setAcademySurveySettingsLoading] = useState(false);
+  const [academySurveySettingsSaving, setAcademySurveySettingsSaving] = useState(false);
+  /** User dismissed the floating shortcut for this session only */
   const [showSurveyShortcut, setShowSurveyShortcut] = useState(true);
   const [academySurvey, setAcademySurvey] = useState({
     fullName: '',
@@ -1561,6 +1636,11 @@ const PageContent = () => {
   // Activity log panel toggle
   /** Admin dashboard: modal shortcuts (accounts / TCS guide / action log) */
   const [adminModal, setAdminModal] = useState(null);
+  /** Admin portal main category: data | display | survey | insights | system */
+  const [adminPanelTab, setAdminPanelTab] = useState('data');
+  const adminUndoStackRef = useRef([]);
+  const [adminUndoCount, setAdminUndoCount] = useState(0);
+  const [adminUndoRunning, setAdminUndoRunning] = useState(false);
 
   // Engineer self-service photo auth
   const [showPhotoAuth, setShowPhotoAuth] = useState(false);
@@ -1592,54 +1672,33 @@ const PageContent = () => {
     setIsSubmittingAcademySurvey(false);
   };
 
-  const exportSamsungAcademySurveys = async () => {
-    setAcademySurveyExporting(true);
-    try {
-      const surveys = await getSamsungAcademySurveysFromDb();
-      if (!surveys.length) {
-        message.warning('No Samsung Academy survey data found.');
-        return;
-      }
-      const rows = surveys
-        .slice()
-        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
-        .map((item, idx) => ({
-          '#': idx + 1,
-          Name: item.fullName || '',
-          Phone: item.phoneNumber || '',
-          Company: item.company || '',
-          Product: item.product || '',
-          'Academy Location': item.academyLocation || '',
-          'Content Valuable': item.contentValue || '',
-          'Trainer Clear & Good': item.trainerClarity || '',
-          'Need More Sessions': item.needMoreSessions || '',
-          'Training Period Suitable': item.periodSuitable || '',
-          'Place Accommodation Suitable': item.placeAccommodation || '',
-          Notes: item.notes || '',
-          'Submitted At': item.createdAt || '',
-          'Source App Mode': item.appMode || '',
-        }));
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Samsung Academy Survey');
-      const stamp = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `samsung_academy_survey_${stamp}.xlsx`);
-      message.success('Samsung Academy survey exported successfully.');
+  const handleSamsungAcademySurveyExported = React.useCallback(
+    ({ count, totalLoaded, filters, fileName }) => {
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
         category: 'EXPORT',
-        action: 'Exported Samsung Academy survey',
-        details: { count: surveys.length },
+        action: 'Exported Samsung Academy survey (filtered)',
+        details: { count, totalLoaded, filters, fileName },
         severity: 'info',
       });
-    } catch (e) {
-      console.error(e);
-      message.error('Failed to export Samsung Academy survey.');
-    } finally {
-      setAcademySurveyExporting(false);
-    }
-  };
+    },
+    [currentUser?.username]
+  );
+
+  const handleArabicFeedbackExported = React.useCallback(
+    ({ count, totalLoaded, filters, fileName }) => {
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        category: 'EXPORT',
+        action: 'Exported Arabic feedback (filtered)',
+        details: { count, totalLoaded, filters, fileName },
+        severity: 'info',
+      });
+    },
+    [currentUser?.username]
+  );
 
   // Analytics
   const [sessionStart, setSessionStart] = useState(null);
@@ -1654,6 +1713,114 @@ const PageContent = () => {
       setAnalyticsLoading(false);
     });
   }, []);
+
+  const applyAdminUndoEntry = React.useCallback(async (entry) => {
+    if (!entry) return;
+    switch (entry.type) {
+      case 'SAVE_RECORD': {
+        if (entry.wasNew && entry.savedRecord?.id) {
+          await deleteEngineerPermanent(entry.savedRecord.id, entry.colName);
+          setEngineers((prev) => prev.filter((e) => e.id !== entry.savedRecord.id));
+        } else if (entry.before) {
+          await saveEngineerToDb(entry.before, entry.colName);
+          setEngineers((prev) => {
+            const idx = prev.findIndex((e) => e.id === entry.before.id);
+            if (idx !== -1) {
+              const next = [...prev];
+              next[idx] = entry.before;
+              return next;
+            }
+            return [...prev, entry.before];
+          });
+        }
+        break;
+      }
+      case 'ARCHIVE': {
+        const restored = { ...entry.record, hidden: false };
+        await saveEngineerToDb(restored, entry.colName);
+        setEngineers((prev) => [...prev, restored]);
+        setFetchedHiddenEngineers((prev) => prev.filter((e) => e.id !== entry.record.id));
+        break;
+      }
+      case 'BULK_ARCHIVE': {
+        for (const rec of entry.records) {
+          await saveEngineerToDb({ ...rec, hidden: false }, entry.colName);
+        }
+        const ids = new Set(entry.records.map((r) => r.id));
+        setEngineers((prev) => [...prev, ...entry.records.map((r) => ({ ...r, hidden: false }))]);
+        setFetchedHiddenEngineers((prev) => prev.filter((e) => !ids.has(e.id)));
+        setBulkSelectedIds([]);
+        break;
+      }
+      case 'RESTORE': {
+        await archiveEngineer(entry.record.id, entry.colName);
+        setEngineers((prev) => prev.filter((e) => e.id !== entry.record.id));
+        setFetchedHiddenEngineers((prev) => [...prev, { ...entry.record, hidden: true }]);
+        break;
+      }
+      case 'BULK_RESTORE': {
+        for (const rec of entry.records) {
+          await archiveEngineer(rec.id, entry.colName);
+        }
+        const ids = new Set(entry.records.map((r) => r.id));
+        setEngineers((prev) => prev.filter((e) => !ids.has(e.id)));
+        setFetchedHiddenEngineers((prev) => [...prev, ...entry.records.map((r) => ({ ...r, hidden: true }))]);
+        setBulkSelectedArchivedIds([]);
+        break;
+      }
+      default:
+        throw new Error('Unsupported undo action');
+    }
+  }, []);
+
+  const handleAdminUndo = React.useCallback(() => {
+    const stack = adminUndoStackRef.current || [];
+    if (!stack.length) {
+      message.warning('Nothing to undo.');
+      return;
+    }
+    const peek = stack[stack.length - 1];
+    modal.confirm({
+      title: 'Undo last change?',
+      content: `This will revert: ${peek.label}. You will be asked to confirm once more.`,
+      okText: 'Continue',
+      cancelText: 'Cancel',
+      onOk: () => {
+        modal.confirm({
+          title: 'Confirm undo',
+          content: 'This will write the previous state back to the database. Are you absolutely sure?',
+          okText: 'Yes, undo',
+          okType: 'danger',
+          cancelText: 'Go back',
+          onOk: async () => {
+            const entry = popUndoEntry(adminUndoStackRef, setAdminUndoCount);
+            if (!entry) return;
+            setAdminUndoRunning(true);
+            const hide = message.loading('Reverting last change…', 0);
+            try {
+              await applyAdminUndoEntry(entry);
+              message.success('Last change was undone.');
+              writeLog({
+                type: 'ADMIN_ACTION',
+                actor: currentUser?.username || 'admin',
+                category: 'UNDO',
+                action: 'Admin undo',
+                details: { undoType: entry.type, label: entry.label },
+                severity: 'warning',
+              });
+            } catch (err) {
+              console.error(err);
+              pushUndoEntry(adminUndoStackRef, setAdminUndoCount, entry);
+              message.error('Undo failed. Your change was kept on the undo stack.');
+            } finally {
+              hide();
+              setAdminUndoRunning(false);
+            }
+          },
+        });
+      },
+    });
+  }, [applyAdminUndoEntry, currentUser?.username, message, modal]);
 
   // Cookie consent
 
@@ -1757,12 +1924,14 @@ const PageContent = () => {
     return 'راضي';
   };
 
-  // Direct URL support: /?survey=samsung-academy
+  // Direct URL support: /?portal=admin | /?survey=samsung-academy
+  const portalQueryHandledRef = useRef(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const portal = String(params.get('portal') || '').toLowerCase();
     const logs = String(params.get('logs') || '').toLowerCase();
+
     if (portal === 'admin') {
       setIsAdminPortal(true);
       if (isLogged && (logs === 'external' || logs === '1')) {
@@ -1775,8 +1944,12 @@ const PageContent = () => {
         setView('ADMIN_LOGIN');
         viewStackRef.current = ['ADMIN_LOGIN'];
       }
+      portalQueryHandledRef.current = true;
       return;
     }
+
+    if (portalQueryHandledRef.current) return;
+
     const survey = String(params.get('survey') || '').toLowerCase();
     if (survey !== 'samsung-academy' && survey !== 'academy') return;
 
@@ -1791,11 +1964,110 @@ const PageContent = () => {
     const nextQuery = params.toString();
     const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
     window.history.replaceState({}, '', nextUrl);
-  }, []);
+    // resetAcademySurvey is stable enough; omit from deps to avoid re-running every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLogged]);
 
   useEffect(() => {
     if (view === 'EXTERNAL_LOGS') loadLogs();
   }, [loadLogs, view]);
+
+  const loadAcademySurveySettings = React.useCallback(async () => {
+    setAcademySurveySettingsLoading(true);
+    try {
+      const settings = await getAcademySurveySettings();
+      setAcademySurveyPopupEnabled(settings.academySurveyPopupEnabled !== false);
+      setFeedbackEnabled(settings.feedbackEnabled !== false);
+    } catch (err) {
+      console.error('Academy survey settings load failed', err);
+    } finally {
+      setAcademySurveySettingsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAcademySurveySettings();
+  }, [loadAcademySurveySettings]);
+
+  const resetEngineerFeedback = React.useCallback(() => {
+    setEngineerFeedback(INITIAL_ENGINEER_FEEDBACK);
+    setFeedbackSent(false);
+  }, []);
+
+  const dismissFeedbackPromo = React.useCallback(() => {
+    setShowFeedbackPromo(false);
+  }, []);
+
+  const feedbackHomePopupOpen =
+    !isAdminPortal && portalRealm === 'TCS' && feedbackEnabled && showFeedbackPromo && view === 'HOME';
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    if (feedbackHomePopupOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+    return undefined;
+  }, [feedbackHomePopupOpen]);
+
+  const openFeedbackForm = React.useCallback(() => {
+    dismissFeedbackPromo();
+    resetEngineerFeedback();
+    navigateTo('FEEDBACK');
+  }, [dismissFeedbackPromo, resetEngineerFeedback, navigateTo]);
+
+  const handleAcademySurveyPopupToggle = async (enabled) => {
+    if (!canWriteModule(currentUser, 'survey')) {
+      message.warning('You do not have write access to survey settings.');
+      return;
+    }
+    setAcademySurveySettingsSaving(true);
+    try {
+      await saveAcademySurveySettings({ academySurveyPopupEnabled: enabled }, currentUser?.username || 'admin');
+      setAcademySurveyPopupEnabled(enabled);
+      if (enabled) setShowSurveyShortcut(true);
+      message.success(enabled ? 'Samsung Academy survey popup is ON for all visitors.' : 'Samsung Academy survey popup is OFF.');
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        action: enabled ? 'Enabled Samsung Academy survey popup' : 'Disabled Samsung Academy survey popup',
+        severity: 'info',
+      });
+    } catch (err) {
+      console.error(err);
+      message.error('Could not save survey popup setting.');
+    } finally {
+      setAcademySurveySettingsSaving(false);
+    }
+  };
+
+  const handleFeedbackEnabledToggle = async (enabled) => {
+    if (!canWriteModule(currentUser, 'feedback')) {
+      message.warning('You do not have write access to feedback settings.');
+      return;
+    }
+    setAcademySurveySettingsSaving(true);
+    try {
+      await saveAcademySurveySettings({ feedbackEnabled: enabled }, currentUser?.username || 'admin');
+      setFeedbackEnabled(enabled);
+      if (enabled) setShowFeedbackPromo(true);
+      message.success(enabled ? 'Arabic feedback form is ON for all visitors.' : 'Arabic feedback form is OFF.');
+      writeLog({
+        type: 'ADMIN_ACTION',
+        actor: currentUser?.username || 'admin',
+        action: enabled ? 'Enabled Arabic feedback form' : 'Disabled Arabic feedback form',
+        severity: 'info',
+      });
+    } catch (err) {
+      console.error(err);
+      message.error('Could not save feedback setting.');
+    } finally {
+      setAcademySurveySettingsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1878,10 +2150,20 @@ const PageContent = () => {
 
   useEffect(() => {
     if (!isLogged || !currentUser) return;
-    const canManageTcs = currentUser.role === 'SUPER_ADMIN' || currentUser.access === 'TCS_ONLY' || currentUser.access === 'ALL';
+    const canManageTcs = canAccessTcsEnv(currentUser) && canReadModule(currentUser, 'tcs');
     if (!canManageTcs) return;
     loadTcsWinnersConfigs();
   }, [isLogged, currentUser, loadTcsWinnersConfigs]);
+
+  const adminCanWriteData = useMemo(
+    () => (isPqaMode ? canWriteModule(currentUser, 'pqa') : canWriteModule(currentUser, 'tcs')),
+    [currentUser, isPqaMode]
+  );
+  const adminCanReadData = useMemo(
+    () => (isPqaMode ? canReadModule(currentUser, 'pqa') : canReadModule(currentUser, 'tcs')),
+    [currentUser, isPqaMode]
+  );
+
   useEffect(() => {
     if (!appMode?.startsWith('TCS')) return;
     loadTcsWinnersConfigs(true);
@@ -1889,17 +2171,26 @@ const PageContent = () => {
 
   // Helper to ensure PQA Service Center photo is displayed correctly
   const getPhotoUrl = (eng) => {
-    if (!eng) return 'https://picsum.photos/200';
+    if (!eng) return DEFAULT_ENGINEER_PHOTO_URL;
 
-    // ── Prioritize Custom Manual Uploads ──────────────────────────────
-    if (eng.photoUrl && 
-        !eng.photoUrl.includes('Service%20centers.png') && 
-        !eng.photoUrl.includes('picsum.photos') && 
-        !eng.photoUrl.startsWith('/logos/')) {
+    const isPqa = appMode?.startsWith('PQA') || Boolean(eng.pqaBranch);
+
+    // TCS engineers: Samsung logo only until they upload their own photo
+    if (!isPqa) {
+      if (isCustomEngineerPhotoUpload(eng)) return eng.photoUrl;
+      return DEFAULT_ENGINEER_PHOTO_URL;
+    }
+
+    // ── PQA: custom uploads, then partner logos ───────────────────────
+    if (
+      eng.photoUrl &&
+      !eng.photoUrl.includes('Service%20centers.png') &&
+      !eng.photoUrl.includes('picsum.photos') &&
+      !eng.photoUrl.startsWith('/logos/')
+    ) {
       return eng.photoUrl;
     }
 
-    const isPqa = appMode?.startsWith('PQA');
     const pqaPlaceholder = () => pqaDefaultUrl || PQA_SERVICE_CENTER_PHOTO;
     /** Resolved Storage URL, else PQA generic placeholder (not missing /logos files), else local path for TCS */
     const brandUrl = (key) => PARTNER_LOGOS[key] || (isPqa ? pqaPlaceholder() : `/logos/${key.toLowerCase()}.png`);
@@ -2460,12 +2751,15 @@ const PageContent = () => {
       })
       .slice(0, limit);
 
-    // Assign dense ranks (same score → same rank) or use Excel rank
+    // Assign display ranks: CE monthly ladder shows 1…N in list order (Excel rank columns can be wrong scale).
     let currentRank = 1;
     return sorted.map((e, i) => {
       if (i > 0 && e.tcsScore < sorted[i - 1].tcsScore) currentRank++;
+      if (appMode === 'PQA_CE') {
+        return { ...e, displayRank: i + 1 };
+      }
       if (appMode?.startsWith('PQA')) {
-         return { ...e, displayRank: e.centerMonthlyRank || currentRank };
+        return { ...e, displayRank: e.centerMonthlyRank || currentRank };
       }
       return { ...e, displayRank: currentRank };
     });
@@ -3321,8 +3615,23 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       // Generate a temporary ID if still missing
       if (!finalEng.id) finalEng.id = Date.now().toString();
 
+      let beforeSnapshot = finalEng.id ? engineers.find((e) => e.id === finalEng.id) : null;
+      if (!beforeSnapshot && duplicateRecord) {
+        beforeSnapshot = duplicateRecord;
+      }
+      const wasNewRecord = !beforeSnapshot;
+
       const savedId = await saveEngineerToDb(finalEng, colName);
       const savedFinalId = savedId || finalEng.id;
+
+      pushUndoEntry(adminUndoStackRef, setAdminUndoCount, {
+        type: 'SAVE_RECORD',
+        label: `Saved ${finalEng.name || finalEng.code || 'record'}`,
+        colName,
+        before: beforeSnapshot ? cloneSnapshot(beforeSnapshot) : null,
+        savedRecord: cloneSnapshot({ ...finalEng, id: savedFinalId }),
+        wasNew: wasNewRecord,
+      });
 
       setEngineers(prev => {
         // If we are overwriting a specific id, replace that entry
@@ -3355,20 +3664,21 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       message.warning("Please fill all fields");
       return;
     }
+    const role = currentUser?.role === 'SUPER_ADMIN' ? (newAdminData.role || 'ADMIN') : 'ADMIN';
     const newAdmin = {
-      id: Date.now().toString(),
-      username: newAdminData.username,
+      username: newAdminData.username.trim(),
       passwordB64: window.btoa(newAdminData.password),
-      name: newAdminData.name,
-      role: newAdminData.role || 'ADMIN',
-      access: newAdminData.access || 'TCS_ONLY',
-      createdAt: new Date().toISOString()
+      name: newAdminData.name.trim(),
+      role,
+      access: currentUser?.role === 'SUPER_ADMIN' ? (newAdminData.access || 'TCS_ONLY') : (currentUser?.access || 'TCS_ONLY'),
+      permissions: buildPermissionsForSave(newAdminData, role),
+      createdAt: new Date().toISOString(),
     };
 
     try {
-      await saveAdminToDb(newAdmin);
-      setAdmins(prev => [...prev, newAdmin]);
-      setNewAdminData({ username: '', password: '', name: '', role: 'ADMIN', access: 'TCS_ONLY' });
+      const savedId = await saveAdminToDb(newAdmin);
+      setAdmins(prev => [...prev, { ...newAdmin, id: savedId }]);
+      setNewAdminData({ ...EMPTY_ADMIN_FORM });
       setShowAddAdmin(false);
       message.success("New admin added successfully");
       writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: 'Added new admin', details: { username: newAdmin.username, name: newAdmin.name }, severity: 'info' });
@@ -3378,6 +3688,104 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       writeLog({ type: 'ERROR', actor: currentUser?.username || 'admin', action: 'Error adding admin', details: { error: String(error)?.slice(0, 200) }, severity: 'error' });
     }
   };
+
+  const startEditAdmin = (admin) => {
+    setEditingAdminId(admin.id);
+    setEditAdminData({
+      username: admin.username || '',
+      password: '',
+      name: admin.name || '',
+      role: admin.role || 'ADMIN',
+      access: admin.access || 'TCS_ONLY',
+      permissions: permissionsForForm(admin),
+    });
+  };
+
+  const cancelEditAdmin = () => {
+    setEditingAdminId(null);
+    setEditAdminData({ ...EMPTY_ADMIN_FORM });
+  };
+
+  const persistAdminUpdate = async (updated, logAction) => {
+    await saveAdminToDb(updated);
+    setAdmins(prev => prev.map(a => a.id === updated.id ? updated : a));
+    if (currentUser?.id === updated.id) {
+      setCurrentUser(updated);
+      try {
+        const raw = localStorage.getItem('adminSession');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          localStorage.setItem('adminSession', JSON.stringify({ ...parsed, user: updated }));
+        }
+      } catch { /* ignore */ }
+    }
+    writeLog({
+      type: 'ADMIN_ACTION',
+      actor: currentUser?.username || 'admin',
+      action: logAction,
+      details: { username: updated.username, role: updated.role, access: updated.access },
+      severity: 'info',
+    });
+  };
+
+  const handleQuickAdminAccessChange = async (admin, newAccess) => {
+    if (currentUser?.role !== 'SUPER_ADMIN') return;
+    const updated = {
+      ...admin,
+      access: newAccess,
+      permissions: syncScopePermissions(newAccess, admin.permissions || permissionsForForm(admin)),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.username || 'admin',
+    };
+    try {
+      await persistAdminUpdate(updated, 'Updated admin access scope');
+      message.success(`Access updated for ${admin.username}`);
+    } catch (error) {
+      console.error(error);
+      message.error('Failed to update access');
+    }
+  };
+
+  const handleSaveAdminEdit = async () => {
+    if (!editingAdminId) return;
+    const admin = admins.find(a => a.id === editingAdminId);
+    if (!admin) return;
+    if (!editAdminData.name?.trim() || !editAdminData.username?.trim()) {
+      message.warning('Name and username are required.');
+      return;
+    }
+    const duplicate = admins.some(
+      a => a.id !== editingAdminId && a.username?.toLowerCase() === editAdminData.username.trim().toLowerCase()
+    );
+    if (duplicate) {
+      message.warning('Username already in use.');
+      return;
+    }
+    const updated = {
+      ...admin,
+      name: editAdminData.name.trim(),
+      username: editAdminData.username.trim(),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.username || 'admin',
+    };
+    if (currentUser?.role === 'SUPER_ADMIN') {
+      updated.role = editAdminData.role || 'ADMIN';
+      updated.access = editAdminData.access || 'TCS_ONLY';
+      updated.permissions = buildPermissionsForSave(editAdminData, updated.role);
+    }
+    if (editAdminData.password?.trim()) {
+      updated.passwordB64 = window.btoa(editAdminData.password);
+    }
+    try {
+      await persistAdminUpdate(updated, 'Edited admin account');
+      cancelEditAdmin();
+      message.success('Account updated.');
+    } catch (error) {
+      console.error(error);
+      message.error('Failed to save account');
+    }
+  };
+
 
   const deleteAdminHandler = async (id) => {
     if (id === currentUser?.id) {
@@ -3405,6 +3813,22 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
     });
   };
 
+  const adminAccountsPanelProps = {
+    admins,
+    currentUser,
+    newAdminData,
+    setNewAdminData,
+    editingAdminId,
+    editAdminData,
+    setEditAdminData,
+    onAdd: handleAddAdmin,
+    onSaveEdit: handleSaveAdminEdit,
+    onCancelEdit: cancelEditAdmin,
+    onStartEdit: startEditAdmin,
+    onQuickAccessChange: handleQuickAdminAccessChange,
+    onDelete: deleteAdminHandler,
+  };
+
   const deleteEngineerHandler = async (id) => {
     modal.confirm({
       title: 'Archive Record',
@@ -3413,8 +3837,16 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       okType: 'danger',
       onOk: async () => {
         try {
-          await archiveEngineer(id, colName);
           const archivedEng = engineers.find(e => e.id === id);
+          if (archivedEng) {
+            pushUndoEntry(adminUndoStackRef, setAdminUndoCount, {
+              type: 'ARCHIVE',
+              label: `Archived ${archivedEng.name || archivedEng.code || 'record'}`,
+              colName,
+              record: cloneSnapshot(archivedEng),
+            });
+          }
+          await archiveEngineer(id, colName);
           setEngineers(prev => prev.filter(e => e.id !== id));
           if (archivedEng) {
             setFetchedHiddenEngineers(prev => [...prev, { ...archivedEng, hidden: true }]);
@@ -3447,10 +3879,18 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await Promise.all(bulkSelectedIds.map((id) => archiveEngineer(id, colName)));
-
           const idSet = new Set(bulkSelectedIds);
           const archived = engineers.filter((e) => idSet.has(e.id));
+          if (archived.length) {
+            pushUndoEntry(adminUndoStackRef, setAdminUndoCount, {
+              type: 'BULK_ARCHIVE',
+              label: `Bulk archived ${archived.length} records`,
+              colName,
+              records: archived.map((r) => cloneSnapshot(r)),
+            });
+          }
+          await Promise.all(bulkSelectedIds.map((id) => archiveEngineer(id, colName)));
+
           setEngineers((prev) => prev.filter((e) => !idSet.has(e.id)));
           setFetchedHiddenEngineers((prev) => [...prev, ...archived.map((e) => ({ ...e, hidden: true }))]);
           if (selectedEngineer && idSet.has(selectedEngineer.id)) setSelectedEngineer(null);
@@ -3485,8 +3925,16 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       content: 'Are you sure you want to restore this engineer?',
       onOk: async () => {
         try {
-          await saveEngineerToDb({ id, hidden: false }, colName);
           const restoredEng = fetchedHiddenEngineers.find(e => e.id === id);
+          if (restoredEng) {
+            pushUndoEntry(adminUndoStackRef, setAdminUndoCount, {
+              type: 'RESTORE',
+              label: `Restored ${restoredEng.name || restoredEng.code || 'record'}`,
+              colName,
+              record: cloneSnapshot(restoredEng),
+            });
+          }
+          await saveEngineerToDb({ id, hidden: false }, colName);
           setFetchedHiddenEngineers(prev => prev.filter(e => e.id !== id));
           if (restoredEng) {
             setEngineers(prev => [...prev, { ...restoredEng, hidden: false }]);
@@ -3518,9 +3966,17 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       okText: 'Restore Selected',
       onOk: async () => {
         try {
-          await Promise.all(bulkSelectedArchivedIds.map((id) => saveEngineerToDb({ id, hidden: false }, colName)));
           const idSet = new Set(bulkSelectedArchivedIds);
           const restored = fetchedHiddenEngineers.filter((e) => idSet.has(e.id));
+          if (restored.length) {
+            pushUndoEntry(adminUndoStackRef, setAdminUndoCount, {
+              type: 'BULK_RESTORE',
+              label: `Bulk restored ${restored.length} records`,
+              colName,
+              records: restored.map((r) => cloneSnapshot(r)),
+            });
+          }
+          await Promise.all(bulkSelectedArchivedIds.map((id) => saveEngineerToDb({ id, hidden: false }, colName)));
           setFetchedHiddenEngineers((prev) => prev.filter((e) => !idSet.has(e.id)));
           setEngineers((prev) => [...prev, ...restored.map((e) => ({ ...e, hidden: false }))]);
           setBulkSelectedArchivedIds([]);
@@ -3659,31 +4115,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           "Audit (-5)",
           "PR (-5)"
         ]]
-        : [[
-          "Quarter",
-          "Engineer Code",
-          "SBA ID",
-          "ASC Engineer",
-          "PhotoURL",
-          "ASC",
-          "PartnerName",
-          "Product",
-          "Month",
-          "Year",
-          "EngineerEvaluation",
-          "SSR",
-          "RRR",
-          "IQCSkipRatio",
-          "CoreParts",
-          "Q1Training",
-          "DRNPS",
-          "ExamScore",
-          "Promoters",
-          "Detractors",
-          "TCS Score"
-        ]];
+        : [TCS_MX_TEMPLATE_HEADERS];
     const ws = XLSX.utils.aoa_to_sheet(tcsHeaders);
-    XLSX.utils.book_append_sheet(wb, ws, isDaAvTemplate ? "TCS_DA_AV_UNIFIED_V4" : "TCS Scores");
+    XLSX.utils.book_append_sheet(wb, ws, isDaAvTemplate ? 'TCS_DA_AV_UNIFIED_V4' : TCS_MX_TEMPLATE_SHEET_NAME);
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
     const url = window.URL.createObjectURL(data);
@@ -3691,7 +4125,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
     link.href = url;
     link.download = isDaAvTemplate
       ? `TCS_DA_AV_UNIFIED_V4_QUARTER_FIRST_${short}_${Date.now()}.xlsx`
-      : `TCS_Score_Template_${short}_2026.xlsx`;
+      : `TCS_MX_Score_Template_${short}_2026.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -4244,200 +4678,30 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         }
 
       } else {
-        // TCS parser (supports legacy monthly format + new quarterly SBA format)
         const tcsModeForProduct = targetTcsMode || appMode;
         const expectedProduct =
           tcsModeForProduct === 'TCS_DA' ? 'DA' : tcsModeForProduct === 'TCS_AV' || tcsModeForProduct === 'TCS_VD' ? 'AV' : 'MX';
-        const targetSheet = workbook.Sheets["TCS Scores"] || workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(targetSheet, { header: 1, raw: false });
-        let headerRow = -1;
-        let cName=-1, cCode=-1, cEngineerCode=-1, cAscCode=-1, cPhoto=2, cAsc=3, cPartner=4, cMonth=5, cYear=6, cQuarter=-1, cSbaId=-1, cEval=7, cRedo=8, cSsr=-1, cRrr=-1, cSk=9, cMaint=10, cOqc=11, cTrain=12, cPba=13, cOcta=14, cCoreParts=-1, cMulti=15, cExam=16, cProm=17, cDet=18, cDrnps=-1;
-        let cAscEngineer=-1, cProduct=-1, cTcsScore=-1;
-        const normalizeHeader = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const parseNum = (value) => {
-          const n = parseFloat(String(value ?? '').replace(/,/g, '').replace(/[^0-9.\-]/g, ''));
-          return Number.isFinite(n) ? n : 0;
-        };
-        /** Parses Excel cell for final TCS; ignores #VALUE!, #N/A, and supports "80%" */
-        const parseExcelTcsScore = (value) => {
-          const s = String(value ?? '').trim();
-          if (!s || /^#/i.test(s)) return null;
-          const cleaned = s.replace(/%/g, '').replace(/,/g, '').trim();
-          const n = parseFloat(String(cleaned).replace(/[^0-9.\-]/g, ''));
-          if (!Number.isFinite(n)) return null;
-          return Number(Math.min(100, Math.max(0, n)).toFixed(1));
-        };
-        const quarterToMonth = (q) => {
-          const k = String(q || '').toUpperCase().replace(/\s/g, '');
-          if (k === 'Q1' || k === '1') return 'March';
-          if (k === 'Q2' || k === '2') return 'June';
-          if (k === 'Q3' || k === '3') return 'September';
-          if (k === 'Q4' || k === '4') return 'December';
-          return '';
-        };
-
-        for (let i = 0; i < Math.min(rows.length, 8); i++) {
-          const r = rows[i] || [];
-          for (let j = 0; j < r.length; j++) {
-            const v = normalizeHeader(r[j]);
-            if (
-              v === 'engineercode' ||
-              v === 'engineer' ||
-              v === 'engineerid' ||
-              (v.includes('engineer') && v.includes('code') && v.length <= 24)
-            ) {
-              cEngineerCode = j;
-              cCode = j;
-            } else if (v === 'asccode') {
-              cAscCode = j;
-              if (cCode < 0) cCode = j;
-            } else if (v === 'code' && cCode < 0) cCode = j;
-            if (v === 'name' || v === 'engineername') cName = j;
-            if (v === 'photourl') cPhoto = j;
-            if (v === 'asc' || v === 'ascname') cAsc = j;
-            if (v === 'ascengineer') cAscEngineer = j;
-            if (v === 'partnername' || v === 'partner') cPartner = j;
-            if (v === 'month') cMonth = j;
-            if (v === 'year') cYear = j;
-            if (v === 'quarter' || v === 'q') cQuarter = j;
-            if (v === 'sbaid' || v === 'sba') cSbaId = j;
-            if (v === 'product') cProduct = j;
-            if (v === 'tcsscore' || v === 'tcsscorepercent' || v === 'finaltcs' || v === 'totalscore' || v === 'finalscore') cTcsScore = j;
-            if (v === 'engineerevaluation' || v === 'evaluation') cEval = j;
-            if (v === 'redoratio' || v === 'redo') cRedo = j;
-            if (v === 'ssr' || v === 'ssrpercent') cSsr = j;
-            if (cSsr < 0 && (v === 'ssrscore' || v === 'ssrutilization')) cSsr = j;
-            if (v === 'chatbot') cMaint = j;
-            if (v === 'hass') cOqc = j;
-            if (v === 'rrr' || v === 'rrr90') cRrr = j;
-            if (v === 'iqcskipratio' || v === 'iqcskip' || v === 'iqcskippercent' || v === 'linkageratio') cSk = j;
-            if (v === 'maintenancemoderatio') cMaint = j;
-            if (v === 'oqcpassrate') cOqc = j;
-            if (v === 'trainingattendance' || v === 'q1training' || v === 'q1trainingscore' || v === 'q1trainin' || v === 'training') cTrain = j;
-            if (v === 'corepartspba') cPba = j;
-            if (v === 'corepartsocta') cOcta = j;
-            if (v === 'coreparts' || v === 'corepartspercent' || v.includes('coreparts')) cCoreParts = j;
-            if (v === 'multipartsratio') cMulti = j;
-            if (v === 'examscore' || v === 'exam') cExam = j;
-            if (v === 'promoters') cProm = j;
-            if (v === 'detractors') cDet = j;
-            if (v === 'drnps') cDrnps = j;
-          }
-          if (cCode > -1) { headerRow = i; break; }
+        const picked = pickBestTcsWorksheetRows(workbook);
+        const rows = picked.rows;
+        if (!rows.length) {
+          message.warning('No TCS worksheet with engineer data found. Check that your file has ENGINEER code and IQC Skip % columns.');
         }
-        for (let i = (headerRow > -1 ? headerRow + 1 : 1); i < rows.length; i++) {
-          const r = rows[i] || [];
-          if (cCode < 0 || !String(r[cCode] ?? '').trim()) continue;
-          const rawQuarter = cQuarter > -1 ? r[cQuarter] : '';
-          const rawMonth = cMonth > -1 ? r[cMonth] : '';
-          const rawYear = cYear > -1 ? r[cYear] : '';
-          let quarterRaw = String(rawQuarter ?? '').trim().toUpperCase();
-          let monthRaw = String(rawMonth ?? '').trim();
-          let yearRaw = String(rawYear ?? '').trim();
-
-          const serialCandidate = typeof rawMonth === 'number' ? rawMonth : parseFloat(String(monthRaw).replace(/,/g, ''));
-          if (Number.isFinite(serialCandidate) && serialCandidate >= 20000 && serialCandidate <= 60000) {
-            const conv = excelSerialToMonthYear(serialCandidate);
-            if (conv) {
-              monthRaw = conv.month;
-              if (!yearRaw) yearRaw = conv.year;
-            }
-          }
-          if (!yearRaw && typeof rawYear === 'number' && rawYear >= 20000 && rawYear <= 60000) {
-            const conv = excelSerialToMonthYear(rawYear);
-            if (conv) yearRaw = conv.year;
-          }
-          if (monthRaw && /^\d{1,2}$/.test(monthRaw)) {
-            const mi = parseInt(monthRaw, 10);
-            if (mi >= 1 && mi <= 12) monthRaw = MONTH_ORDER[mi - 1];
-          }
-          if (monthRaw && /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(monthRaw)) {
-            const p = monthRaw.split('/');
-            let yr = parseInt(p[2], 10);
-            if (yr < 100) yr += 2000;
-            const d = new Date(yr, parseInt(p[0], 10) - 1, parseInt(p[1], 10));
-            if (!Number.isNaN(d.getTime())) {
-              monthRaw = MONTH_ORDER[d.getMonth()];
-              if (!yearRaw) yearRaw = String(d.getFullYear());
-            }
-          }
-          const effectiveMonth = monthRaw || quarterToMonth(quarterRaw) || 'March';
-          let effectiveYear = normalizeYearKey(yearRaw);
-          if (!effectiveYear) effectiveYear = String(new Date().getFullYear());
-          let qNorm = quarterRaw.replace(/\s/g, '');
-          if (/^[1-4]$/.test(qNorm)) qNorm = `Q${qNorm}`;
-          const corePartsValue = cCoreParts > -1 ? parseNum(r[cCoreParts]) : 0;
-          const q1TrainingValue = cTrain > -1 ? parseNum(r[cTrain]) : 0;
-          const drnpsDirect = cDrnps > -1 ? parseNum(r[cDrnps]) : 0;
-          const examValue = cExam > -1 ? parseNum(r[cExam]) : 0;
-          const evalValue = cEval > -1 ? parseNum(r[cEval]) : 0;
-          const redoValue = cRedo > -1 ? parseNum(r[cRedo]) : 0;
-          /** SSR % is always read from Excel column H (1-based column 8 → 0-based index 7). */
-          const EXCEL_COL_H_INDEX = 7;
-          const ssrValue = parseNum(r[EXCEL_COL_H_INDEX]);
-          const rrrValue = cRrr > -1 ? parseNum(r[cRrr]) : 0;
-          const iqcCol = cSk >= 1 ? cSk - 1 : cSk;
-          const iqcValue = iqcCol > -1 ? parseNum(r[iqcCol]) : 0;
-
-          if (cProduct > -1) {
-            const prod = String(r[cProduct] || '').trim().toUpperCase();
-            const isDaAvUnifiedUpload =
-              tcsModeForProduct === 'TCS_DA' || tcsModeForProduct === 'TCS_AV' || tcsModeForProduct === 'TCS_VD';
-            if (isDaAvUnifiedUpload) {
-              if (prod && !['DA', 'AV', 'VD'].includes(prod)) continue;
-            } else if (prod && prod !== expectedProduct && !(expectedProduct === 'AV' && prod === 'VD')) {
-              continue;
-            }
-          }
-
-          const nameFromSheet = cAscEngineer > -1 ? r[cAscEngineer] : (cName > -1 ? r[cName] : '');
-          const ascNameFromSheet = cAsc > -1 ? r[cAsc] : '';
-          const sheetTcs = cTcsScore > -1 ? parseExcelTcsScore(r[cTcsScore]) : null;
-
-          const rawEngineerCode = cEngineerCode > -1 ? r[cEngineerCode] : (cCode > -1 ? r[cCode] : '');
-          const rawAscCode = cAscCode > -1 ? r[cAscCode] : '';
-          const engineerCodeNormalized = String(rawEngineerCode ?? '').trim();
-          const ascCodeNormalized = String(rawAscCode ?? '').trim();
-          const finalCodeRaw = engineerCodeNormalized || ascCodeNormalized;
-          const codeKey = finalCodeRaw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-          if (!codeKey || codeKey === 'ENGINEERCODE' || codeKey === 'ASCCODE' || codeKey === 'CODE') continue;
-          let eng = {
-            id: '',
-            name: String(nameFromSheet || "Unknown").trim(),
-            code: /^\d+$/.test(finalCodeRaw) ? finalCodeRaw : finalCodeRaw.toUpperCase(),
-            engineerCode: /^\d+$/.test(engineerCodeNormalized) ? engineerCodeNormalized : engineerCodeNormalized.toUpperCase(),
-            ascCode: /^\d+$/.test(ascCodeNormalized) ? ascCodeNormalized : ascCodeNormalized.toUpperCase(),
-            photoUrl: cPhoto > -1 ? String(r[cPhoto] || "https://picsum.photos/200") : "https://picsum.photos/200",
-            sbaId: cSbaId > -1 ? String(r[cSbaId] || '').trim() : '',
-            asc: (ascNameFromSheet ? String(ascNameFromSheet).trim() : 'N/A'),
-            product: cProduct > -1 ? String(r[cProduct] || '').trim().toUpperCase() : expectedProduct,
-            partnerName: String(r[cPartner] || "N/A"),
-            quarter: qNorm || getQuarter(effectiveMonth) || '',
-            month: effectiveMonth, year: effectiveYear,
-            engineerEvaluation: evalValue,
-            ssrScore: ssrValue,
-            rrrScore: rrrValue,
-            iqcSkipRatio: iqcValue,
-            corePartsScore: corePartsValue,
-            q1TrainingScore: q1TrainingValue,
-            drnpsScore: drnpsDirect,
-            redoRatio: redoValue,
-            maintenanceModeRatio: parseNum(r[cMaint]),
-            oqcPassRate: parseNum(r[cOqc]),
-            trainingAttendance: q1TrainingValue,
-            corePartsPBA: cPba > -1 ? parseNum(r[cPba]) : corePartsValue,
-            corePartsOcta: cOcta > -1 ? parseNum(r[cOcta]) : 0,
-            multiPartsRatio: parseNum(r[cMulti]),
-            examScore: examValue,
-            promoters: parseNum(r[cProm]),
-            detractors: parseNum(r[cDet]),
-          };
-          eng.tcsScore = sheetTcs != null ? sheetTcs : 0;
-          eng.tier = tcsModeForProduct === 'TCS_MX'
-            ? getMxEvaluationTier(eng.engineerEvaluation)
-            : getTier(eng.tcsScore);
-          uploadedRecords.push(eng);
+        const { records, headerRow } = parseTcsScoreSheetRows(rows, {
+          expectedProduct,
+          tcsMode: tcsModeForProduct,
+        });
+        if (headerRow < 0) {
+          message.warning('No TCS header row found. Use the downloaded template (Engineer Code, SSR, RRR, IQCSkipRatio, etc.).');
+        } else if (picked.sheetName) {
+          console.info(`TCS import: using sheet "${picked.sheetName}" (${records.length} rows)`);
         }
+        uploadedRecords = records.map((eng) => ({
+          ...eng,
+          tier:
+            tcsModeForProduct === 'TCS_MX'
+              ? getMxEvaluationTier(eng.engineerEvaluation)
+              : getTier(eng.tcsScore),
+        }));
       }
 
       if (uploadedRecords.length === 0) {
@@ -4463,7 +4727,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             e.month?.toLowerCase() === rec.month?.toLowerCase() &&
             String(e.year) === String(rec.year)
         );
-        const finalRec = existing ? { ...rec, id: existing.id } : rec;
+        const finalRec = existing
+          ? { ...existing, ...rec, id: existing.id, photoUrl: resolveEngineerPhotoForImport(rec, existing) }
+          : { ...rec, photoUrl: resolveEngineerPhotoForImport(rec, null) };
         if (!groupedUploadSet[targetCol]) groupedUploadSet[targetCol] = [];
         groupedUploadSet[targetCol].push(finalRec);
       }
@@ -4480,14 +4746,16 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         const currentCollection = resolveFirestoreCollection(appMode);
         const savedCurrent = savedByCollection[currentCollection] || [];
         if (savedCurrent.length > 0) {
-          setEngineers(prev => {
-            const next = [...prev];
-            savedCurrent.forEach(rec => {
-              const idx = next.findIndex(e => e.id === rec.id);
-              if (idx !== -1) next[idx] = rec;
-              else next.push(rec);
-            });
-            return next;
+          const freshEngineers = await getEngineers(currentCollection);
+          setEngineers(freshEngineers);
+          setSelectedEngineer((prev) => {
+            if (!prev) return prev;
+            const byId = freshEngineers.find((e) => e.id === prev.id);
+            if (byId) return byId;
+            const codeKey = String(prev.code || '').replace(/\D/g, '');
+            return (
+              freshEngineers.find((e) => String(e.code || '').replace(/\D/g, '') === codeKey) || prev
+            );
           });
         }
         const totalSaved = Object.values(savedByCollection).reduce((sum, arr) => sum + arr.length, 0);
@@ -5002,7 +5270,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <ChevronRight className="w-4 h-4 rotate-180" /> Return to Hub
                 </button>
 
-                <h2 className="text-6xl text-center font-black tracking-tighter text-white uppercase italic leading-none py-12">"Precision Defines Rank."</h2>
+                <h2 className="text-6xl text-center font-black tracking-tighter text-white uppercase italic leading-none py-12">&ldquo;Precision Defines Rank.&rdquo;</h2>
               </div>
 
 
@@ -5143,7 +5411,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <button
                     onClick={() => { setPortalRealm('TCS'); setAppMode('TCS_MX'); }}
-                    disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'TCS_ONLY' && currentUser.access !== 'ALL'}
+                    disabled={!canAccessTcsEnv(currentUser)}
                     className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.15em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-2 ${appMode === 'TCS_MX' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-zinc-500 hover:text-white'}`}
                   >
                     <Users className="w-4 h-4" />
@@ -5151,7 +5419,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </button>
                   <button
                     onClick={() => { setPortalRealm('TCS'); setAppMode('TCS_DA'); }}
-                    disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'TCS_ONLY' && currentUser.access !== 'ALL'}
+                    disabled={!canAccessTcsEnv(currentUser)}
                     className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.15em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-2 ${appMode === 'TCS_DA' ? 'bg-amber-600 text-white shadow-[0_0_20px_rgba(217,119,6,0.35)]' : 'text-zinc-500 hover:text-white'}`}
                   >
                     <Cpu className="w-4 h-4" />
@@ -5159,7 +5427,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </button>
                   <button
                     onClick={() => { setPortalRealm('TCS'); setAppMode('TCS_AV'); }}
-                    disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'TCS_ONLY' && currentUser.access !== 'ALL'}
+                    disabled={!canAccessTcsEnv(currentUser)}
                     className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.15em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-2 ${appMode === 'TCS_AV' || appMode === 'TCS_VD' ? 'bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.35)]' : 'text-zinc-500 hover:text-white'}`}
                   >
                     <Monitor className="w-4 h-4" />
@@ -5169,7 +5437,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <div className="w-[1px] h-8 bg-white/10 hidden md:block" />
                  <button 
                   onClick={() => { setPortalRealm('PQA'); setAppMode('PQA_MX'); }}
-                  disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'PQA_ONLY' && currentUser.access !== 'ALL'}
+                  disabled={!canAccessPqaEnv(currentUser)}
                   className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 ${appMode === 'PQA_MX' ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)]' : 'text-zinc-500 hover:text-white'}`}
                 >
                   <Building2 className="w-4 h-4" />
@@ -5177,7 +5445,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 </button>
                 <button 
                   onClick={() => { setPortalRealm('PQA'); setAppMode('PQA_CE'); }}
-                  disabled={currentUser.role !== 'SUPER_ADMIN' && currentUser.access !== 'PQA_ONLY' && currentUser.access !== 'ALL'}
+                  disabled={!canAccessPqaEnv(currentUser)}
                   className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-3 ${appMode === 'PQA_CE' ? 'bg-emerald-600 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-zinc-500 hover:text-white'}`}
                 >
                   <Activity className="w-4 h-4" />
@@ -5203,6 +5471,18 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     <span className="text-xs font-black text-white uppercase">{currentUser.name}</span>
                   </div>
                   <div className="h-8 w-[1px] bg-zinc-800 mx-1" />
+                  {adminUndoCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAdminUndo}
+                      disabled={adminUndoRunning}
+                      title="Undo last admin change (double confirmation)"
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-600/10 border border-amber-500/25 text-amber-300 hover:bg-amber-600/20 transition-all disabled:opacity-40 text-[9px] font-black uppercase tracking-widest"
+                    >
+                      <Undo2 className="w-4 h-4" />
+                      Undo ({adminUndoCount})
+                    </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="p-2 bg-red-600/10 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all group"
@@ -5212,8 +5492,61 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 </div>
               </div>
 
+              <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-2xl bg-zinc-900/60 border border-white/5 text-[10px] font-bold text-zinc-400">
+                <span className="text-zinc-500 uppercase tracking-widest">Working on</span>
+                <span className="text-white font-black uppercase">{appMode || '—'}</span>
+                <span className="text-zinc-700">·</span>
+                <span>{engineers.length} active record{engineers.length === 1 ? '' : 's'}</span>
+                {fetchedHiddenEngineers.length > 0 && (
+                  <>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-red-400/90">{fetchedHiddenEngineers.length} archived</span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 border-b border-white/10 pb-4">
+                {[
+                  { key: 'data', label: 'Data', show: canAccessModule(currentUser, 'tcs') || canAccessModule(currentUser, 'pqa') },
+                  {
+                    key: 'display',
+                    label: 'Display',
+                    show:
+                      canWriteModule(currentUser, 'survey')
+                      || canWriteModule(currentUser, 'feedback')
+                      || canReadModule(currentUser, 'tcs')
+                      || currentUser.role === 'SUPER_ADMIN',
+                  },
+                  { key: 'survey', label: 'Survey', show: canAccessModule(currentUser, 'survey') },
+                  { key: 'feedback', label: 'Feedback', show: canAccessModule(currentUser, 'feedback') },
+                  ...(currentUser.role === 'SUPER_ADMIN'
+                    ? [
+                        { key: 'insights', label: 'Insights' },
+                        { key: 'system', label: 'System' },
+                      ]
+                    : []),
+                ]
+                  .filter((tab) => tab.show !== false)
+                  .map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setAdminPanelTab(tab.key)}
+                    className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      adminPanelTab === tab.key
+                        ? 'bg-blue-600 text-white shadow-[0_0_16px_rgba(37,99,235,0.35)]'
+                        : 'bg-zinc-900 text-zinc-500 border border-white/5 hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {adminPanelTab === 'data' && (
+              <div className="space-y-8">
               {/* TCS — active profile workspace (division chosen in strip above; no duplicate tabs — full list is Live Registry below) */}
-              {(currentUser.role === 'SUPER_ADMIN' || currentUser.access === 'TCS_ONLY' || currentUser.access === 'ALL') && appMode?.startsWith('TCS') && (() => {
+              {(canAccessModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (() => {
                 const activeTcs =
                   appMode === 'TCS_DA' ? 'TCS_DA' : appMode === 'TCS_AV' || appMode === 'TCS_VD' ? 'TCS_AV' : 'TCS_MX';
                 const tabDef = {
@@ -5228,7 +5561,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <p className="text-[9px] font-black uppercase tracking-[0.35em] text-blue-400 mb-1">TCS bulk data — {cur.short}</p>
                       <h3 className="text-lg font-black text-white uppercase tracking-tight">{cur.label}</h3>
                       <p className="text-[10px] text-zinc-500 font-medium max-w-2xl">
-                        Template <strong className="text-zinc-300">Engineer Code</strong> is what engineers use in search. <strong className="text-zinc-300">Product</strong> = {cur.short} (legacy VD is accepted for AV). Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>. Full roster and edits: <strong className="text-zinc-400">Live Engineer Registry</strong> below.
+                        Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">Engineer Code</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/30 p-5 flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:items-center sm:justify-between">
@@ -5242,6 +5575,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         </div>
                       </div>
                       <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
+                        {adminCanReadData && (
                         <button
                           type="button"
                           onClick={() => downloadTcsDivisionTemplate(activeTcs)}
@@ -5249,53 +5583,29 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         >
                           <Download className="w-4 h-4" /> Template
                         </button>
+                        )}
+                        {adminCanWriteData && (
                         <label className="flex flex-1 items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase tracking-wider hover:bg-blue-600/30 cursor-pointer transition-all">
                           <Upload className="w-4 h-4" /> Upload
                           <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => handleExcelUpload(e, { targetTcsMode: activeTcs })} />
                         </label>
+                        )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      disabled={tcsProductImagesSyncing}
-                      onClick={async () => {
-                        setTcsProductImagesSyncing(true);
-                        try {
-                          const urls = await uploadTcsAllProductImagesFromPublic();
-                          message.success(`Saved to Firebase: tcs/all-products-images/ — mx, da, vd (${Object.keys(urls).length} files).`);
-                        } catch (e) {
-                          console.error(e);
-                          message.error(e?.message || 'Upload failed. Check Storage rules for tcs/all-products-images/*');
-                        } finally {
-                          setTcsProductImagesSyncing(false);
-                        }
-                      }}
-                      className="flex w-full flex-row items-center justify-center gap-2 rounded-2xl border border-cyan-500/25 bg-cyan-600/10 px-5 py-4 font-black text-[10px] uppercase tracking-wider text-cyan-200 transition-all hover:bg-cyan-600/20 disabled:opacity-40"
-                    >
-                      {tcsProductImagesSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                      {tcsProductImagesSyncing ? 'Uploading…' : 'Save division images to Firebase (tcs/all-products-images)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleClearTcsDivisionData(activeTcs === 'TCS_AV' ? 'TCS_AV' : activeTcs)}
-                      className="flex w-full flex-row items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-600/10 px-5 py-4 font-black text-[10px] uppercase tracking-wider text-red-300 transition-all hover:bg-red-600/20"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                      Clear {cur.short} ({cur.collection})
-                    </button>
                   </div>
                 );
               })()}
 
               {/* PQA — active profile workspace (division chosen in strip above; roster below) */}
-              {(currentUser.role === 'SUPER_ADMIN' || currentUser.access === 'PQA_ONLY' || currentUser.access === 'ALL') && isPqaMode && (
+              {(canAccessModule(currentUser, 'pqa') && isPqaMode) && (
                 <div className="rounded-[2rem] border border-yellow-500/15 bg-zinc-900/40 p-6 md:p-8 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-[0.35em] text-yellow-500/90 mb-1">PQA bulk data — {appMode === 'PQA_CE' ? 'CE' : 'MX'}</p>
                     <h3 className="text-lg font-black text-white uppercase tracking-tight">PQA Excel (multi-sheet)</h3>
-                    <p className="text-[10px] text-zinc-500 font-medium mt-1">Template includes ★Evaluation point and ★Monthly Average. Upload applies to <strong className="text-zinc-400">{appMode}</strong>. Full service-center list: <strong className="text-zinc-400">Live Engineer Registry</strong> below.</p>
+                    <p className="text-[10px] text-zinc-500 font-medium mt-1">Template includes ★Evaluation point and ★Monthly Average. Upload applies to <strong className="text-zinc-400">{appMode}</strong>. Manage centers in the registry below.</p>
                   </div>
                   <div className="flex flex-wrap gap-3 shrink-0">
+                    {adminCanReadData && (
                     <button
                       type="button"
                       onClick={downloadExcelTemplate}
@@ -5303,333 +5613,635 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     >
                       <Download className="w-4 h-4" /> PQA template
                     </button>
+                    )}
+                    {adminCanWriteData && (
                     <label className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-200 text-[10px] font-black uppercase tracking-wider hover:bg-yellow-500/25 cursor-pointer transition-all">
                       <Upload className="w-4 h-4" /> PQA upload
                       <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
                     </label>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Operations — tools first; TCS clear split by division below */}
-              <div className="rounded-[2rem] border border-white/10 bg-zinc-900/35 p-6 md:p-8 space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 border-b border-white/5 pb-4">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500 mb-1">Operations</p>
-                    <h3 className="text-base font-black text-white uppercase tracking-tight">Tools & registry</h3>
-                    <p className="text-[10px] text-zinc-500 font-medium mt-1 max-w-lg">Add records, guides, and logs. Clear archived division data only when you intend to reset that Firestore collection.</p>
+              {adminCanWriteData && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingEng({
+                    id: '', name: '', code: '',
+                    photoUrl: appMode?.startsWith('PQA') ? PQA_SERVICE_CENTER_PHOTO : DEFAULT_ENGINEER_PHOTO_URL,
+                    asc: '', partnerName: '', month: 'March', year: '2026',
+                    redoRatio: '', iqcSkipRatio: '', maintenanceModeRatio: '', oqcPassRate: '',
+                    trainingAttendance: '', corePartsPBA: '', corePartsOcta: '', multiPartsRatio: '',
+                    examScore: '', promoters: '', detractors: '', tcsScore: 0, tier: 'Bronze'
+                  })}
+                  className="flex items-center gap-2 bg-white text-black px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all shadow-xl"
+                >
+                  <Plus className="w-5 h-5" />
+                  {appMode?.startsWith('PQA') ? 'Add Service Center' : 'Add Engineer'}
+                </button>
+              </div>
+              )}
+
+              {(adminCanReadData || adminCanWriteData) && (
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-[1px] w-8 bg-zinc-800" />
+                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">
+                      Live {appMode?.startsWith('PQA') ? 'Service Center' : 'Engineer'} Registry
+                    </h3>
                   </div>
+                  <button
+                    onClick={() => setNoEngineers(!noEngineers)}
+                    className="flex items-center gap-3 px-6 py-3 bg-zinc-900 border border-white/5 rounded-full text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-white transition-all shadow-xl"
+                  >
+                    <Eye className="w-4 h-4" />
+                    {noEngineers ? "Minimize Archives" : "Inspect Archives"}
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  <button
-                    onClick={() => setEditingEng({
-                      id: '', name: '', code: '',
-                      photoUrl: appMode?.startsWith('PQA') ? PQA_SERVICE_CENTER_PHOTO : 'https://picsum.photos/200',
-                      asc: '', partnerName: '', month: 'March', year: '2026',
-                      redoRatio: '', iqcSkipRatio: '', maintenanceModeRatio: '', oqcPassRate: '',
-                      trainingAttendance: '', corePartsPBA: '', corePartsOcta: '', multiPartsRatio: '',
-                      examScore: '', promoters: '', detractors: '', tcsScore: 0, tier: 'Bronze'
-                    })}
-                    className="flex flex-col items-center gap-2 bg-white text-black p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all shadow-xl"
-                  >
-                    <Plus className="w-5 h-5" />
-                    {appMode?.startsWith('PQA') ? 'Add Service Center' : 'Add Engineer'}
-                  </button>
-
-                  {currentUser?.role === 'SUPER_ADMIN' && (
+                {currentUser?.role === 'SUPER_ADMIN' && (
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={seedDatabase}
-                      disabled={isSaving}
-                      className="flex flex-col items-center gap-2 bg-purple-600/10 border border-purple-500/20 text-purple-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-purple-600/20 transition-all disabled:opacity-50"
-                      title="Seed database with initial demo data"
+                      onClick={() => setBulkSelectedIds(allVisibleSelected ? [] : visibleRegistryIds)}
+                      className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-full text-[9px] font-black text-zinc-400 uppercase tracking-widest hover:text-white transition-all"
                     >
-                      <RefreshCw className={`w-5 h-5 ${isSaving ? 'animate-spin' : ''}`} />
-                      Seed Database
+                      {allVisibleSelected ? 'Clear Selection' : 'Select All'}
                     </button>
-                  )}
-
-                  {currentUser?.role === 'SUPER_ADMIN' && (
                     <button
-                      onClick={() => setAdminModal('accounts')}
-                      className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
+                      onClick={bulkArchiveEngineersHandler}
+                      disabled={bulkSelectedIds.length === 0}
+                      className="px-4 py-2 bg-red-600/10 border border-red-500/20 rounded-full text-[9px] font-black text-red-400 uppercase tracking-widest hover:bg-red-600/20 transition-all disabled:opacity-40"
                     >
-                      <Settings className="w-5 h-5" />
-                      Manage Accounts
-                    </button>
-                  )}
-
-                  {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.access === 'TCS_ONLY' || currentUser?.access === 'ALL') && (
-                    <button
-                      onClick={openTcsWinnersHub}
-                      className="flex flex-col items-center gap-2 bg-zinc-900 border border-blue-500/20 text-blue-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-blue-600/10 transition-all"
-                    >
-                      <Award className="w-5 h-5" />
-                      Dashboard Winners
-                    </button>
-                  )}
-
-                  <button
-                    onClick={exportSamsungAcademySurveys}
-                    disabled={academySurveyExporting}
-                    className="flex flex-col items-center gap-2 bg-zinc-900 border border-emerald-500/20 text-emerald-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-emerald-600/10 transition-all disabled:opacity-40"
-                  >
-                    {academySurveyExporting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                    Export Academy Survey
-                  </button>
-
-                  <button
-                    onClick={() => (isPqaMode ? setView('PQA_INFO') : setAdminModal('guide'))}
-                    className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
-                  >
-                    <BookOpen className="w-5 h-5" />
-                    {isPqaMode ? 'PQA Guide' : 'TCS Guide'}
-                  </button>
-
-                  {currentUser?.role === 'SUPER_ADMIN' && (
-                    <button
-                      onClick={() => { setAdminModal('logs'); loadLogs(); }}
-                      className="flex flex-col items-center gap-2 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all border bg-zinc-900 border border-white/5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                    >
-                      <Activity className="w-5 h-5" />
-                      Actions Log
-                    </button>
-                  )}
-                </div>
-
-                {currentUser?.role === 'SUPER_ADMIN' && isPqaMode && (
-                  <div className="border-t border-white/5 pt-5">
-                    <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-500/90 mb-3">PQA — clear current division</p>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!window.confirm(`⚠️ Archive ALL records for ${appMode}?`)) return;
-                        try {
-                          await Promise.all(engineers.map((e) => archiveEngineer(e.id, colName)));
-                          setEngineers([]);
-                          message.success(`${appMode} data cleared.`);
-                        } catch (err) {
-                          message.error('Failed to clear database.');
-                        }
-                      }}
-                      className="flex w-full max-w-md flex-row items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-600/10 px-5 py-4 font-black text-[10px] uppercase tracking-wider text-red-400 transition-all hover:bg-red-600/20 sm:w-auto"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                      Clear {appMode} data
+                      Bulk Delete ({bulkSelectedIds.length})
                     </button>
                   </div>
                 )}
 
-              </div>
-
-              {/* Analytics Panel (Super Admin Only) */}
-              {currentUser?.role === 'SUPER_ADMIN' && analyticsSummary && (() => {
-                const today = new Date().toISOString().slice(0, 10);
-                const todayVisitors = analyticsSummary.dailyVisitorHits?.[today] || 0;
-                const todayAdmins = analyticsSummary.dailyAdminLogins?.[today] || 0;
-                const avgVMs = analyticsSummary.avgVisitorSessionMs || 0;
-                const avgVMin = Math.floor(avgVMs / 60000);
-                const avgVSec = Math.floor((avgVMs % 60000) / 1000);
-                const avgAMs = analyticsSummary.avgAdminSessionMs || 0;
-                const avgAMin = Math.floor(avgAMs / 60000);
-                const avgASec = Math.floor((avgAMs % 60000) / 1000);
-                return (
-                  <div className="glass-card rounded-[2.5rem] p-8 space-y-6 border border-blue-500/10">
-                    <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-                      <BarChart3 className="w-4 h-4 text-blue-400" />
-                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Global App Analytics</h3>
+                {/* Archive Stack */}
+                {noEngineers && fetchedHiddenEngineers.length > 0 && (
+                  <>
+                  {currentUser?.role === 'SUPER_ADMIN' && (
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
-                        onClick={refreshAnalytics}
-                        disabled={analyticsLoading}
-                        className="ml-auto flex items-center gap-1 px-3 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[8px] font-black text-blue-400 uppercase tracking-widest hover:bg-blue-600/20 transition-all disabled:opacity-40"
+                        onClick={() => setBulkSelectedArchivedIds(allArchivedSelected ? [] : archivedRegistryIds)}
+                        className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-full text-[9px] font-black text-zinc-400 uppercase tracking-widest hover:text-white transition-all"
                       >
-                        <RefreshCw className={`w-3 h-3 ${analyticsLoading ? 'animate-spin' : ''}`} />
-                         Refresh
+                        {allArchivedSelected ? 'Clear Selection' : 'Select All'}
+                      </button>
+                      <button
+                        onClick={bulkRestoreEngineersHandler}
+                        disabled={bulkSelectedArchivedIds.length === 0}
+                        className="px-4 py-2 bg-emerald-600/10 border border-emerald-500/20 rounded-full text-[9px] font-black text-emerald-400 uppercase tracking-widest hover:bg-emerald-600/20 transition-all disabled:opacity-40"
+                      >
+                        Restore Selected ({bulkSelectedArchivedIds.length})
+                      </button>
+                      <button
+                        onClick={bulkDeleteArchivedEngineersHandler}
+                        disabled={bulkSelectedArchivedIds.length === 0}
+                        className="px-4 py-2 bg-red-600/10 border border-red-500/20 rounded-full text-[9px] font-black text-red-400 uppercase tracking-widest hover:bg-red-600/20 transition-all disabled:opacity-40"
+                      >
+                        Delete From Archive ({bulkSelectedArchivedIds.length})
                       </button>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       {/* Visitor Stats */}
-                       <div className="space-y-4">
-                        <p className="text-[8px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-2">
-                          <UserCircle className="w-3 h-3" /> Visitor Traffic
-                        </p>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Total Hits</p>
-                            <p className="text-2xl font-black text-emerald-400 italic">{analyticsSummary.visitorHits ?? '—'}</p>
-                          </div>
-                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Today</p>
-                            <p className="text-2xl font-black text-emerald-400 italic">{todayVisitors}</p>
-                          </div>
-                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Avg Time</p>
-                            <p className="text-sm font-black text-emerald-400 italic">{avgVMin}m {avgVSec}s</p>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-500">
+                    {fetchedHiddenEngineers.map(eng => (
+                      <div key={eng.id} className="bg-red-950/10 border border-red-900/20 p-6 rounded-3xl flex items-center justify-between group hover:bg-red-900/20 transition-all">
+                        <div className="flex items-center gap-5">
+                          {currentUser?.role === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => setBulkSelectedArchivedIds((prev) => prev.includes(eng.id) ? prev.filter((id) => id !== eng.id) : [...prev, eng.id])}
+                              className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${
+                                bulkSelectedArchivedIds.includes(eng.id)
+                                  ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400'
+                                  : 'bg-zinc-900 border-white/15 text-transparent hover:border-white/35'
+                              }`}
+                              title={bulkSelectedArchivedIds.includes(eng.id) ? 'Deselect' : 'Select'}
+                            >
+                              <CheckCircle className="w-3 h-3" />
+                            </button>
+                          )}
+                          <img
+                            src={getPhotoUrl(eng)}
+                            onError={handleEngineerPhotoError}
+                            className={`w-12 h-12 rounded-xl grayscale opacity-40 shadow-2xl ${getLogoStyle(getPhotoUrl(eng))}`}
+                            alt={tcsDisplayPrimary(eng)}
+                          />
+                          <div>
+                            <p className="text-sm font-black text-zinc-500 uppercase tracking-tight line-through opacity-50">{tcsDisplayPrimary(eng)}</p>
+                            {tcsDisplaySecondary(eng) ? (
+                              <p className="text-[10px] font-bold text-zinc-600 line-through opacity-50 mt-0.5 normal-case">{tcsDisplaySecondary(eng)}</p>
+                            ) : null}
+                            <span className="text-[9px] font-black text-red-500 tracking-widest uppercase mt-1 block">ARCHIVED : {eng.code}</span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                          <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-3 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">TCS mode picks</p>
-                            <p className="text-lg font-black text-emerald-300 italic">{analyticsSummary.visitorHitsTCS ?? '—'}</p>
-                          </div>
-                          <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-3 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">PQA mode picks</p>
-                            <p className="text-lg font-black text-emerald-300 italic">{analyticsSummary.visitorHitsPQA ?? '—'}</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => restoreEngineerHandler(eng.id)}
+                            className="p-4 bg-zinc-900 text-zinc-500 rounded-xl hover:bg-green-600 hover:text-white transition-all"
+                            title="Restore archived record"
+                          >
+                            <Upload className="w-4 h-4" />
+                          </button>
+                          {currentUser?.role === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => deleteArchivedEngineerHandler(eng.id)}
+                              className="p-4 bg-zinc-900 text-zinc-500 rounded-xl hover:bg-red-600 hover:text-white transition-all"
+                              title="Delete permanently from archive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  </>
+                )}
+
+                {/* Active Registry Stack — deduplicated: one row per engineer (newest record) */}
+                <div className="grid grid-cols-1 gap-px bg-white/5 border border-white/5 rounded-[3rem] overflow-hidden shadow-3xl">
+                  {deduplicatedEngineers.length === 0 ? (
+                    <div className="p-24 text-center text-zinc-700 italic font-black uppercase tracking-[0.3em]">No registry entries detected.</div>
+                  ) : deduplicatedEngineers.map((eng, idx) => (
+
+                    <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-3 md:p-6 flex items-center justify-between gap-2 group">
+                      <div className="flex items-center gap-3 md:gap-6 min-w-0 flex-1">
+                      {currentUser?.role === 'SUPER_ADMIN' && (
+                        <button
+                          onClick={() => setBulkSelectedIds((prev) => prev.includes(eng.id) ? prev.filter((id) => id !== eng.id) : [...prev, eng.id])}
+                          className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${
+                            bulkSelectedIds.includes(eng.id)
+                              ? 'bg-red-600/20 border-red-500 text-red-400'
+                              : 'bg-zinc-900 border-white/15 text-transparent hover:border-white/35'
+                          }`}
+                          title={bulkSelectedIds.includes(eng.id) ? 'Deselect' : 'Select'}
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                        </button>
+                      )}
+                      <div className="w-10 h-10 md:w-14 md:h-14 relative flex-shrink-0">
+                          <img
+                            src={getPhotoUrl(eng)}
+                            onError={handleEngineerPhotoError}
+                            className={`w-full h-full rounded-xl md:rounded-2xl grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80 ${getLogoStyle(getPhotoUrl(eng))}`}
+                            alt={tcsDisplayPrimary(eng)}
+                          />
+                          {isPqaMode ? (
+                            // PQA: show numeric rank in corner
+                            (() => {
+                              const pqaRank = deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === eng.code?.toUpperCase()) + 1;
+                              const isTopThree = pqaRank <= 3;
+                              return (
+                                <div className={`absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black flex items-center justify-center text-[8px] font-black italic ${
+                                  pqaRank === 1 ? 'bg-yellow-500 text-black' :
+                                  pqaRank === 2 ? 'bg-zinc-300 text-black' :
+                                  pqaRank === 3 ? 'bg-orange-500 text-black' :
+                                  'bg-zinc-800 text-zinc-400'
+                                }`}>{pqaRank}</div>
+                              );
+                            })()
+                          ) : (
+                            <div className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black bg-black flex items-center justify-center">
+                              <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-4 h-4 object-contain tier-emblem-blend" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <h4 className="text-xs md:text-base font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors truncate">{tcsDisplayPrimary(eng)}</h4>
+                          {tcsDisplaySecondary(eng) ? (
+                            <p className="text-[9px] md:text-[10px] font-bold text-zinc-500 mt-0.5 truncate normal-case tracking-normal">{tcsDisplaySecondary(eng)}</p>
+                          ) : null}
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {isPqaMode && (
+                              <span className="text-[7px] md:text-[9px] font-black text-zinc-600 uppercase tracking-widest">{eng.code}</span>
+                            )}
+                            {isPqaMode ? (
+                              // PQA: show numeric rank pill
+                              (() => {
+                                const pqaRank = deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === eng.code?.toUpperCase()) + 1;
+                                return (
+                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                                    pqaRank === 1 ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' :
+                                    pqaRank === 2 ? 'bg-zinc-300/10 border-zinc-300/30 text-zinc-300' :
+                                    pqaRank === 3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
+                                    'bg-zinc-800/60 border-white/5 text-zinc-500'
+                                  }`}>#{pqaRank}</span>
+                                );
+                              })()
+                            ) : (
+                              <TierBadge tier={eng.tier} size="sm" />
+                            )}
+                            {eng.sbaId && isPqaMode && (
+                              <span className="text-[7px] md:text-[9px] font-black text-zinc-500 uppercase tracking-widest">SBA: {eng.sbaId}</span>
+                            )}
+                            {(eng.quarter || getQuarter(eng.month)) && (
+                              <span className="text-[7px] md:text-[9px] font-black text-zinc-600 uppercase tracking-widest">
+                                {(eng.quarter || getQuarter(eng.month))} · {eng.year}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Admin Stats */}
-                      <div className="space-y-4">
-                        <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
-                          <ShieldCheck className="w-3 h-3" /> Admin Activity
-                        </p>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Logins</p>
-                            <p className="text-2xl font-black text-blue-400 italic">{analyticsSummary.adminLogins ?? '—'}</p>
-                          </div>
-                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Today</p>
-                            <p className="text-2xl font-black text-blue-400 italic">{todayAdmins}</p>
-                          </div>
-                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-center">
-                            <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Avg Time</p>
-                            <p className="text-sm font-black text-blue-400 italic">{avgAMin}m {avgASec}s</p>
-                          </div>
+                      <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+                        <div className="text-right">
+                          <span className="text-sm md:text-xl font-black text-white tracking-widest italic">
+                            {appMode?.startsWith('PQA') ? resolvePqaTcsScorePure(eng) : eng.tcsScore}
+                          </span>
+                          <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA' : 'TCS'}</p>
                         </div>
+                        {adminCanWriteData && (
+                        <div className="flex gap-1 md:gap-2">
+                          <button
+                            onClick={() => setEditingEng(eng)}
+                            className="p-2 md:p-3 bg-zinc-900 text-zinc-500 rounded-lg md:rounded-2xl hover:bg-white hover:text-black transition-all"
+                          >
+                            <Edit2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteEngineerHandler(eng.id)}
+                            className="p-2 md:p-3 bg-zinc-900 text-zinc-500 rounded-lg md:rounded-2xl hover:bg-red-600 hover:text-white transition-all"
+                          >
+                            <Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                          </button>
+                        </div>
+                        )}
                       </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+              )}
+              </div>
+              )}
+
+              {adminPanelTab === 'display' && (
+                <div className="space-y-6">
+                  <div className="rounded-[2rem] border border-white/10 bg-zinc-900/35 p-6 md:p-8 space-y-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500">Display</p>
+                    <h3 className="text-base font-black text-white uppercase tracking-tight">Public dashboard settings</h3>
+                    <p className="text-[10px] text-zinc-500 font-medium max-w-lg">Configure what visitors see on leaderboards and exports.</p>
+                    {canWriteModule(currentUser, 'survey') && (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-emerald-500/20 bg-zinc-950/60 p-5">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Samsung Academy survey popup</p>
+                        <p className="text-[10px] text-zinc-500 font-medium leading-relaxed max-w-md">
+                          When ON, TCS portal visitors see the floating &quot;Samsung Academy Survey&quot; button. When OFF, it is hidden for everyone until you turn it back on.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${academySurveyPopupEnabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                          {academySurveySettingsLoading ? '…' : academySurveyPopupEnabled ? 'On' : 'Off'}
+                        </span>
+                        <Switch
+                          checked={academySurveyPopupEnabled}
+                          loading={academySurveySettingsLoading || academySurveySettingsSaving}
+                          onChange={handleAcademySurveyPopupToggle}
+                        />
+                      </div>
+                    </div>
+                    )}
+                    {canWriteModule(currentUser, 'feedback') && (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-purple-500/20 bg-zinc-950/60 p-5">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-purple-400">Engineer feedback (Arabic form)</p>
+                        <p className="text-[10px] text-zinc-500 font-medium leading-relaxed max-w-md">
+                          When ON, visitors see a home popup and floating shortcut; the submission form stays in Arabic. Dismiss hides until browser refresh.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${feedbackEnabled ? 'text-purple-400' : 'text-zinc-500'}`}>
+                          {academySurveySettingsLoading ? '…' : feedbackEnabled ? 'On' : 'Off'}
+                        </span>
+                        <Switch
+                          checked={feedbackEnabled}
+                          loading={academySurveySettingsLoading || academySurveySettingsSaving}
+                          onChange={handleFeedbackEnabledToggle}
+                        />
+                      </div>
+                    </div>
+                    )}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                      {(canReadModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (
+                        <button
+                          type="button"
+                          onClick={openTcsWinnersHub}
+                          className="flex flex-col items-center gap-2 bg-zinc-900 border border-blue-500/20 text-blue-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-blue-600/10 transition-all"
+                        >
+                          <Award className="w-5 h-5" />
+                          Dashboard Winners
+                        </button>
+                      )}
+                      {canAccessModule(currentUser, 'survey') && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminPanelTab('survey')}
+                        className="flex flex-col items-center gap-2 bg-zinc-900 border border-emerald-500/20 text-emerald-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-emerald-600/10 transition-all"
+                      >
+                        <ClipboardList className="w-5 h-5" />
+                        Survey analytics
+                      </button>
+                      )}
+                      {canAccessModule(currentUser, 'feedback') && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminPanelTab('feedback')}
+                        className="flex flex-col items-center gap-2 bg-zinc-900 border border-purple-500/20 text-purple-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-purple-600/10 transition-all"
+                      >
+                        <MessageSquare className="w-5 h-5" />
+                        Feedback export
+                      </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => (isPqaMode ? setView('PQA_INFO') : setAdminModal('guide'))}
+                        className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
+                      >
+                        <BookOpen className="w-5 h-5" />
+                        {isPqaMode ? 'PQA Guide' : 'TCS Guide'}
+                      </button>
+                      {(canReadModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (
+                        <button
+                          type="button"
+                          disabled={tcsProductImagesSyncing}
+                          onClick={async () => {
+                            setTcsProductImagesSyncing(true);
+                            try {
+                              const urls = await uploadTcsAllProductImagesFromPublic();
+                              message.success(`Saved to Firebase: tcs/all-products-images/ (${Object.keys(urls).length} files).`);
+                            } catch (e) {
+                              console.error(e);
+                              const isStorageDenied =
+                                String(e?.code || '').includes('storage/unauthorized') ||
+                                String(e?.message || '').includes('storage/unauthorized');
+                              message.error(
+                                isStorageDenied
+                                  ? 'Storage blocked by Firebase rules. Open Storage Rules (link under Sync Division Images), paste rules, click Publish, then try again.'
+                                  : e?.message || 'Upload failed.'
+                              );
+                            } finally {
+                              setTcsProductImagesSyncing(false);
+                            }
+                          }}
+                          className="flex flex-col items-center gap-2 bg-zinc-900 border border-cyan-500/20 text-cyan-300 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-cyan-600/10 transition-all disabled:opacity-40 col-span-2 sm:col-span-1"
+                        >
+                          {tcsProductImagesSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                          Sync Division Images
+                        </button>
+                      )}
+                      {(canReadModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (
+                        <p className="col-span-2 text-[10px] text-zinc-500 leading-relaxed mt-1">
+                          First-time upload?{' '}
+                          <a
+                            href={FIREBASE_STORAGE_RULES_CONSOLE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 underline"
+                          >
+                            Open Firebase Storage Rules
+                          </a>
+                          {' → '}
+                          <button
+                            type="button"
+                            className="text-cyan-400 underline"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(FIREBASE_STORAGE_RULES_SNIPPET);
+                                message.success('Rules copied. Paste in Firebase → Publish, then Sync again.');
+                              } catch {
+                                message.info('Copy storage.rules from the project folder manually.');
+                              }
+                            }}
+                          >
+                            Copy rules
+                          </button>
+                          {' → Publish → Sync Division Images.'}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                );
-              })()}
+                </div>
+              )}
+
+              {adminPanelTab === 'survey' && canAccessModule(currentUser, 'survey') && (
+                <div className="rounded-[2rem] border border-emerald-500/15 bg-zinc-900/35 p-6 md:p-8">
+                  {canReadModule(currentUser, 'survey') ? (
+                    <SamsungAcademySurveyDashboard
+                      message={message}
+                      onExported={handleSamsungAcademySurveyExported}
+                      allowExport={canReadModule(currentUser, 'survey')}
+                    />
+                  ) : (
+                    <div className="space-y-4 text-center py-12">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Survey — write access</p>
+                      <p className="text-sm text-zinc-500 max-w-md mx-auto">
+                        You can change public survey settings in the Display tab. Analytics and export require read access.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setAdminPanelTab('display')}
+                        className="px-6 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-[10px] font-black uppercase tracking-widest text-emerald-200"
+                      >
+                        Open Display settings
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminPanelTab === 'feedback' && canAccessModule(currentUser, 'feedback') && (
+                <div className="rounded-[2rem] border border-purple-500/15 bg-zinc-900/35 p-6 md:p-8">
+                  {canReadModule(currentUser, 'feedback') ? (
+                    <ArabicFeedbackDashboard
+                      message={message}
+                      onExported={handleArabicFeedbackExported}
+                      allowExport={canReadModule(currentUser, 'feedback')}
+                    />
+                  ) : (
+                    <div className="space-y-4 text-center py-12">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-purple-400">Feedback — write access</p>
+                      <p className="text-sm text-zinc-500 max-w-md mx-auto">
+                        You can change the public feedback form in the Display tab. Analytics and export require read access.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setAdminPanelTab('display')}
+                        className="px-6 py-3 rounded-xl bg-purple-600/20 border border-purple-500/30 text-[10px] font-black uppercase tracking-widest text-purple-200"
+                      >
+                        Open Display settings
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminPanelTab === 'insights' && currentUser?.role === 'SUPER_ADMIN' && (
+                <div className="space-y-6">
+                  {analyticsSummary && (() => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    const todayVisitors = analyticsSummary.dailyVisitorHits?.[today] || 0;
+                    const todayAdmins = analyticsSummary.dailyAdminLogins?.[today] || 0;
+                    const avgVMs = analyticsSummary.avgVisitorSessionMs || 0;
+                    const avgVMin = Math.floor(avgVMs / 60000);
+                    const avgVSec = Math.floor((avgVMs % 60000) / 1000);
+                    const avgAMs = analyticsSummary.avgAdminSessionMs || 0;
+                    const avgAMin = Math.floor(avgAMs / 60000);
+                    const avgASec = Math.floor((avgAMs % 60000) / 1000);
+                    return (
+                      <div className="glass-card rounded-[2.5rem] p-8 space-y-6 border border-blue-500/10">
+                        <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                          <BarChart3 className="w-4 h-4 text-blue-400" />
+                          <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Traffic &amp; usage</h3>
+                          <button
+                            type="button"
+                            onClick={refreshAnalytics}
+                            disabled={analyticsLoading}
+                            className="ml-auto flex items-center gap-1 px-3 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[8px] font-black text-blue-400 uppercase tracking-widest hover:bg-blue-600/20 transition-all disabled:opacity-40"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${analyticsLoading ? 'animate-spin' : ''}`} />
+                            Refresh
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="space-y-4">
+                            <p className="text-[8px] font-black text-purple-500 uppercase tracking-widest flex items-center gap-2">
+                              <UserCircle className="w-3 h-3" /> Visitor traffic
+                            </p>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center">
+                                <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Total hits</p>
+                                <p className="text-2xl font-black text-emerald-400 italic">{analyticsSummary.visitorHits ?? '—'}</p>
+                              </div>
+                              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center">
+                                <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Today</p>
+                                <p className="text-2xl font-black text-emerald-400 italic">{todayVisitors}</p>
+                              </div>
+                              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 text-center">
+                                <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Avg time</p>
+                                <p className="text-sm font-black text-emerald-400 italic">{avgVMin}m {avgVSec}s</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
+                              <ShieldCheck className="w-3 h-3" /> Admin activity
+                            </p>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-center">
+                                <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Logins</p>
+                                <p className="text-2xl font-black text-blue-400 italic">{analyticsSummary.adminLogins ?? '—'}</p>
+                              </div>
+                              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-center">
+                                <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Today</p>
+                                <p className="text-2xl font-black text-blue-400 italic">{todayAdmins}</p>
+                              </div>
+                              <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-center">
+                                <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">Avg time</p>
+                                <p className="text-sm font-black text-blue-400 italic">{avgAMin}m {avgASec}s</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    onClick={() => { setAdminModal('logs'); loadLogs(); }}
+                    className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-zinc-900 border border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+                  >
+                    <Activity className="w-5 h-5" />
+                    Open audit log
+                  </button>
+                </div>
+              )}
+
+              {adminPanelTab === 'system' && currentUser?.role === 'SUPER_ADMIN' && (
+                <div className="space-y-6">
+                  <div className="rounded-[2rem] border border-white/10 bg-zinc-900/35 p-6 md:p-8 space-y-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500">System</p>
+                    <h3 className="text-base font-black text-white uppercase tracking-tight">Accounts &amp; maintenance</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setAdminModal('accounts')}
+                        className="flex flex-col items-center gap-2 bg-zinc-900 border border-white/5 text-zinc-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-800 hover:text-white transition-all"
+                      >
+                        <Settings className="w-5 h-5" />
+                        Manage accounts
+                      </button>
+                      <button
+                        type="button"
+                        onClick={seedDatabase}
+                        disabled={isSaving}
+                        className="flex flex-col items-center gap-2 bg-purple-600/10 border border-purple-500/20 text-purple-400 p-5 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-purple-600/20 transition-all disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-5 h-5 ${isSaving ? 'animate-spin' : ''}`} />
+                        Seed database
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-[2rem] border border-red-500/20 bg-red-950/10 p-6 md:p-8 space-y-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.35em] text-red-400">Danger zone</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">Archive or clear all records for the selected division. This cannot be undone easily.</p>
+                    {(canAccessModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (() => {
+                      const activeTcs = appMode === 'TCS_DA' ? 'TCS_DA' : appMode === 'TCS_AV' || appMode === 'TCS_VD' ? 'TCS_AV' : 'TCS_MX';
+                      const short = activeTcs === 'TCS_DA' ? 'DA' : activeTcs === 'TCS_AV' ? 'AV' : 'MX';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleClearTcsDivisionData(activeTcs === 'TCS_AV' ? 'TCS_AV' : activeTcs)}
+                          className="flex w-full flex-row items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-600/10 px-5 py-4 font-black text-[10px] uppercase tracking-wider text-red-300 transition-all hover:bg-red-600/20"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                          Clear TCS {short} division
+                        </button>
+                      );
+                    })()}
+                    {isPqaMode && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!window.confirm(`Archive ALL records for ${appMode}?`)) return;
+                          try {
+                            await Promise.all(engineers.map((e) => archiveEngineer(e.id, colName)));
+                            setEngineers([]);
+                            message.success(`${appMode} data cleared.`);
+                          } catch (err) {
+                            message.error('Failed to clear database.');
+                          }
+                        }}
+                        className="flex w-full flex-row items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-600/10 px-5 py-4 font-black text-[10px] uppercase tracking-wider text-red-400 transition-all hover:bg-red-600/20"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                        Clear {appMode} data
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Modal
                 title={<span className="text-[11px] font-black uppercase tracking-[0.25em] text-zinc-300">Manage accounts</span>}
                 open={adminModal === 'accounts'}
-                onCancel={() => setAdminModal(null)}
+                onCancel={() => { setAdminModal(null); cancelEditAdmin(); }}
                 footer={null}
                 width="min(1100px, 96vw)"
                 destroyOnHidden
                 styles={{ body: { maxHeight: 'min(85vh, 900px)', overflowY: 'auto', paddingTop: 12 } }}
               >
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-2">
-                  <div className="lg:col-span-5 space-y-6">
-                    <div className="glass-card rounded-[2rem] p-8 space-y-6 border border-green-500/20">
-                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] flex items-center gap-3">
-                        <UserPlus className="w-4 h-4 text-green-500" /> Provision node
-                      </h3>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Full identity</label>
-                          <input
-                            type="text"
-                            className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm outline-none focus:border-green-600 font-bold text-white"
-                            value={newAdminData.name}
-                            onChange={e => setNewAdminData({ ...newAdminData, name: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Username</label>
-                          <input
-                            type="text"
-                            className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm outline-none focus:border-green-600 font-bold text-white"
-                            value={newAdminData.username}
-                            onChange={e => setNewAdminData({ ...newAdminData, username: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Password</label>
-                          <input
-                            type="password"
-                            className="w-full bg-black border border-white/5 rounded-2xl p-4 text-sm outline-none focus:border-green-600 font-bold text-white"
-                            value={newAdminData.password}
-                            onChange={e => setNewAdminData({ ...newAdminData, password: e.target.value })}
-                          />
-                        </div>
-                        {currentUser?.role === 'SUPER_ADMIN' && (
-                          <>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Role</label>
-                              <select
-                                value={newAdminData.role}
-                                onChange={e => setNewAdminData({ ...newAdminData, role: e.target.value })}
-                                className="w-full bg-black border border-white/5 rounded-2xl p-4 text-[10px] font-black uppercase tracking-widest outline-none focus:border-green-600 text-white"
-                              >
-                                <option value="ADMIN">Standard operator</option>
-                                <option value="SUPER_ADMIN">Super admin</option>
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Access</label>
-                              <select
-                                value={newAdminData.access}
-                                onChange={e => setNewAdminData({ ...newAdminData, access: e.target.value })}
-                                className="w-full bg-black border border-white/5 rounded-2xl p-4 text-[10px] font-black uppercase tracking-widest outline-none focus:border-green-600 text-white"
-                              >
-                                <option value="TCS_ONLY">TCS only</option>
-                                <option value="PQA_ONLY">PQA only</option>
-                                <option value="ALL">Global</option>
-                              </select>
-                            </div>
-                          </>
-                        )}
-                        <button
-                          onClick={handleAddAdmin}
-                          className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.25em] hover:bg-green-500 transition-all"
-                        >
-                          Add admin
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="lg:col-span-7 space-y-4">
-                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.35em]">Active accounts</p>
-                    <div className="grid grid-cols-1 gap-3 max-h-[min(60vh,560px)] overflow-y-auto pr-1">
-                      {admins.map(admin => (
-                        <div key={admin.id} className="bg-zinc-900/80 p-5 rounded-2xl border border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                          <div>
-                            <span className="text-lg font-black text-white uppercase">{admin.name}</span>
-                            <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mt-1">@{admin.username}</p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {currentUser?.role === 'SUPER_ADMIN' && (
-                              <select
-                                value={admin.access || 'TCS_ONLY'}
-                                onChange={(e) => {
-                                  const newAccess = e.target.value;
-                                  const updated = { ...admin, access: newAccess };
-                                  saveAdminToDb(updated).then(() => {
-                                    setAdmins(prev => prev.map(a => a.id === admin.id ? updated : a));
-                                    message.success(`Access updated for ${admin.username}`);
-                                  });
-                                }}
-                                className="bg-zinc-950 text-zinc-300 text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border border-white/10"
-                              >
-                                <option value="TCS_ONLY">TCS only</option>
-                                <option value="PQA_ONLY">PQA only</option>
-                                <option value="ALL">Full</option>
-                              </select>
-                            )}
-                            {admin.id !== '1' && (
-                              <button type="button" onClick={() => deleteAdminHandler(admin.id)} className="p-2 bg-black text-zinc-600 rounded-xl hover:bg-red-600 hover:text-white transition-all">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setAdminModal(null); setView('PROFILE_MGMT'); }}
-                      className="w-full py-3 rounded-2xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
-                    >
-                      Open full directory view
-                    </button>
-                  </div>
-                </div>
+                <AdminAccountsPanel {...adminAccountsPanelProps} compact />
+                <button
+                  type="button"
+                  onClick={() => { setAdminModal(null); setView('PROFILE_MGMT'); }}
+                  className="w-full mt-4 py-3 rounded-2xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
+                >
+                  Open full directory view
+                </button>
               </Modal>
 
               <Modal
@@ -5894,235 +6506,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 })()}
               </Modal>
 
-              {/* Live Registry Section */}
-              <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-[1px] w-8 bg-zinc-800" />
-                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">
-                      Live {appMode?.startsWith('PQA') ? 'Service Center' : 'Engineer'} Registry
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setNoEngineers(!noEngineers)}
-                    className="flex items-center gap-3 px-6 py-3 bg-zinc-900 border border-white/5 rounded-full text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-white transition-all shadow-xl"
-                  >
-                    <Eye className="w-4 h-4" />
-                    {noEngineers ? "Minimize Archives" : "Inspect Archives"}
-                  </button>
-                </div>
 
-                {currentUser?.role === 'SUPER_ADMIN' && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => setBulkSelectedIds(allVisibleSelected ? [] : visibleRegistryIds)}
-                      className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-full text-[9px] font-black text-zinc-400 uppercase tracking-widest hover:text-white transition-all"
-                    >
-                      {allVisibleSelected ? 'Clear Selection' : 'Select All'}
-                    </button>
-                    <button
-                      onClick={bulkArchiveEngineersHandler}
-                      disabled={bulkSelectedIds.length === 0}
-                      className="px-4 py-2 bg-red-600/10 border border-red-500/20 rounded-full text-[9px] font-black text-red-400 uppercase tracking-widest hover:bg-red-600/20 transition-all disabled:opacity-40"
-                    >
-                      Bulk Delete ({bulkSelectedIds.length})
-                    </button>
-                  </div>
-                )}
-
-                {/* Archive Stack */}
-                {noEngineers && fetchedHiddenEngineers.length > 0 && (
-                  <>
-                  {currentUser?.role === 'SUPER_ADMIN' && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => setBulkSelectedArchivedIds(allArchivedSelected ? [] : archivedRegistryIds)}
-                        className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-full text-[9px] font-black text-zinc-400 uppercase tracking-widest hover:text-white transition-all"
-                      >
-                        {allArchivedSelected ? 'Clear Selection' : 'Select All'}
-                      </button>
-                      <button
-                        onClick={bulkRestoreEngineersHandler}
-                        disabled={bulkSelectedArchivedIds.length === 0}
-                        className="px-4 py-2 bg-emerald-600/10 border border-emerald-500/20 rounded-full text-[9px] font-black text-emerald-400 uppercase tracking-widest hover:bg-emerald-600/20 transition-all disabled:opacity-40"
-                      >
-                        Restore Selected ({bulkSelectedArchivedIds.length})
-                      </button>
-                      <button
-                        onClick={bulkDeleteArchivedEngineersHandler}
-                        disabled={bulkSelectedArchivedIds.length === 0}
-                        className="px-4 py-2 bg-red-600/10 border border-red-500/20 rounded-full text-[9px] font-black text-red-400 uppercase tracking-widest hover:bg-red-600/20 transition-all disabled:opacity-40"
-                      >
-                        Delete From Archive ({bulkSelectedArchivedIds.length})
-                      </button>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-500">
-                    {fetchedHiddenEngineers.map(eng => (
-                      <div key={eng.id} className="bg-red-950/10 border border-red-900/20 p-6 rounded-3xl flex items-center justify-between group hover:bg-red-900/20 transition-all">
-                        <div className="flex items-center gap-5">
-                          {currentUser?.role === 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => setBulkSelectedArchivedIds((prev) => prev.includes(eng.id) ? prev.filter((id) => id !== eng.id) : [...prev, eng.id])}
-                              className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${
-                                bulkSelectedArchivedIds.includes(eng.id)
-                                  ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400'
-                                  : 'bg-zinc-900 border-white/15 text-transparent hover:border-white/35'
-                              }`}
-                              title={bulkSelectedArchivedIds.includes(eng.id) ? 'Deselect' : 'Select'}
-                            >
-                              <CheckCircle className="w-3 h-3" />
-                            </button>
-                          )}
-                          <img
-                            src={getPhotoUrl(eng)}
-                            onError={handleEngineerPhotoError}
-                            className={`w-12 h-12 rounded-xl grayscale opacity-40 shadow-2xl ${getLogoStyle(getPhotoUrl(eng))}`}
-                            alt={tcsDisplayPrimary(eng)}
-                          />
-                          <div>
-                            <p className="text-sm font-black text-zinc-500 uppercase tracking-tight line-through opacity-50">{tcsDisplayPrimary(eng)}</p>
-                            {tcsDisplaySecondary(eng) ? (
-                              <p className="text-[10px] font-bold text-zinc-600 line-through opacity-50 mt-0.5 normal-case">{tcsDisplaySecondary(eng)}</p>
-                            ) : null}
-                            <span className="text-[9px] font-black text-red-500 tracking-widest uppercase mt-1 block">ARCHIVED : {eng.code}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => restoreEngineerHandler(eng.id)}
-                            className="p-4 bg-zinc-900 text-zinc-500 rounded-xl hover:bg-green-600 hover:text-white transition-all"
-                            title="Restore archived record"
-                          >
-                            <Upload className="w-4 h-4" />
-                          </button>
-                          {currentUser?.role === 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => deleteArchivedEngineerHandler(eng.id)}
-                              className="p-4 bg-zinc-900 text-zinc-500 rounded-xl hover:bg-red-600 hover:text-white transition-all"
-                              title="Delete permanently from archive"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  </>
-                )}
-
-                {/* Active Registry Stack — deduplicated: one row per engineer (newest record) */}
-                <div className="grid grid-cols-1 gap-px bg-white/5 border border-white/5 rounded-[3rem] overflow-hidden shadow-3xl">
-                  {deduplicatedEngineers.length === 0 ? (
-                    <div className="p-24 text-center text-zinc-700 italic font-black uppercase tracking-[0.3em]">No registry entries detected.</div>
-                  ) : deduplicatedEngineers.map((eng, idx) => (
-
-                    <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-3 md:p-6 flex items-center justify-between gap-2 group">
-                      <div className="flex items-center gap-3 md:gap-6 min-w-0 flex-1">
-                      {currentUser?.role === 'SUPER_ADMIN' && (
-                        <button
-                          onClick={() => setBulkSelectedIds((prev) => prev.includes(eng.id) ? prev.filter((id) => id !== eng.id) : [...prev, eng.id])}
-                          className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${
-                            bulkSelectedIds.includes(eng.id)
-                              ? 'bg-red-600/20 border-red-500 text-red-400'
-                              : 'bg-zinc-900 border-white/15 text-transparent hover:border-white/35'
-                          }`}
-                          title={bulkSelectedIds.includes(eng.id) ? 'Deselect' : 'Select'}
-                        >
-                          <CheckCircle className="w-3 h-3" />
-                        </button>
-                      )}
-                      <div className="w-10 h-10 md:w-14 md:h-14 relative flex-shrink-0">
-                          <img
-                            src={getPhotoUrl(eng)}
-                            onError={handleEngineerPhotoError}
-                            className={`w-full h-full rounded-xl md:rounded-2xl grayscale-50 group-hover:grayscale-0 transition-all shadow-2xl shadow-black/80 ${getLogoStyle(getPhotoUrl(eng))}`}
-                            alt={tcsDisplayPrimary(eng)}
-                          />
-                          {isPqaMode ? (
-                            // PQA: show numeric rank in corner
-                            (() => {
-                              const pqaRank = deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === eng.code?.toUpperCase()) + 1;
-                              const isTopThree = pqaRank <= 3;
-                              return (
-                                <div className={`absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black flex items-center justify-center text-[8px] font-black italic ${
-                                  pqaRank === 1 ? 'bg-yellow-500 text-black' :
-                                  pqaRank === 2 ? 'bg-zinc-300 text-black' :
-                                  pqaRank === 3 ? 'bg-orange-500 text-black' :
-                                  'bg-zinc-800 text-zinc-400'
-                                }`}>{pqaRank}</div>
-                              );
-                            })()
-                          ) : (
-                            <div className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border-2 border-black bg-black flex items-center justify-center">
-                              <img src={TIER_META[eng.tier]?.img || TIER_META.Bronze.img} alt={eng.tier} className="w-4 h-4 object-contain tier-emblem-blend" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <h4 className="text-xs md:text-base font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors truncate">{tcsDisplayPrimary(eng)}</h4>
-                          {tcsDisplaySecondary(eng) ? (
-                            <p className="text-[9px] md:text-[10px] font-bold text-zinc-500 mt-0.5 truncate normal-case tracking-normal">{tcsDisplaySecondary(eng)}</p>
-                          ) : null}
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            {isPqaMode && (
-                              <span className="text-[7px] md:text-[9px] font-black text-zinc-600 uppercase tracking-widest">{eng.code}</span>
-                            )}
-                            {isPqaMode ? (
-                              // PQA: show numeric rank pill
-                              (() => {
-                                const pqaRank = deduplicatedEngineers.findIndex(d => d.code?.toUpperCase() === eng.code?.toUpperCase()) + 1;
-                                return (
-                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
-                                    pqaRank === 1 ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' :
-                                    pqaRank === 2 ? 'bg-zinc-300/10 border-zinc-300/30 text-zinc-300' :
-                                    pqaRank === 3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
-                                    'bg-zinc-800/60 border-white/5 text-zinc-500'
-                                  }`}>#{pqaRank}</span>
-                                );
-                              })()
-                            ) : (
-                              <TierBadge tier={eng.tier} size="sm" />
-                            )}
-                            {eng.sbaId && isPqaMode && (
-                              <span className="text-[7px] md:text-[9px] font-black text-zinc-500 uppercase tracking-widest">SBA: {eng.sbaId}</span>
-                            )}
-                            {(eng.quarter || getQuarter(eng.month)) && (
-                              <span className="text-[7px] md:text-[9px] font-black text-zinc-600 uppercase tracking-widest">
-                                {(eng.quarter || getQuarter(eng.month))} · {eng.year}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-                        <div className="text-right">
-                          <span className="text-sm md:text-xl font-black text-white tracking-widest italic">
-                            {appMode?.startsWith('PQA') ? resolvePqaTcsScorePure(eng) : eng.tcsScore}
-                          </span>
-                          <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{appMode?.startsWith('PQA') ? 'PQA' : 'TCS'}</p>
-                        </div>
-                        <div className="flex gap-1 md:gap-2">
-                          <button
-                            onClick={() => setEditingEng(eng)}
-                            className="p-2 md:p-3 bg-zinc-900 text-zinc-500 rounded-lg md:rounded-2xl hover:bg-white hover:text-black transition-all"
-                          >
-                            <Edit2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => deleteEngineerHandler(eng.id)}
-                            className="p-2 md:p-3 bg-zinc-900 text-zinc-500 rounded-lg md:rounded-2xl hover:bg-red-600 hover:text-white transition-all"
-                          >
-                            <Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
@@ -6144,152 +6528,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-                <div className="lg:col-span-5 space-y-8">
-                  <div className="glass-card rounded-[3rem] p-10 space-y-10 border-green-500/20 shadow-2xl">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-6">
-                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] flex items-center gap-3">
-                        <UserPlus className="w-4 h-4 text-green-500" /> Provision Node
-                      </h3>
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    </div>
-
-                    <div className="space-y-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Full Identity</label>
-                        <input
-                          type="text"
-                          placeholder="NAME_ALPHA"
-                          className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm outline-none focus:border-green-600 font-bold text-white shadow-inner"
-                          value={newAdminData.name}
-                          onChange={e => setNewAdminData({ ...newAdminData, name: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Access Identifier</label>
-                        <input
-                          type="text"
-                          placeholder="USERNAME_SIGMA"
-                          className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm outline-none focus:border-green-600 font-bold text-white shadow-inner"
-                          value={newAdminData.username}
-                          onChange={e => setNewAdminData({ ...newAdminData, username: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Secure Key</label>
-                        <input
-                          type="password"
-                          placeholder="••••••••••••"
-                          className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm outline-none focus:border-green-600 font-bold text-white shadow-inner"
-                          value={newAdminData.password}
-                          onChange={e => setNewAdminData({ ...newAdminData, password: e.target.value })}
-                        />
-                      </div>
-                      
-                      {currentUser?.role === 'SUPER_ADMIN' && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">System Role</label>
-                            <select
-                              value={newAdminData.role}
-                              onChange={e => setNewAdminData({ ...newAdminData, role: e.target.value })}
-                              className="w-full bg-black border border-white/5 rounded-2xl p-5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-green-600 text-white appearance-none"
-                            >
-                              <option value="ADMIN">Standard Operator</option>
-                              <option value="SUPER_ADMIN">Super Admin Root</option>
-                            </select>
-                          </div>
-  
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Access Clearance</label>
-                            <select
-                              value={newAdminData.access}
-                              onChange={e => setNewAdminData({ ...newAdminData, access: e.target.value })}
-                              className="w-full bg-black border border-white/5 rounded-2xl p-5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-green-600 text-white appearance-none"
-                            >
-                              <option value="TCS_ONLY">TCS Environment Only</option>
-                              <option value="PQA_ONLY">PQA Environments Only</option>
-                              <option value="ALL">Global Access (All)</option>
-                            </select>
-                          </div>
-                        </>
-                      )}
-                      <button
-                        onClick={handleAddAdmin}
-                        className="w-full bg-green-600 text-white py-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] hover:bg-green-500 transition-all shadow-2xl shadow-green-900/40 mt-6"
-                      >
-                        Initialize Provisioning
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-7 space-y-8">
-                  <div className="flex items-center gap-4">
-                    <div className="h-[1px] w-8 bg-zinc-800" />
-                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Active Operations Nodes</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    {admins.map(admin => (
-                      <div key={admin.id} className="bg-zinc-900/50 hover:bg-zinc-900 transition-all p-8 rounded-[2.5rem] border border-white/5 flex items-center justify-between group">
-                        <div className="flex items-center gap-6">
-                          <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center text-zinc-700 border border-white/5 group-hover:text-blue-500 transition-colors shadow-inner">
-                            <UserCircle className="w-8 h-8" />
-                          </div>
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xl font-black text-white uppercase tracking-tighter">{admin.name}</span>
-                              {admin.role === 'SUPER_ADMIN' && <span className="text-[8px] bg-blue-600/10 text-blue-500 px-3 py-1 rounded-full border border-blue-600/20 font-black tracking-widest uppercase">Root</span>}
-                              <span className="text-[8px] bg-emerald-600/10 text-emerald-500 px-3 py-1 rounded-full border border-emerald-600/20 font-black tracking-widest uppercase">
-                                {admin.access === 'ALL' ? 'GLOBAL ACCESS' : (admin.access?.replace('_', ' ') || 'TCS ONLY')}
-                              </span>
-                            </div>
-                            <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mt-1">@ACCESS_ID: {admin.username}</span>
-                            <span className="text-[7px] font-black text-zinc-800 uppercase tracking-[0.2em] mt-1 italic">Policy: {admin.role} System</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {currentUser?.role === 'SUPER_ADMIN' && (
-                            <div className="relative group/auth">
-                               <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center pointer-events-none border border-blue-500/20">
-                                 <Shield className="w-4 h-4 text-blue-500" />
-                               </div>
-                               <select
-                                 value={admin.access || 'TCS_ONLY'}
-                                 onChange={(e) => {
-                                   const newAccess = e.target.value;
-                                   const updated = { ...admin, access: newAccess };
-                                   saveAdminToDb(updated).then(() => {
-                                      setAdmins(prev => prev.map(a => a.id === admin.id ? updated : a));
-                                      message.success(`Access updated for ${admin.username}`);
-                                   });
-                                 }}
-                                 className="bg-zinc-900 text-zinc-300 text-[10px] font-black uppercase tracking-widest pl-14 pr-10 py-4 rounded-2xl border border-white/10 hover:border-blue-500/50 hover:bg-zinc-800 focus:ring-2 focus:ring-blue-500/30 transition-all appearance-none cursor-pointer shadow-lg min-w-[160px]"
-                               >
-                                 <option value="TCS_ONLY">TCS Only</option>
-                                 <option value="PQA_ONLY">PQA Only</option>
-                                 <option value="ALL">Full Authority</option>
-                               </select>
-                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                 <ChevronRight className="w-3 h-3 text-zinc-600 rotate-90" />
-                               </div>
-                            </div>
-                          )}
-                          {admin.id !== '1' && (
-                            <button
-                              onClick={() => deleteAdminHandler(admin.id)}
-                              className="p-5 bg-black text-zinc-700 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-xl"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <AdminAccountsPanel {...adminAccountsPanelProps} />
             </div>
           )}
 
@@ -6409,6 +6648,10 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 {(() => {
                   if (profileOpenedByExactCode) {
                     let eng = isPqaMode ? pqaProfileSubject : selectedEngineer;
+                    if (!isPqaMode && selectedEngineer?.id) {
+                      const liveEng = engineers.find((e) => e.id === selectedEngineer.id);
+                      if (liveEng) eng = liveEng;
+                    }
                     let pqaExactMonthPeriods = [];
                     if (isPqaMode && selectedEngineer) {
                       const selectedBranch = selectedEngineer.pqaBranch || appMode;
@@ -6458,7 +6701,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     const pqaSnapCaps = eng.pqaKpiCaps || (appMode === 'PQA_CE' ? PQA_KPI_DEFAULTS_CE : PQA_KPI_DEFAULTS_MX);
                     const dispSsr = parseFloat(eng.ssrScore ?? 0);
                     const dispRrr = parseFloat(eng.rrrScore || 0);
-                    const dispIqc = parseFloat(eng.iqcSkipRatio || 0);
+                    const dispIqc = resolveMxIqcSkipForDisplay(eng);
                     const dispCore = parseFloat(eng.corePartsScore ?? eng.corePartsPBA ?? 0);
                     const dispEval = parseFloat(eng.engineerEvaluation || 0);
                     const dispTrain = parseFloat(eng.q1TrainingScore ?? eng.trainingAttendance ?? 0);
@@ -6479,7 +6722,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                               ? `KPIs from the ★Evaluation point sheet — ${(eng.pqaBranch || appMode) === 'PQA_CE' ? 'CE' : 'MX'} registry only (MX vs CE are stored separately). Targets follow headers such as SSR (20), D-RNPS (10).`
                               : isDaAvExactProfile
                                 ? 'DA/AV criteria from uploaded sheet: SSR, REDO, Chatbot, HASS, Acc Core Parts (VD), Training Attendance, Linkage ratio. Ranking score uses Final Score.'
-                                : 'SSR % is imported from Excel column H. Engineer evaluation groups SSR, RRR, IQC skip, Core parts, and Q1 training (0–20 points). DRNPS and Exam are separate top-level scores. IQC % uses the cell before the IQC header when present.'}
+                                : 'Metrics match the TCS MX template: IQC Skip % (column M), Repair cases (L), Engineer evaluation, DRNPS, Exam, TCS Score. Download the updated template from Admin if needed.'}
                           </p>
                         </div>
                         {isPqaMode && pqaExactMonthPeriods.length > 0 && (
@@ -6699,13 +6942,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.examScore || 0), 0) / qRecords.length).toFixed(1))
                     : 0;
                   const qAvgSsr = qRecords.length > 0
-                    ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.ssrScore ?? r.redoRatio ?? 0), 0) / qRecords.length).toFixed(1))
+                    ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.ssrScore ?? 0), 0) / qRecords.length).toFixed(1))
                     : 0;
                   const qAvgRrr = qRecords.length > 0
                     ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.rrrScore || 0), 0) / qRecords.length).toFixed(1))
                     : 0;
                   const qAvgIqc = qRecords.length > 0
-                    ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.iqcSkipRatio || 0), 0) / qRecords.length).toFixed(1))
+                    ? parseFloat((qRecords.reduce((s, r) => s + resolveMxIqcSkipForDisplay(r), 0) / qRecords.length).toFixed(1))
                     : 0;
                   const qAvgCoreParts = qRecords.length > 0
                     ? parseFloat((qRecords.reduce((s, r) => s + parseFloat(r.corePartsScore ?? r.corePartsPBA ?? 0), 0) / qRecords.length).toFixed(1))
@@ -6745,9 +6988,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   // Weighted component pts - handle PQA vs TCS
                   const dispExam = isPqaMode ? 0 : (profileViewMode === 'QUARTERLY' ? qAvgExam : parseFloat(effRecord.examScore || 0));
                   const dispDrnps = isPqaMode ? parseFloat(dispRecord.dRnps || 0) : (profileViewMode === 'QUARTERLY' ? qAvgDrnps : calculateDRNPS(effRecord.promoters, effRecord.detractors));
-                  const dispSsr = profileViewMode === 'QUARTERLY' ? qAvgSsr : parseFloat(effRecord.ssrScore ?? effRecord.redoRatio ?? 0);
+                  const dispSsr = profileViewMode === 'QUARTERLY' ? qAvgSsr : parseFloat(effRecord.ssrScore ?? 0);
                   const dispRrr = profileViewMode === 'QUARTERLY' ? qAvgRrr : parseFloat(effRecord.rrrScore || 0);
-                  const dispIqc = profileViewMode === 'QUARTERLY' ? qAvgIqc : parseFloat(effRecord.iqcSkipRatio || 0);
+                  const dispIqc = profileViewMode === 'QUARTERLY' ? qAvgIqc : resolveMxIqcSkipForDisplay(effRecord);
                   const dispCoreParts = profileViewMode === 'QUARTERLY' ? qAvgCoreParts : parseFloat(effRecord.corePartsScore ?? effRecord.corePartsPBA ?? 0);
                   const dispQ1Training = profileViewMode === 'QUARTERLY' ? qAvgQ1Training : parseFloat(effRecord.q1TrainingScore ?? effRecord.trainingAttendance ?? 0);
                   const dispDrnpsRaw = profileViewMode === 'QUARTERLY'
@@ -6762,21 +7005,17 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     appMode === 'TCS_VD' ||
                     ['DA', 'AV', 'VD'].includes(String(effRecord?.product || selectedEngineer?.product || '').toUpperCase())
                   );
-                  const isQ1Record = ['jan', 'january', 'feb', 'february', 'mar', 'march'].includes(String(effRecord.month || '').toLowerCase());
-                  const isQ1Quarter = String(effQ || '').toUpperCase() === 'Q1';
-                  const hasQ1Eval = profileViewMode === 'QUARTERLY'
+                  const hasEngineerEvaluation = profileViewMode === 'QUARTERLY'
                     ? qRecords.some(r => r.engineerEvaluation !== undefined && r.engineerEvaluation !== null && r.engineerEvaluation !== '')
                     : (effRecord.engineerEvaluation !== undefined && effRecord.engineerEvaluation !== null && effRecord.engineerEvaluation !== '');
-                  const useQ1EvalBreakdown =
-                    !isPqaMode &&
-                    appMode === 'TCS_MX' &&
-                    hasQ1Eval &&
-                    ((profileViewMode === 'QUARTERLY' && isQ1Quarter) || (profileViewMode === 'MONTHLY' && isQ1Record));
+                  const useMxEvalBreakdown =
+                    !isPqaMode && appMode === 'TCS_MX' && hasEngineerEvaluation;
+                  const hideLegacyKpiBreakdown = !isPqaMode && appMode === 'TCS_MX';
                   const dispEval = profileViewMode === 'QUARTERLY' ? qAvgEval : parseFloat(effRecord.engineerEvaluation || 0);
                   const evalPts = isPqaMode ? 0 : parseFloat(Math.min(50, (dispEval / 100) * 50).toFixed(1));
                   const kpiPts = isPqaMode
                     ? dispScore
-                    : (useQ1EvalBreakdown
+                    : (useMxEvalBreakdown
                       ? evalPts
                       : parseFloat(((dispScore - (examPts || 0) - (drnpsPts || 0))).toFixed(1)));
                   const isDaAvProfile = isDaAvModePre;
@@ -6887,7 +7126,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           {!isPqaMode ? (
                             <>
                               <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
-                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">{useQ1EvalBreakdown ? 'Evaluation' : 'KPIs'}</span>
+                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">{useMxEvalBreakdown ? 'Evaluation' : 'KPIs'}</span>
                                 <span className="text-3xl font-black text-emerald-300 italic">{kpiPts > 0 ? kpiPts.toFixed(1) : '—'}</span>
                               </div>
                               <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex flex-col items-center text-center">
@@ -6960,7 +7199,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 </div>
                                 <div className="border-t border-white/5 pt-8 space-y-6">
                                   <p className="text-[8px] font-black text-purple-400 uppercase tracking-widest">Uploaded Excel Metrics</p>
-                                  <p className="text-[8px] text-zinc-600 font-bold uppercase tracking-widest -mt-1 mb-1">SSR column H · Q1 training = points out of 20 (not %) · Engineer evaluation (mother) → SSR, RRR, IQC skip, Core parts, Q1 training · DRNPS and Exam are separate mother categories.</p>
+                                  <p className="text-[8px] text-zinc-600 font-bold uppercase tracking-widest -mt-1 mb-1">Columns match the MX template: EngineerEvaluation → SSR, RRR, IQC skip, Core parts, Q1 training · DRNPS and Exam are separate categories.</p>
                                   <div className="rounded-2xl border border-emerald-500/20 bg-zinc-950/50 p-6 space-y-5">
                                     <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 border-b border-white/5 pb-4">
                                       <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.3em]">Engineer evaluation</p>
@@ -6983,27 +7222,29 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                     <MetricBar label="Exam" value={dispExam} max={100} suffix="%" target={90} />
                                   </div>
                                 </div>
-                                <div className="border-t border-white/5 pt-8 space-y-5">
-                                  <p className="text-[8px] font-black text-yellow-400 uppercase tracking-widest">KPI Breakdown (50% of Total)</p>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
-                                    {isDaAvProfile ? (
-                                      daAvCriteriaBars.map((k) => (
-                                        <MetricBar key={k.label} label={k.label} value={k.value} max={k.max} suffix={k.suffix} target={k.target} inverse={k.inverse} />
-                                      ))
-                                    ) : (
-                                      <>
-                                        <MetricBar label="Training Attendance" value={parseFloat(dispRecord.trainingAttendance || 0)} max={100} suffix="%" target={100} />
-                                        <MetricBar label="OQC Pass Rate" value={parseFloat(dispRecord.oqcPassRate || 0)} max={100} suffix="%" target={85} />
-                                        <MetricBar label="Maintenance Mode" value={parseFloat(dispRecord.maintenanceModeRatio || 0)} max={100} suffix="%" target={65} />
-                                        <MetricBar label="REDO Ratio" value={parseFloat(dispRecord.redoRatio || 0)} max={3} suffix="%" target={0.7} inverse />
-                                        <MetricBar label="IQC Skip Ratio" value={parseFloat(dispRecord.iqcSkipRatio || 0)} max={50} suffix="%" target={25} inverse />
-                                        <MetricBar label="Core Parts PBA" value={parseFloat(dispRecord.corePartsPBA || 0)} max={80} suffix="%" target={30} inverse />
-                                        <MetricBar label="Core Parts Octa" value={parseFloat(dispRecord.corePartsOcta || 0)} max={80} suffix="%" target={40} inverse />
-                                        <MetricBar label="Multi Parts Ratio" value={parseFloat(dispRecord.multiPartsRatio || 0)} max={5} suffix="%" target={1} inverse />
-                                      </>
-                                    )}
+                                {!hideLegacyKpiBreakdown && (
+                                  <div className="border-t border-white/5 pt-8 space-y-5">
+                                    <p className="text-[8px] font-black text-yellow-400 uppercase tracking-widest">KPI Breakdown (50% of Total)</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
+                                      {isDaAvProfile ? (
+                                        daAvCriteriaBars.map((k) => (
+                                          <MetricBar key={k.label} label={k.label} value={k.value} max={k.max} suffix={k.suffix} target={k.target} inverse={k.inverse} />
+                                        ))
+                                      ) : (
+                                        <>
+                                          <MetricBar label="Training Attendance" value={parseFloat(dispRecord.trainingAttendance || 0)} max={100} suffix="%" target={100} />
+                                          <MetricBar label="OQC Pass Rate" value={parseFloat(dispRecord.oqcPassRate || 0)} max={100} suffix="%" target={85} />
+                                          <MetricBar label="Maintenance Mode" value={parseFloat(dispRecord.maintenanceModeRatio || 0)} max={100} suffix="%" target={65} />
+                                          <MetricBar label="REDO Ratio" value={parseFloat(dispRecord.redoRatio || 0)} max={3} suffix="%" target={0.7} inverse />
+                                          <MetricBar label="IQC Skip Ratio" value={resolveMxIqcSkipForDisplay(dispRecord)} max={50} suffix="%" target={25} inverse />
+                                          <MetricBar label="Core Parts PBA" value={parseFloat(dispRecord.corePartsPBA || 0)} max={80} suffix="%" target={30} inverse />
+                                          <MetricBar label="Core Parts Octa" value={parseFloat(dispRecord.corePartsOcta || 0)} max={80} suffix="%" target={40} inverse />
+                                          <MetricBar label="Multi Parts Ratio" value={parseFloat(dispRecord.multiPartsRatio || 0)} max={5} suffix="%" target={1} inverse />
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
+                                )}
                               </>
                             )}
                           </div>
@@ -7269,7 +7510,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <h3 className="text-lg font-black text-white uppercase tracking-tight">What is TCS?</h3>
                 </div>
                 <p className="text-zinc-400 leading-relaxed text-sm">
-                  The <strong className="text-white">Technical Capability System (TCS)</strong> is Samsung's internal engineering performance framework. Each month, every engineer receives a composite score (0–100) based on three dimensions: their KPI performance, customer satisfaction (DRNPS), and technical knowledge (Exam score). This score determines their tier ranking and standing in the team leaderboard.
+                  The <strong className="text-white">Technical Capability System (TCS)</strong> is Samsung&apos;s internal engineering performance framework. Each month, every engineer receives a composite score (0–100) based on three dimensions: their KPI performance, customer satisfaction (DRNPS), and technical knowledge (Exam score). This score determines their tier ranking and standing in the team leaderboard.
                 </p>
               </div>
 
@@ -7877,109 +8118,173 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             </div>
           )}
 
-          {/* ─── FEEDBACK VIEW ────────────────────────────────────────────── */}
+          {/* ─── ARABIC FEEDBACK (TEST) ───────────────────────────────────── */}
           {view === 'FEEDBACK' && (
-            <div className="max-w-2xl mx-auto space-y-12 animate-in slide-in-from-bottom-4 duration-700">
-              {/* Header */}
-              <div className="text-center space-y-4">
+            <div dir="rtl" className="max-w-3xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-700 pb-20">
+              <div className="text-center space-y-3">
                 <div className="flex items-center justify-center gap-3">
                   <div className="h-[1px] w-16 bg-purple-500/50" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.5em] text-purple-400">Engineer Voice</span>
+                  <span className="text-[11px] font-black tracking-[0.35em] text-purple-300">ملاحظات TCS</span>
                   <div className="h-[1px] w-16 bg-purple-500/50" />
                 </div>
-                <h2 className="text-5xl font-black tracking-tighter text-white uppercase italic">Feedback &<br />Suggestions</h2>
-                <p className="text-zinc-500 text-sm">Your voice shapes the next version of TCS. Share what works, what doesn't, and your ideas.</p>
+                <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white">استفسارات وملاحظات</h2>
+                <p className="text-zinc-300 text-base md:text-lg">شاركنا رأيك أو استفسارك أو أي تحديث — نسخة تجريبية للمراجعة.</p>
               </div>
 
               {feedbackSent ? (
-                // Success State
-                <div className="glass-card rounded-[3rem] p-16 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 fade-in duration-500">
-                  <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/30 animate-pulse">
-                    <CheckCircle className="w-12 h-12 text-emerald-400" />
+                <div className="glass-card rounded-[2.5rem] p-10 md:p-14 flex flex-col items-center text-center space-y-5">
+                  <div className="w-20 h-20 rounded-full border border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle className="w-10 h-10 text-emerald-400" />
                   </div>
-                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Thank You!</h3>
-                  <p className="text-zinc-400 text-sm">Your feedback has been received. We appreciate your contribution to improving TCS.</p>
-                  <button
-                    onClick={() => setView('HOME')}
-                    className="px-8 py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-zinc-200 transition-all"
-                  >
-                    Return to Dashboard
-                  </button>
+                  <h3 className="text-2xl font-black text-white">شكراً لمشاركتك</h3>
+                  <p className="text-zinc-400">تم إرسال ملاحظتك بنجاح.</p>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetEngineerFeedback();
+                        setView('FEEDBACK');
+                      }}
+                      className="px-6 py-3 rounded-2xl bg-purple-600 text-white font-black text-sm hover:bg-purple-500 transition-all"
+                    >
+                      إرسال ملاحظة أخرى
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('HOME')}
+                      className="px-6 py-3 rounded-2xl bg-zinc-900 text-zinc-300 border border-white/10 font-black text-sm hover:text-white hover:border-white/20 transition-all"
+                    >
+                      العودة للرئيسية
+                    </button>
+                  </div>
                 </div>
               ) : (
-                // Form
-                <div className="glass-card rounded-[3rem] p-10 md:p-16 space-y-8">
-                  {/* Name field */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Your Name</label>
-                    <input
-                      type="text"
-                      value={feedbackName}
-                      onChange={e => setFeedbackName(e.target.value)}
-                      placeholder="Engineer Name"
-                      className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm focus:border-purple-500 transition-all outline-none font-bold text-white shadow-inner"
-                    />
-                  </div>
-
-                  {/* Star Rating */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Rate TCS Overall</label>
-                    <div className="flex gap-3">
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <button
-                          key={star}
-                          onClick={() => setFeedbackRating(star)}
-                          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${star <= feedbackRating
-                            ? 'bg-yellow-400/20 border border-yellow-400 text-yellow-400 scale-110'
-                            : 'bg-zinc-900 border border-white/5 text-zinc-600 hover:text-yellow-400'
-                            }`}
-                        >
-                          <Star className="w-6 h-6" fill={star <= feedbackRating ? 'currentColor' : 'none'} />
-                        </button>
-                      ))}
-                      <span className="ml-2 flex items-center text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                        {feedbackRating === 0 ? 'Select rating' : ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][feedbackRating - 1]}
-                      </span>
+                <div className="glass-card rounded-[2.5rem] p-6 md:p-10 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm md:text-base font-black text-zinc-200">الاسم</label>
+                      <input
+                        type="text"
+                        value={engineerFeedback.fullName}
+                        onChange={(e) => setEngineerFeedback((prev) => ({ ...prev, fullName: e.target.value }))}
+                        placeholder="الاسم الأول واسم العائلة"
+                        className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm md:text-base font-black text-zinc-200">رقم الهاتف</label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={engineerFeedback.phoneNumber}
+                        onChange={(e) => setEngineerFeedback((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                        placeholder="مثال: 01012345678"
+                        className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-purple-500"
+                      />
                     </div>
                   </div>
 
-                  {/* Feedback Text */}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Your Message</label>
-                    <textarea
-                      value={feedbackText}
-                      onChange={e => setFeedbackText(e.target.value)}
-                      rows={6}
-                      placeholder="Share your thoughts, suggestions, or concerns about TCS..."
-                      className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm focus:border-purple-500 transition-all outline-none font-medium text-white shadow-inner resize-none"
+                    <label className="text-sm md:text-base font-black text-zinc-200">الشركة</label>
+                    <input
+                      type="text"
+                      value={engineerFeedback.company}
+                      onChange={(e) => setEngineerFeedback((prev) => ({ ...prev, company: e.target.value }))}
+                      placeholder="اكتب اسم الشركة"
+                      className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-purple-500"
                     />
                   </div>
 
-                  {/* Submit */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm md:text-base font-black text-zinc-200">المنتج</label>
+                      <select
+                        value={engineerFeedback.product}
+                        onChange={(e) => setEngineerFeedback((prev) => ({ ...prev, product: e.target.value }))}
+                        className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-purple-500"
+                      >
+                        <option value="">اختر المنتج</option>
+                        {FEEDBACK_PRODUCT_OPTIONS.map((product) => (
+                          <option key={product} value={product}>{product}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm md:text-base font-black text-zinc-200">المنصب / الوظيفة</label>
+                      <input
+                        type="text"
+                        value={engineerFeedback.position}
+                        onChange={(e) => setEngineerFeedback((prev) => ({ ...prev, position: e.target.value }))}
+                        placeholder="مثال: مهندس صيانة، مشرف فني..."
+                        className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-semibold text-white outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm md:text-base font-black text-zinc-200">الاستفسار أو الملاحظة أو الرأي</label>
+                    <textarea
+                      value={engineerFeedback.message}
+                      onChange={(e) => setEngineerFeedback((prev) => ({ ...prev, message: e.target.value }))}
+                      rows={6}
+                      placeholder="اكتب استفسارك أو تحديثك أو ملاحظتك أو رأيك هنا..."
+                      className="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-base font-medium text-white outline-none focus:border-purple-500 resize-none"
+                    />
+                  </div>
+
                   <button
+                    type="button"
                     onClick={async () => {
-                      if (!feedbackText.trim()) { window.alert('Please write your feedback before submitting.'); return; }
+                      const result = validateArabicFeedbackForm(engineerFeedback);
+                      if (!result.ok) {
+                        message.warning(result.message);
+                        return;
+                      }
                       setIsSendingFeedback(true);
                       try {
-                        await saveFeedbackToDb({ name: feedbackName, message: feedbackText, rating: feedbackRating });
+                        await saveFeedbackToDb({
+                          ...result.data,
+                          locale: 'ar',
+                          formVersion: 'arabic_feedback_v1',
+                          source: 'app',
+                          appMode: appMode || null,
+                          verificationMethod: 'phone_format',
+                          verified: true,
+                        });
+                        logUserAction({
+                          action: 'Submitted Arabic feedback',
+                          category: 'FEEDBACK',
+                          details: {
+                            product: result.data.product,
+                            company: result.data.company,
+                          },
+                        });
                         setFeedbackSent(true);
-                      } catch (e) { console.error(e); window.alert('Failed to submit feedback. Please try again.'); }
-                      finally { setIsSendingFeedback(false); }
+                        message.success('تم إرسال ملاحظتك بنجاح.');
+                      } catch (e) {
+                        console.error(e);
+                        message.error('حدث خطأ أثناء الإرسال. حاول مرة أخرى.');
+                      } finally {
+                        setIsSendingFeedback(false);
+                      }
                     }}
                     disabled={isSendingFeedback}
-                    className="w-full bg-purple-600 text-white py-6 rounded-2xl font-black text-sm uppercase tracking-[0.3em] hover:bg-purple-500 transition-all shadow-2xl shadow-purple-900/40 flex items-center justify-center gap-3"
+                    className="w-full rounded-2xl bg-purple-600 py-4 text-sm font-black text-white transition-all hover:bg-purple-500 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {isSendingFeedback
-                      ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      : <Send className="w-5 h-5" />}
-                    {isSendingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                    {isSendingFeedback ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    {isSendingFeedback ? 'جاري الإرسال...' : 'إرسال الملاحظة'}
                   </button>
 
                   <button
-                    onClick={() => setView(selectedEngineer ? 'ENGINEER_HISTORY' : 'HOME')}
-                    className="w-full text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em] hover:text-white transition-colors py-3"
+                    type="button"
+                    onClick={() => navigateTo('HOME')}
+                    className="w-full text-zinc-500 text-sm font-black hover:text-white transition-colors py-2"
                   >
-                    Cancel
+                    إلغاء والعودة
                   </button>
                 </div>
               )}
@@ -8203,8 +8508,92 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         </div> {/* close animated wrapper key={view} */}
       </main>
 
+      {/* Arabic feedback promo — home modal */}
+      {feedbackHomePopupOpen && (
+          <div
+            className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-black/75 backdrop-blur-md"
+            dir="rtl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-promo-title"
+          >
+            <div className="relative w-full max-w-md rounded-[2rem] border border-purple-500/25 bg-zinc-950 shadow-[0_0_60px_rgba(147,51,234,0.35)] p-6 sm:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-300">
+              <button
+                type="button"
+                onClick={dismissFeedbackPromo}
+                className="absolute top-4 left-4 p-2 rounded-xl bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white transition-all"
+                aria-label="إغلاق"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="text-center space-y-2 pt-2">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center">
+                  <MessageSquare className="w-7 h-7 text-purple-300" />
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-purple-400">صوت شركاء سامسونج</p>
+                <h3 id="feedback-promo-title" className="text-xl sm:text-2xl font-black text-white">
+                  ملاحظات واقتراحات
+                </h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  شاركنا استفسارك أو ملاحظتك أو رأيك من خلال تجربتك لتطبيق SCORA. يستغرق النموذج دقيقة واحدة.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={openFeedbackForm}
+                  className="w-full rounded-2xl bg-purple-600 py-4 text-sm font-black text-white hover:bg-purple-500 transition-all"
+                >
+                  املأ النموذج
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissFeedbackPromo}
+                  className="w-full rounded-2xl border border-white/10 bg-zinc-900 py-3 text-sm font-black text-zinc-400 hover:text-white hover:border-white/20 transition-all"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* Floating Arabic feedback link (other pages; hidden on HOME while promo active) */}
+      {!isAdminPortal &&
+        portalRealm === 'TCS' &&
+        feedbackEnabled &&
+        showFeedbackPromo &&
+        view !== 'HOME' &&
+        view !== 'APP_SELECTION' &&
+        view !== 'PQA_DIVISION_SELECTION' &&
+        view !== 'TCS_DIVISION_SELECTION' &&
+        view !== 'FEEDBACK' && (
+          <div className="fixed left-5 top-[calc(50%+4.5rem)] -translate-y-1/2 z-50" dir="rtl">
+            <button
+              type="button"
+              onClick={dismissFeedbackPromo}
+              className="absolute -top-2 -left-2 h-6 w-6 rounded-full border border-white/20 bg-zinc-900 text-white/80 hover:text-white hover:border-white/40 transition-all flex items-center justify-center"
+              title="إخفاء"
+              aria-label="إخفاء زر الملاحظات"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={openFeedbackForm}
+              className="rounded-2xl bg-purple-600/95 px-4 py-3 shadow-[0_0_28px_rgba(147,51,234,0.75)] border border-purple-300/30 transition-all hover:scale-105 hover:bg-purple-500 active:scale-95"
+              title="ملاحظات واقتراحات"
+            >
+              <span className="inline-flex items-center gap-2 text-[10px] font-black text-white">
+                <MessageSquare className="w-4 h-4" />
+                ملاحظات واقتراحات
+              </span>
+            </button>
+          </div>
+        )}
+
       {/* Floating Samsung Academy Survey Link */}
-      {!isAdminPortal && portalRealm === 'TCS' && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
+      {!isAdminPortal && portalRealm === 'TCS' && academySurveyPopupEnabled && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
         <div className="fixed right-5 top-1/2 -translate-y-1/2 z-50">
           <button
             onClick={() => setShowSurveyShortcut(false)}

@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:pqa-map": "node scripts/verify-pqa-partner-map.mjs"
+    "test:pqa-map": "node scripts/verify-pqa-partner-map.mjs",
+    "deploy:storage": "firebase deploy --only storage --project tcs-for-engineers"
   },
   "dependencies": {
     "antd": "^6.3.0",
@@ -24,6 +26,7 @@
     "docx": "^9.6.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "firebase-tools": "^14.0.0",
     "pptxgenjs": "^4.0.1",
     "tailwindcss": "^4"
   }

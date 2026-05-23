@@ -21,7 +21,9 @@ export const uploadTcsAllProductImagesFromPublic = async () => {
         if (!res.ok) throw new Error(`Could not load ${publicPath}`);
         const blob = await res.blob();
         const storageRef = ref(storage, `${TCS_ALL_PRODUCTS_IMAGES_FOLDER}/${storageName}`);
-        await uploadBytes(storageRef, blob, { contentType: blob.type || 'image/png' });
+        await uploadBytes(storageRef, blob, {
+            contentType: blob.type?.startsWith('image/') ? blob.type : 'image/png',
+        });
         urls[storageName] = await getDownloadURL(storageRef);
     }
     return urls;

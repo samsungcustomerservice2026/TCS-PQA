@@ -1,5 +1,9 @@
 // Constants and Helpers
 
+/** Default engineer avatar until they upload their own photo (Samsung logo). */
+export const DEFAULT_ENGINEER_PHOTO_URL =
+  'https://firebasestorage.googleapis.com/v0/b/tcs-for-engineers.firebasestorage.app/o/PQA%2FService%20centers%2FSAMSUNG.jpg?alt=media&token=90a6b923-e8c1-4f65-96d1-0852386e73c1';
+
 // ─── KPI TARGETS & SCORE WEIGHTS ─────────────────────────────
 // All 8 KPIs combined → 50% of TCS score (max 50 pts)
 // DRNPS              → 30% of TCS score (max 30 pts)
