@@ -5307,13 +5307,18 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </p>
                   </div>
 
-                  <div className="space-y-8 relative z-10">
+                  <form
+                    className="space-y-8 relative z-10"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSearch();
+                    }}
+                  >
                     <div className="relative group">
                       <input
                         type="text"
                         value={searchCode}
                         onChange={(e) => setSearchCode(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         placeholder={searchIsPqaContext ? 'SERVICE_CENTER_CODE' : 'ENGINEER_CODE'}
                         className="w-full bg-black border border-white/5 rounded-3xl p-6 md:p-8 text-center text-2xl md:text-4xl font-black tracking-[0.2em] md:tracking-[0.4em] focus:border-blue-500 transition-all outline-none placeholder:text-zinc-900 text-white shadow-inner"
                       />
@@ -5321,12 +5326,12 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </div>
 
                     <button
-                      onClick={handleSearch}
+                      type="submit"
                       className="w-full bg-white text-black py-6 md:py-8 rounded-3xl font-black text-sm uppercase tracking-[0.4em] hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-2xl"
                     >
                       Search
                     </button>
-                  </div>
+                  </form>
 
                   <div className="pt-8 border-t border-white/5 flex items-center justify-center gap-6 relative z-10">
                     <div className="flex flex-col items-center">
@@ -5355,7 +5360,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <p className="text-zinc-600 text-sm font-medium">Authentication required for management node access.</p>
               </div>
 
-              <div className="space-y-6 bg-zinc-900 shadow-3xl p-10 rounded-[3rem] border border-white/5">
+              <form
+                className="space-y-6 bg-zinc-900 shadow-3xl p-10 rounded-[3rem] border border-white/5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAdminLogin();
+                }}
+              >
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Access ID</label>
                   <input
@@ -5363,6 +5374,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     placeholder="USERNAME_ALPHA"
                     value={loginUser}
                     onChange={e => setLoginUser(e.target.value)}
+                    autoComplete="username"
                     className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm focus:border-blue-500 transition-all outline-none placeholder:text-zinc-800 font-bold text-white shadow-inner"
                   />
                 </div>
@@ -5373,6 +5385,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     placeholder="••••••••••••"
                     value={loginPass}
                     onChange={e => setLoginPass(e.target.value)}
+                    autoComplete="current-password"
                     className="w-full bg-black border border-white/5 rounded-2xl p-5 text-sm focus:border-blue-500 transition-all outline-none placeholder:text-zinc-800 font-bold text-white shadow-inner"
                   />
                 </div>
@@ -5387,12 +5400,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 )}
 
                 <button
-                  onClick={handleAdminLogin}
+                  type="submit"
                   className="w-full bg-white text-black py-6 rounded-2xl font-black text-sm hover:bg-zinc-200 transition-all active:scale-[0.98] shadow-2xl uppercase tracking-[0.3em] mt-6"
                 >
                   Execute Initialization
                 </button>
                 <button
+                  type="button"
                   onClick={() => setView('HOME')}
                   className="w-full text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em] hover:text-white transition-colors py-4"
                 >
@@ -5400,13 +5414,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 </button>
                 <div className="flex justify-center">
                   <button
+                    type="button"
                     onClick={handleClearSession}
                     className="text-[8px] font-black text-zinc-800 uppercase tracking-widest hover:text-red-500 transition-all"
                   >
                     Clear Session Cache
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
           )}
 
@@ -6557,10 +6572,10 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       : (engineerSummaryRanks?.monthRank || selectedEngineer.ytdRank || '-'))}
                 />
               )}
-              <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
+              <div className="space-y-16 animate-in slide-in-from-right-8 duration-700 overflow-x-hidden max-w-full">
                 {/* Dossier Header */}
-                <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-12 border-b border-white/5 pb-16">
-                  <div className="flex flex-col items-center md:items-start gap-8">
+                <div className="flex flex-col md:flex-row items-stretch md:items-end justify-between gap-8 md:gap-12 border-b border-white/5 pb-16">
+                  <div className="flex flex-col items-center md:items-start gap-8 w-full min-w-0 max-w-full">
                     <div className="relative group">
                       <div className="absolute -inset-4 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
                       <img
@@ -6584,10 +6599,10 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <Camera className="w-3 h-3" />
                       {isPqaMode ? 'Update Center Photo' : 'Update My Photo'}
                     </button>
-                    <div className="text-center md:text-left space-y-2">
+                    <div className="text-center md:text-left space-y-2 w-full min-w-0 max-w-full px-1">
                       <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
                         <div className="h-[1px] w-8 bg-blue-500 hidden sm:block" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.5em] text-blue-500">Personnel Dossier</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.35em] sm:tracking-[0.5em] text-blue-500">Personnel Dossier</span>
                         {isPqaMode && (
                           <span className={`text-[8px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest ${
                             (selectedEngineer.pqaBranch || appMode) === 'PQA_CE'
@@ -6598,18 +6613,18 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           </span>
                         )}
                       </div>
-                      <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white uppercase italic">
+                      <h2 className="text-lg sm:text-2xl md:text-4xl lg:text-5xl font-black tracking-tight md:tracking-tighter text-white uppercase italic leading-[1.15] break-words [overflow-wrap:anywhere] max-w-full">
                         {isPqaMode ? selectedEngineer.name : tcsDisplayPrimary(selectedEngineer)}
                       </h2>
                       {!isPqaMode && tcsDisplaySecondary(selectedEngineer) ? (
-                        <p className="text-sm font-bold text-zinc-400 normal-case mt-1">{tcsDisplaySecondary(selectedEngineer)}</p>
+                        <p className="text-xs sm:text-sm font-bold text-zinc-400 normal-case mt-1 break-words [overflow-wrap:anywhere] max-w-full">{tcsDisplaySecondary(selectedEngineer)}</p>
                       ) : null}
                       {isPqaMode ? null : (
-                        <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.5em] mt-1">
+                        <p className="text-zinc-500 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.35em] sm:tracking-[0.5em] mt-1 break-all max-w-full">
                           Engineer code · {String(selectedEngineer.code || '—')}
                         </p>
                       )}
-                      <div className="flex items-center gap-4 mt-2">
+                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 sm:gap-4 mt-2 max-w-full">
                         {isPqaMode && (
                           <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.6em]">{selectedEngineer.code}</p>
                         )}
@@ -6626,9 +6641,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-4">
-                    <div className="glass-card px-10 py-6 rounded-3xl flex flex-col items-end border-blue-500/20 shadow-2xl">
-                      <span className="text-6xl font-black text-white italic tracking-tighter">
+                  <div className="flex flex-col items-center md:items-end gap-4 w-full md:w-auto shrink-0">
+                    <div className="glass-card px-6 sm:px-10 py-5 sm:py-6 rounded-3xl flex flex-col items-center md:items-end border-blue-500/20 shadow-2xl w-full max-w-sm md:max-w-none">
+                      <span className="text-4xl sm:text-5xl md:text-6xl font-black text-white italic tracking-tighter">
                         {isPqaMode
                           ? ((profileOpenedByExactCode && pqaAccumulatedScore > 0)
                             ? Number(pqaAccumulatedScore.toFixed(1))
