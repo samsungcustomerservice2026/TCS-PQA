@@ -92,6 +92,12 @@ import {
   FEEDBACK_PRODUCT_OPTIONS,
   validateArabicFeedbackForm,
 } from '../lib/arabicFeedbackValidation';
+import {
+  SCORA_ADMIN_EXTERNAL_LOGS_URL,
+  SCORA_PUBLIC_FEEDBACK_URL,
+  SCORA_PUBLIC_PATHS,
+  SCORA_PUBLIC_SURVEY_URL,
+} from '../constants/scoraDomains';
 
 import {
   FIREBASE_STORAGE_RULES_CONSOLE_URL,
@@ -165,6 +171,20 @@ const getQuarter = (monthName) => {
 
 const UI_STATE_STORAGE_KEY_MAIN = 'tcs_ui_state_main_v1';
 const UI_STATE_STORAGE_KEY_ADMIN = 'tcs_ui_state_admin_v1';
+
+/** Clean public paths — also work via query: ?survey=samsung-academy | ?feedback=1 */
+const PUBLIC_SAMSUNG_ACADEMY_SURVEY_PATH = SCORA_PUBLIC_PATHS.survey;
+const PUBLIC_FEEDBACK_PATH = SCORA_PUBLIC_PATHS.feedback;
+
+const isDirectSurveyQuery = (value) => {
+  const v = String(value || '').toLowerCase();
+  return v === 'samsung-academy' || v === 'academy' || v === '1' || v === 'true';
+};
+
+const isDirectFeedbackQuery = (value) => {
+  const v = String(value || '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'feedback' || v === 'arabic';
+};
 const getMonthIndex = (monthName) => {
   if (monthName === undefined || monthName === null || monthName === '') return 0;
   if (typeof monthName === 'number' && monthName >= 1 && monthName <= 12) return monthName - 1;
@@ -2039,11 +2059,47 @@ const PageContent = () => {
     return 'راضي';
   };
 
-  // Direct URL support: /?portal=admin | /?survey=samsung-academy
+  // Direct URL support: /samsung-academy-survey | /feedback | /?portal=admin | /?survey=… | /?feedback=…
   const portalQueryHandledRef = useRef(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+
+    const survey = String(params.get('survey') || '').toLowerCase();
+    if (isDirectSurveyQuery(survey)) {
+      setPortalRealm('TCS');
+      setAppMode((prev) => prev || 'TCS_MX');
+      setShowSurveyShortcut(false);
+      resetAcademySurvey();
+      setView('SAMSUNG_ACADEMY_SURVEY');
+      viewStackRef.current = ['APP_SELECTION', 'SAMSUNG_ACADEMY_SURVEY'];
+      params.delete('survey');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', nextUrl);
+      return;
+    }
+
+    const feedback = String(params.get('feedback') || params.get('form') || '').toLowerCase();
+    if (isDirectFeedbackQuery(feedback)) {
+      setPortalRealm('TCS');
+      setAppMode((prev) => prev || 'TCS_MX');
+      setShowFeedbackPromo(false);
+      setEngineerFeedback(INITIAL_ENGINEER_FEEDBACK);
+      setFeedbackSent(false);
+      try {
+        sessionStorage.setItem('feedback_opened', '1');
+      } catch { /* ignore */ }
+      setView('FEEDBACK');
+      viewStackRef.current = ['APP_SELECTION', 'FEEDBACK'];
+      params.delete('feedback');
+      params.delete('form');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', nextUrl);
+      return;
+    }
+
     const portal = String(params.get('portal') || '').toLowerCase();
     const logs = String(params.get('logs') || '').toLowerCase();
 
@@ -2060,28 +2116,18 @@ const PageContent = () => {
         viewStackRef.current = ['ADMIN_LOGIN'];
       }
       portalQueryHandledRef.current = true;
-      return;
     }
-
-    if (portalQueryHandledRef.current) return;
-
-    const survey = String(params.get('survey') || '').toLowerCase();
-    if (survey !== 'samsung-academy' && survey !== 'academy') return;
-
-    setPortalRealm('TCS');
-    setAppMode((prev) => prev || 'TCS_MX');
-    setShowSurveyShortcut(false);
-    resetAcademySurvey();
-    setView('SAMSUNG_ACADEMY_SURVEY');
-    viewStackRef.current = ['APP_SELECTION', 'SAMSUNG_ACADEMY_SURVEY'];
-
-    params.delete('survey');
-    const nextQuery = params.toString();
-    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
-    window.history.replaceState({}, '', nextUrl);
-    // resetAcademySurvey is stable enough; omit from deps to avoid re-running every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLogged]);
+
+  const copyPublicDirectLink = React.useCallback(async (fullUrl, label) => {
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      message.success(`${label} direct link copied.`);
+    } catch {
+      message.error('Failed to copy link.');
+    }
+  }, [message]);
 
   useEffect(() => {
     if (view === 'EXTERNAL_LOGS') loadLogs();
@@ -6353,6 +6399,60 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       </div>
                     </div>
                     )}
+                    <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5 space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-300">Public direct links</p>
+                        <p className="text-[10px] text-zinc-500 font-medium leading-relaxed max-w-2xl">
+                          Share these URLs to open the survey or feedback form directly — no need to navigate the portal first.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-emerald-500/20 bg-black/30 p-4 space-y-3">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Samsung Academy survey</p>
+                          <p className="text-[10px] font-mono text-zinc-400 break-all">{SCORA_PUBLIC_SURVEY_URL}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => window.open(SCORA_PUBLIC_SURVEY_URL, '_blank', 'noopener,noreferrer')}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600/25 transition-all"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyPublicDirectLink(SCORA_PUBLIC_SURVEY_URL, 'Samsung Academy survey')}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 text-[9px] font-black uppercase tracking-widest hover:text-white hover:bg-zinc-800 transition-all"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-purple-500/20 bg-black/30 p-4 space-y-3">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-purple-400">Arabic feedback form</p>
+                          <p className="text-[10px] font-mono text-zinc-400 break-all">{SCORA_PUBLIC_FEEDBACK_URL}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => window.open(SCORA_PUBLIC_FEEDBACK_URL, '_blank', 'noopener,noreferrer')}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-600/15 border border-purple-500/25 text-purple-300 text-[9px] font-black uppercase tracking-widest hover:bg-purple-600/25 transition-all"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyPublicDirectLink(SCORA_PUBLIC_FEEDBACK_URL, 'Feedback')}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 text-[9px] font-black uppercase tracking-widest hover:text-white hover:bg-zinc-800 transition-all"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                       {(canReadModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (
                         <button
@@ -8486,8 +8586,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}${externalLogsPath}`;
-                      window.open(url, '_blank', 'noopener,noreferrer');
+                      window.open(SCORA_ADMIN_EXTERNAL_LOGS_URL, '_blank', 'noopener,noreferrer');
                     }}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase tracking-widest hover:bg-blue-600/30 transition-all"
                   >
@@ -8497,8 +8596,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <button
                     onClick={async () => {
                       try {
-                        const url = `${window.location.origin}${externalLogsPath}`;
-                        await navigator.clipboard.writeText(url);
+                        await navigator.clipboard.writeText(SCORA_ADMIN_EXTERNAL_LOGS_URL);
                         message.success('Direct log link copied.');
                       } catch {
                         message.error('Failed to copy link.');

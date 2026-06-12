@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import { SCORA_MAIN_ORIGIN } from "../constants/scoraDomains";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,11 +21,11 @@ export const metadata = {
   openGraph: {
     title: "TCS — Technical Capability System",
     description: "Earn Your Tier • Own Your Title. Samsung's transparent engineering performance framework.",
-    url: "https://tcs-for-engineers.web.app",
+    url: SCORA_MAIN_ORIGIN,
     siteName: "TCS For Engineers",
     images: [
       {
-        url: "https://tcs-for-engineers.web.app/sam_logo.png",
+        url: `${SCORA_MAIN_ORIGIN}/sam_logo.png`,
         width: 800,
         height: 400,
         alt: "TCS For Engineers",
@@ -37,7 +38,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "TCS — Technical Capability System",
     description: "Earn Your Tier • Own Your Title. Samsung's engineering performance framework.",
-    images: ["https://tcs-for-engineers.web.app/sam_logo.png"],
+    images: [`${SCORA_MAIN_ORIGIN}/sam_logo.png`],
   },
   icons: {
     icon: "/favicon.ico",
