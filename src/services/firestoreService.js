@@ -8,6 +8,8 @@ const TCS_DASHBOARD_WINNERS_COLLECTION = 'tcs_dashboard_winners';
 /** Only these collections may be archived from the admin UI (prevents arbitrary path writes). */
 const ALLOWED_ENGINEER_COLLECTIONS = new Set([
   'engineers',
+  'tcs_mx_receptionists',
+  'tcs_mx_galaxy_consultants',
   'tcs_da_engineers',
   'tcs_vd_engineers',
   'pqa_mx_centers',

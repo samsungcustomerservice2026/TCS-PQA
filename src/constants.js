@@ -172,6 +172,32 @@ export const getTierColor = (tier) => {
     }
 };
 
+const buildMxDemoRecord = ({ id, name, code, engineerEvaluation, examScore = 85, promoters = 28, detractors = 2 }) => ({
+    id,
+    name,
+    code,
+    photoUrl: DEFAULT_ENGINEER_PHOTO_URL,
+    asc: 'Samsung ASC',
+    partnerName: 'MX Division',
+    month: 'March',
+    year: '2026',
+    product: 'MX',
+    redoRatio: 0.5,
+    iqcSkipRatio: 18,
+    maintenanceModeRatio: 70,
+    oqcPassRate: 88,
+    trainingAttendance: 100,
+    corePartsPBA: 22,
+    corePartsOcta: 35,
+    multiPartsRatio: 0.8,
+    engineerEvaluation,
+    examScore,
+    promoters,
+    detractors,
+    tcsScore: 0,
+    tier: 'Bronze',
+});
+
 export const INITIAL_ENGINEERS = [
     {
         id: '1',
@@ -182,7 +208,6 @@ export const INITIAL_ENGINEERS = [
         partnerName: 'TCS Global',
         month: 'March',
         year: '2025',
-        // KPI fields
         redoRatio: 0.5,
         iqcSkipRatio: 18,
         maintenanceModeRatio: 70,
@@ -191,12 +216,30 @@ export const INITIAL_ENGINEERS = [
         corePartsPBA: 22,
         corePartsOcta: 35,
         multiPartsRatio: 0.8,
-        // Exam & DRNPS
         examScore: 93,
         promoters: 45,
         detractors: 3,
-        // Computed
         tcsScore: 0,
         tier: 'Bronze'
     }
 ];
+
+/** Demo seed for TCS MX Receptionists (separate Firestore collection). */
+export const INITIAL_MX_RECEPTIONISTS = [
+    buildMxDemoRecord({ id: 'rx-demo-1', name: 'Sara Hassan', code: 'RX-001', engineerEvaluation: 94 }),
+    buildMxDemoRecord({ id: 'rx-demo-2', name: 'Nour Ali', code: 'RX-002', engineerEvaluation: 91 }),
+    buildMxDemoRecord({ id: 'rx-demo-3', name: 'Mona Farid', code: 'RX-003', engineerEvaluation: 88 }),
+    buildMxDemoRecord({ id: 'rx-demo-4', name: 'Hana Youssef', code: 'RX-004', engineerEvaluation: 85 }),
+    buildMxDemoRecord({ id: 'rx-demo-5', name: 'Laila Kamal', code: 'RX-005', engineerEvaluation: 82 }),
+    buildMxDemoRecord({ id: 'rx-demo-6', name: 'Dina Mahmoud', code: 'RX-006', engineerEvaluation: 79 }),
+].map((r) => ({ ...r, roleType: 'receptionist' }));
+
+/** Demo seed for TCS MX Galaxy Consultants (separate Firestore collection). */
+export const INITIAL_MX_GALAXY_CONSULTANTS = [
+    buildMxDemoRecord({ id: 'gc-demo-1', name: 'Omar Galaxy', code: 'GC-001', engineerEvaluation: 96 }),
+    buildMxDemoRecord({ id: 'gc-demo-2', name: 'Youssef Galaxy', code: 'GC-002', engineerEvaluation: 93 }),
+    buildMxDemoRecord({ id: 'gc-demo-3', name: 'Karim Galaxy', code: 'GC-003', engineerEvaluation: 90 }),
+    buildMxDemoRecord({ id: 'gc-demo-4', name: 'Tarek Galaxy', code: 'GC-004', engineerEvaluation: 87 }),
+    buildMxDemoRecord({ id: 'gc-demo-5', name: 'Amr Galaxy', code: 'GC-005', engineerEvaluation: 84 }),
+    buildMxDemoRecord({ id: 'gc-demo-6', name: 'Hadi Galaxy', code: 'GC-006', engineerEvaluation: 81 }),
+].map((r) => ({ ...r, roleType: 'galaxy_consultant' }));

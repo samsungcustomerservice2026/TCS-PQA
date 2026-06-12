@@ -70,6 +70,8 @@ import { cloneSnapshot, pushUndoEntry, popUndoEntry } from '../lib/adminUndo';
 
 import {
   INITIAL_ENGINEERS,
+  INITIAL_MX_RECEPTIONISTS,
+  INITIAL_MX_GALAXY_CONSULTANTS,
   calculateDRNPS,
   getTier,
   getTierColor,
@@ -185,13 +187,41 @@ const parseMonthYearKey = (key) => {
 /** Firestore may store year as number or string — always compare coerced */
 const sameCalendarYear = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();
 
+/** TCS MX role tabs — Engineers unchanged; Receptionists & Galaxy Consultants use separate collections. */
+const TCS_MX_ROLE_TABS = [
+  { key: 'engineers', label: 'Engineers' },
+  { key: 'receptionists', label: 'Receptionists' },
+  { key: 'galaxy_consultants', label: 'Galaxy Consultants' },
+];
+
+const TCS_MX_ROLE_COLLECTIONS = {
+  engineers: 'engineers',
+  receptionists: 'tcs_mx_receptionists',
+  galaxy_consultants: 'tcs_mx_galaxy_consultants',
+};
+
+const getInitialDataForCollection = (collectionName) => {
+  if (collectionName === TCS_MX_ROLE_COLLECTIONS.receptionists) return INITIAL_MX_RECEPTIONISTS;
+  if (collectionName === TCS_MX_ROLE_COLLECTIONS.galaxy_consultants) return INITIAL_MX_GALAXY_CONSULTANTS;
+  return INITIAL_ENGINEERS;
+};
+
+const getTcsMxRolePersonLabel = (mxRoleTab) => {
+  if (mxRoleTab === 'receptionists') return 'Receptionist';
+  if (mxRoleTab === 'galaxy_consultants') return 'Galaxy Consultant';
+  return 'Engineer';
+};
+
 /** Firestore collection for app mode (TCS split by division: MX uses legacy `engineers`) */
-const resolveFirestoreCollection = (mode) => {
-  if (!mode) return 'engineers';
+const resolveFirestoreCollection = (mode, mxRoleTab = 'engineers') => {
+  if (!mode) return TCS_MX_ROLE_COLLECTIONS.engineers;
   if (mode === 'PQA_MX') return 'pqa_mx_centers';
   if (mode === 'PQA_CE') return 'pqa_ce_centers';
   if (mode === 'TCS_DA') return 'tcs_da_engineers';
   if (mode === 'TCS_AV' || mode === 'TCS_VD') return 'tcs_vd_engineers';
+  if (mode === 'TCS_MX') {
+    return TCS_MX_ROLE_COLLECTIONS[mxRoleTab] || TCS_MX_ROLE_COLLECTIONS.engineers;
+  }
   return 'engineers';
 };
 
@@ -1388,6 +1418,18 @@ const PageContent = () => {
       return null;
     }
   }); // 'TCS_MX' | 'TCS_DA' | 'TCS_AV' | 'TCS_VD' (legacy) | 'PQA_MX' | 'PQA_CE'
+  const [tcsMxRoleTab, setTcsMxRoleTab] = useState(() => {
+    if (typeof window === 'undefined') return 'engineers';
+    try {
+      const raw = sessionStorage.getItem(bootStorageKey);
+      if (!raw) return 'engineers';
+      const parsed = JSON.parse(raw);
+      const tab = parsed?.tcsMxRoleTab;
+      return TCS_MX_ROLE_TABS.some((t) => t.key === tab) ? tab : 'engineers';
+    } catch {
+      return 'engineers';
+    }
+  });
   /** Set when user picks TCS vs PQA at gateway — keeps search screen aligned (engineer code vs service center code). */
   const [portalRealm, setPortalRealm] = useState(() => {
     if (typeof window === 'undefined') return null;
@@ -1468,20 +1510,23 @@ const PageContent = () => {
           appMode: appMode || null,
           portalRealm: portalRealm || null,
           isAdminPortal: !!isAdminPortal,
+          tcsMxRoleTab,
         })
       );
     } catch {
       // Ignore persistence failures
     }
-  }, [view, appMode, portalRealm, isAdminPortal]);
+  }, [view, appMode, portalRealm, isAdminPortal, tcsMxRoleTab]);
 
   const isPqaMode = appMode?.startsWith('PQA');
+  const isTcsMxAlternateRole = appMode === 'TCS_MX' && tcsMxRoleTab !== 'engineers';
+  const tcsMxPersonLabel = appMode === 'TCS_MX' ? getTcsMxRolePersonLabel(tcsMxRoleTab) : 'Engineer';
   /** Search / lookup copy: PQA portal → service center code; TCS portal → engineer code. Falls back to appMode when portalRealm unset. */
   const searchIsPqaContext = portalRealm === 'PQA' || (portalRealm === null && isPqaMode);
   const portalVsAppMismatch =
     (portalRealm === 'TCS' && isPqaMode) || (portalRealm === 'PQA' && appMode?.startsWith('TCS'));
   // Derived Firestore collection name — available everywhere in the component
-  const colName = resolveFirestoreCollection(appMode);
+  const colName = resolveFirestoreCollection(appMode, tcsMxRoleTab);
   const [engineers, setEngineers] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [currentUser, setCurrentUser] = useState(() => {
@@ -2637,7 +2682,6 @@ const PageContent = () => {
     };
     return (
       <div className="mb-6 w-full min-w-0 max-w-full md:mb-10" aria-label="Top three podium">
-        <p className="mb-3 text-center text-[9px] font-black uppercase tracking-[0.35em] text-zinc-600">Podium — Top 3</p>
         <div className="mx-auto grid w-full min-w-0 max-w-4xl grid-cols-3 items-end gap-1 px-1 sm:gap-3 sm:px-3 md:gap-5">
           {top.length >= 2 && <PodiumCol eng={top[1]} forcedRank={2} stepClass="h-12 sm:h-[5.5rem] md:h-[7rem]" />}
           {top.length >= 1 && <PodiumCol eng={top[0]} forcedRank={1} stepClass="h-16 sm:h-[7.5rem] md:h-[9.5rem]" champion />}
@@ -2733,9 +2777,10 @@ const PageContent = () => {
           setEngineers(fetchedEngineers);
           setNoEngineers(false);
         } else {
-          console.warn("No engineers found in database. Using initial demo data.");
-          setEngineers(INITIAL_ENGINEERS);
-          setNoEngineers(false); // We have demo data now
+          const fallback = getInitialDataForCollection(colName);
+          console.warn(`No records in ${colName}. Using demo fallback (${fallback.length} rows).`);
+          setEngineers(fallback);
+          setNoEngineers(false);
         }
 
         if (fetchedHiddenEngineers && fetchedHiddenEngineers.length > 0) {
@@ -2760,7 +2805,7 @@ const PageContent = () => {
         setFetchError(`Database connection issue: ${error.message || 'Unknown error'}. Using offline fallback data and admin.`);
         
         // Use fallbacks on error
-        setEngineers(INITIAL_ENGINEERS);
+        setEngineers(getInitialDataForCollection(colName));
         setAdmins(bootstrapAdmin ? [bootstrapAdmin] : []);
         setNoEngineers(false);
       } finally {
@@ -2769,7 +2814,7 @@ const PageContent = () => {
     };
 
     fetchData();
-  }, [appMode, view]);
+  }, [appMode, view, colName]);
 
   const sortedEngineers = useMemo(() => {
     return [...engineers].sort((a, b) => b.tcsScore - a.tcsScore);
@@ -3340,13 +3385,17 @@ const PageContent = () => {
       });
   }, [engineers, deduplicatedEngineers, effectiveQuarterKey, appMode, pqaMxGroupBy, resolveTcsDashboardScore]);
   const monthlyDashboardList = useMemo(() => {
+    if (isTcsMode && isTcsMxAlternateRole) {
+      return hofTop10.slice(0, TCS_WINNERS_PER_PRODUCT);
+    }
     if (isTcsMode) return applyConfiguredTcsWinners(quarterlyRanking);
     return hofTop10;
-  }, [isTcsMode, applyConfiguredTcsWinners, quarterlyRanking, hofTop10]);
+  }, [isTcsMode, isTcsMxAlternateRole, applyConfiguredTcsWinners, quarterlyRanking, hofTop10]);
   const quarterlyDashboardList = useMemo(() => {
     if (!isTcsMode) return quarterlyRanking;
+    if (isTcsMxAlternateRole) return quarterlyRanking.slice(0, TCS_WINNERS_PER_PRODUCT);
     return applyConfiguredTcsWinners(quarterlyRanking);
-  }, [isTcsMode, applyConfiguredTcsWinners, quarterlyRanking]);
+  }, [isTcsMode, isTcsMxAlternateRole, applyConfiguredTcsWinners, quarterlyRanking]);
 
   // ─── Engineer history: all records for the selected engineer's code, latest 3 months ───
   const engineerHistory = useMemo(() => {
@@ -3546,7 +3595,7 @@ const PageContent = () => {
     }
 
     if (matchingRecords.length === 0) {
-      message.error(`${searchIsPqaContext ? 'Service center' : 'Engineer'} "${trimmed}" not found in current records for ${appMode || 'this division'}.`);
+      message.error(`${searchIsPqaContext ? 'Service center' : tcsMxPersonLabel} "${trimmed}" not found in current records for ${appMode || 'this division'}.`);
       logUserAction({
         action: 'Search not found',
         category: 'SEARCH',
@@ -3651,16 +3700,16 @@ const PageContent = () => {
     setIsSaving(true);
     const hide = message.loading("Seeding database with initial data...", 0);
     try {
-      const promises = INITIAL_ENGINEERS.map(async (eng) => {
-        // Ensure ID is generated for Firestore
+      const seedRows = getInitialDataForCollection(colName);
+      const promises = seedRows.map(async (eng) => {
         const engToSave = { ...eng, id: Date.now().toString() + Math.random().toString(36).substring(7) };
-        return saveEngineerToDb(engToSave);
+        return saveEngineerToDb(engToSave, colName);
       });
       await Promise.all(promises);
       
-      const updatedEngineers = await getEngineers();
+      const updatedEngineers = await getEngineers(colName);
       setEngineers(updatedEngineers);
-      message.success("Database seeded successfully!");
+      message.success(`Database seeded successfully (${colName}).`);
       writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: 'Seeded database', severity: 'info' });
     } catch (error) {
       console.error("Error seeding database:", error);
@@ -3695,18 +3744,23 @@ const PageContent = () => {
   };
 
   const handleClearTcsDivisionData = async (mode) => {
-    const col = resolveFirestoreCollection(mode);
+    const col = mode === 'TCS_MX'
+      ? resolveFirestoreCollection(mode, tcsMxRoleTab)
+      : resolveFirestoreCollection(mode);
     const short = mode === 'TCS_MX' ? 'MX' : mode === 'TCS_DA' ? 'DA' : 'AV';
+    const roleLabel = mode === 'TCS_MX' && tcsMxRoleTab !== 'engineers'
+      ? ` · ${getTcsMxRolePersonLabel(tcsMxRoleTab)}s`
+      : '';
     try {
       const list = await getEngineers(col);
       if (list.length === 0) {
         message.info(`No records in TCS ${short}.`);
         return;
       }
-      if (!window.confirm(`⚠️ Archive ALL ${list.length} records in TCS ${short} (${col})?`)) return;
+      if (!window.confirm(`⚠️ Archive ALL ${list.length} records in TCS ${short}${roleLabel} (${col})?`)) return;
       await Promise.all(list.map((e) => archiveEngineer(e.id, col)));
-      if (resolveFirestoreCollection(appMode) === col) setEngineers([]);
-      message.success(`TCS ${short} data cleared.`);
+      if (colName === col) setEngineers([]);
+      message.success(`TCS ${short}${roleLabel} data cleared.`);
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
@@ -4478,7 +4532,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       const workbook = XLSX.read(data, { type: 'array' });
 
       const isPqaMode = appMode?.startsWith('PQA');
-      const uploadCol = resolveFirestoreCollection(isPqaMode ? appMode : (targetTcsMode || appMode));
+      const uploadMode = isPqaMode ? appMode : (targetTcsMode || appMode);
+      const uploadMxRole = uploadMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers';
+      const uploadCol = resolveFirestoreCollection(uploadMode, uploadMxRole);
       const existingByCollection = {};
       const getExistingForCollection = async (collectionName) => {
         if (existingByCollection[collectionName]) return existingByCollection[collectionName];
@@ -5002,7 +5058,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         const product = String(rec?.product || '').toUpperCase().trim();
         if (product === 'DA') return resolveFirestoreCollection('TCS_DA');
         if (product === 'AV' || product === 'VD') return resolveFirestoreCollection('TCS_AV');
-        if (product === 'MX') return resolveFirestoreCollection('TCS_MX');
+        if (product === 'MX') return resolveFirestoreCollection('TCS_MX', tcsMxRoleTab);
         return uploadCol;
       };
       const groupedUploadSet = {};
@@ -5031,7 +5087,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           });
           savedByCollection[targetCol] = await Promise.all(promises);
         }
-        const currentCollection = resolveFirestoreCollection(appMode);
+        const currentCollection = colName;
         const savedCurrent = savedByCollection[currentCollection] || [];
         if (savedCurrent.length > 0) {
           const freshEngineers = await getEngineers(currentCollection);
@@ -5324,6 +5380,24 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </button>
                 </div>
 
+                {appMode === 'TCS_MX' && (
+                  <div className="bg-zinc-900/60 p-1.5 rounded-full border border-white/10 flex flex-wrap items-center justify-center gap-1 backdrop-blur-xl shadow-xl animate-in fade-in slide-in-from-top-2 duration-700">
+                    {TCS_MX_ROLE_TABS.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setTcsMxRoleTab(tab.key)}
+                        className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${tcsMxRoleTab === tab.key
+                          ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                          : 'text-zinc-500 hover:text-white'
+                          }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {appMode === 'PQA_MX' && (
                   <div className="bg-zinc-900/60 p-1.5 rounded-full border border-white/10 flex items-center backdrop-blur-xl shadow-xl animate-in fade-in slide-in-from-top-2 duration-700">
                     <button
@@ -5390,7 +5464,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     </h3>
                     {monthlyDashboardList.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
-                        {isTcsMode
+                        {isTcsMode && isTcsMxAlternateRole
+                          ? `No ${tcsMxPersonLabel.toLowerCase()} data for this period. Add records in Admin → TCS MX → ${TCS_MX_ROLE_TABS.find((t) => t.key === tcsMxRoleTab)?.label || 'Role'}.`
+                          : isTcsMode
                           ? `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${TCS_WINNERS_PER_PRODUCT} in Admin Portal → Dashboard Winners.`
                           : 'No data for this period.'}
                       </div>
@@ -5471,17 +5547,17 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </div>
 
                   <div className="space-y-4">
-                    {appMode !== 'PQA_CE' && (
+                    {appMode?.startsWith('PQA') && appMode !== 'PQA_CE' && (
                       <h3 className="text-center text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">
-                        {appMode?.startsWith('PQA')
-                          ? (pqaMxGroupBy === 'PARTNER' ? 'All 7 Partners — Accumulated Average' : 'All Service Centers — Accumulated Average')
-                          : `Top ${TCS_WINNERS_PER_PRODUCT} Winners (Quarterly)`}
+                        {pqaMxGroupBy === 'PARTNER' ? 'All 7 Partners — Accumulated Average' : 'All Service Centers — Accumulated Average'}
                       </h3>
                     )}
                     {quarterlyDashboardList.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         {appMode?.startsWith('PQA')
                           ? 'No accumulated data — upload Excel with ★Partner Ranking sheet.'
+                          : isTcsMxAlternateRole
+                          ? `No ${tcsMxPersonLabel.toLowerCase()} data for this quarter. Add records in Admin → TCS MX → ${TCS_MX_ROLE_TABS.find((t) => t.key === tcsMxRoleTab)?.label || 'Role'}.`
                           : `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${TCS_WINNERS_PER_PRODUCT} in Admin Portal → Dashboard Winners.`}
                       </div>
                     ) : (() => {
@@ -5546,6 +5622,23 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
           {view === 'ENGINEER_LOOKUP' && (
             <div className="space-y-16 animate-in slide-in-from-right-8 duration-700">
+              {appMode === 'TCS_MX' && (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {TCS_MX_ROLE_TABS.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setTcsMxRoleTab(tab.key)}
+                      className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tcsMxRoleTab === tab.key
+                        ? 'bg-purple-600 text-white shadow-[0_0_16px_rgba(168,85,247,0.35)]'
+                        : 'bg-zinc-900 text-zinc-500 border border-white/10 hover:text-white'
+                        }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {/* Header section */}
               <div className=" gap-12 border-b border-white/5 pb-6">
 
@@ -5585,7 +5678,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     <p className="text-zinc-400 text-xs font-medium uppercase tracking-widest">
                       {searchIsPqaContext
                         ? 'Enter your service center code below'
-                        : 'Enter your engineer code below (Excel column “Engineer Code”) — not SBA ID'}
+                        : appMode === 'TCS_MX' && tcsMxRoleTab !== 'engineers'
+                          ? `Enter your ${tcsMxPersonLabel.toLowerCase()} code below`
+                          : 'Enter your engineer code below (Excel column “Engineer Code”) — not SBA ID'}
                     </p>
                   </div>
 
@@ -5601,7 +5696,15 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         type="text"
                         value={searchCode}
                         onChange={(e) => setSearchCode(e.target.value)}
-                        placeholder={searchIsPqaContext ? 'SERVICE_CENTER_CODE' : 'ENGINEER_CODE'}
+                        placeholder={
+                          searchIsPqaContext
+                            ? 'SERVICE_CENTER_CODE'
+                            : appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists'
+                              ? 'RECEPTIONIST_CODE'
+                              : appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants'
+                                ? 'GALAXY_CONSULTANT_CODE'
+                                : 'ENGINEER_CODE'
+                        }
                         className="w-full bg-black border border-white/5 rounded-3xl p-6 md:p-8 text-center text-2xl md:text-4xl font-black tracking-[0.2em] md:tracking-[0.4em] focus:border-blue-500 transition-all outline-none placeholder:text-zinc-900 text-white shadow-inner"
                       />
                       <div className="absolute -bottom-px left-1/2 -translate-x-1/2 w-0 h-[2px] bg-blue-500 group-focus-within:w-1/2 transition-all duration-700" />
@@ -5755,6 +5858,25 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   PQA CE Division
                 </button>
               </div>
+
+              {appMode === 'TCS_MX' && (
+                <div className="flex flex-wrap items-center justify-center gap-2 bg-zinc-900/80 border border-purple-500/20 rounded-2xl p-2 max-w-4xl mx-auto mb-4">
+                  {TCS_MX_ROLE_TABS.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setTcsMxRoleTab(tab.key)}
+                      className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tcsMxRoleTab === tab.key
+                        ? 'bg-purple-600 text-white shadow-[0_0_16px_rgba(168,85,247,0.35)]'
+                        : 'bg-zinc-900 text-zinc-500 border border-white/5 hover:text-white'
+                        }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Dashboard Header — compact */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
                 <div className="space-y-1">
@@ -5853,18 +5975,21 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 const activeTcs =
                   appMode === 'TCS_DA' ? 'TCS_DA' : appMode === 'TCS_AV' || appMode === 'TCS_VD' ? 'TCS_AV' : 'TCS_MX';
                 const tabDef = {
-                  TCS_MX: { label: 'TCS MX', short: 'MX', collection: 'engineers', border: 'border-purple-500/25', img: '/mx_logo.png', imgClass: 'object-cover' },
+                  TCS_MX: { label: 'TCS MX', short: 'MX', collection: colName, border: 'border-purple-500/25', img: '/mx_logo.png', imgClass: 'object-cover' },
                   TCS_DA: { label: 'TCS DA', short: 'DA', collection: 'tcs_da_engineers', border: 'border-amber-500/25', img: '/ce_logo.png', imgClass: 'object-cover' },
                   TCS_AV: { label: 'TCS AV', short: 'AV', collection: 'tcs_vd_engineers', border: 'border-cyan-500/25', img: '/av_division.png', imgClass: 'object-contain object-center bg-[#3d3d3d]' },
                 };
                 const cur = tabDef[activeTcs];
+                const mxRoleLabel = activeTcs === 'TCS_MX'
+                  ? (TCS_MX_ROLE_TABS.find((t) => t.key === tcsMxRoleTab)?.label || 'Engineers')
+                  : null;
                 return (
                   <div className={`rounded-[2rem] border bg-zinc-900/40 p-6 md:p-8 space-y-5 ${cur.border}`}>
                     <div className="flex flex-col gap-2 border-b border-white/5 pb-4">
-                      <p className="text-[9px] font-black uppercase tracking-[0.35em] text-blue-400 mb-1">TCS bulk data — {cur.short}</p>
-                      <h3 className="text-lg font-black text-white uppercase tracking-tight">{cur.label}</h3>
+                      <p className="text-[9px] font-black uppercase tracking-[0.35em] text-blue-400 mb-1">TCS bulk data — {cur.short}{mxRoleLabel ? ` · ${mxRoleLabel}` : ''}</p>
+                      <h3 className="text-lg font-black text-white uppercase tracking-tight">{cur.label}{mxRoleLabel ? ` — ${mxRoleLabel}` : ''}</h3>
                       <p className="text-[10px] text-zinc-500 font-medium max-w-2xl">
-                        Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">Engineer Code</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.
+                        Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">{getTcsMxRolePersonLabel(tcsMxRoleTab)} Code</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/30 p-5 flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:items-center sm:justify-between">
@@ -5942,7 +6067,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   className="flex items-center gap-2 bg-white text-black px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all shadow-xl"
                 >
                   <Plus className="w-5 h-5" />
-                  {appMode?.startsWith('PQA') ? 'Add Service Center' : 'Add Engineer'}
+                  {appMode?.startsWith('PQA') ? 'Add Service Center' : `Add ${tcsMxPersonLabel}`}
                 </button>
               </div>
               )}
@@ -5953,7 +6078,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div className="flex items-center gap-4">
                     <div className="h-[1px] w-8 bg-zinc-800" />
                     <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">
-                      Live {appMode?.startsWith('PQA') ? 'Service Center' : 'Engineer'} Registry
+                      Live {appMode?.startsWith('PQA') ? 'Service Center' : `${tcsMxPersonLabel}`} Registry
                     </h3>
                   </div>
                   <button
@@ -6503,6 +6628,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     {(canAccessModule(currentUser, 'tcs') && appMode?.startsWith('TCS')) && (() => {
                       const activeTcs = appMode === 'TCS_DA' ? 'TCS_DA' : appMode === 'TCS_AV' || appMode === 'TCS_VD' ? 'TCS_AV' : 'TCS_MX';
                       const short = activeTcs === 'TCS_DA' ? 'DA' : activeTcs === 'TCS_AV' ? 'AV' : 'MX';
+                      const mxRoleSuffix = activeTcs === 'TCS_MX' && tcsMxRoleTab !== 'engineers'
+                        ? ` · ${getTcsMxRolePersonLabel(tcsMxRoleTab)}s`
+                        : '';
                       return (
                         <button
                           type="button"
@@ -6510,7 +6638,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           className="flex w-full flex-row items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-600/10 px-5 py-4 font-black text-[10px] uppercase tracking-wider text-red-300 transition-all hover:bg-red-600/20"
                         >
                           <Trash2 className="w-5 h-5" />
-                          Clear TCS {short} division
+                          Clear TCS {short}{mxRoleSuffix}
                         </button>
                       );
                     })()}
