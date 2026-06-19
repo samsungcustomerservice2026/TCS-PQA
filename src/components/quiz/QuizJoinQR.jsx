@@ -3,7 +3,7 @@
 import React from 'react';
 import QRCode from 'react-qr-code';
 import { Copy } from 'lucide-react';
-import { scoraChallengeJoinUrl, SCORA_CHALLENGE_PATHS } from '../../constants/scoraChallengePaths';
+import { scoraChallengeJoinUrl } from '../../constants/scoraChallengePaths';
 import { SCORA_CHALLENGE_JOIN_URL } from '../../constants/scoraDomains';
 
 export default function QuizJoinQR({
@@ -14,9 +14,10 @@ export default function QuizJoinQR({
   size = 200,
   className = '',
 }) {
-  const joinUrl = url || scoraChallengeJoinUrl(
-    pin,
-    typeof window !== 'undefined' ? window.location.origin : SCORA_CHALLENGE_JOIN_URL.replace(SCORA_CHALLENGE_PATHS.join, ''),
+  const joinUrl = url || (
+    typeof window !== 'undefined'
+      ? scoraChallengeJoinUrl(pin, window.location.origin)
+      : (pin ? `${SCORA_CHALLENGE_JOIN_URL}?pin=${encodeURIComponent(pin)}` : SCORA_CHALLENGE_JOIN_URL)
   );
 
   const copyLink = async () => {

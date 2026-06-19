@@ -9,9 +9,9 @@ export const metadata = {
 export default function ScoraChallengeJoinPage() {
   return (
     <Suspense fallback={(
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-4xl font-black text-white">SCORA Challenge</p>
-        <p className="text-white/70 text-sm font-semibold uppercase tracking-widest">Loading…</p>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-400">SCORA Challenge</p>
+        <p className="text-zinc-500 text-sm font-semibold uppercase tracking-widest">Loading…</p>
       </div>
     )}
     >

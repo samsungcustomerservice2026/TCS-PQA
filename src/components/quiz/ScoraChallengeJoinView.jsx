@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Globe } from 'lucide-react';
 import { getQuizSessionByPin, joinQuizSession } from '../../services/quizService';
 import { QUIZ_PIN_LENGTH } from '../../constants/quiz';
 import { normalizeQuizSettings } from '../../lib/quizSessionHelpers';
@@ -22,7 +21,6 @@ const T = {
     pinLabel: 'Game PIN',
     nickLabel: 'Nickname',
     enter: 'Enter',
-    join: 'Join',
     joining: 'Joining…',
     back: '← Back',
     lang: 'العربية',
@@ -36,7 +34,6 @@ const T = {
     pinLabel: 'رمز اللعبة',
     nickLabel: 'الاسم المستعار',
     enter: 'دخول',
-    join: 'انضم',
     joining: 'جاري الانضمام…',
     back: '→ رجوع',
     lang: 'English',
@@ -47,17 +44,6 @@ const T = {
     waiting: 'أدخل الرمز من المضيف عند بدء اللعبة.',
   },
 };
-
-function KahootBackdrop() {
-  return (
-    <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-      <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-[#5c2d9e]/60 blur-2xl" />
-      <div className="absolute top-1/4 -right-20 h-80 w-80 rounded-full bg-[#7b3eb8]/50 blur-2xl" />
-      <div className="absolute -bottom-32 left-1/4 h-96 w-96 rounded-full bg-[#3d1278]/70 blur-3xl" />
-      <div className="absolute bottom-10 right-1/3 h-48 w-48 rounded-full bg-[#9b59d0]/30 blur-xl" />
-    </div>
-  );
-}
 
 export default function ScoraChallengeJoinView() {
   const router = useRouter();
@@ -145,29 +131,32 @@ export default function ScoraChallengeJoinView() {
 
   return (
     <div className="relative min-h-screen flex flex-col" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <KahootBackdrop />
-
       <button
         type="button"
         onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-        className="absolute top-5 right-5 z-20 flex items-center gap-1.5 text-white/90 hover:text-white text-sm font-bold"
+        className="absolute top-6 right-6 z-20 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white"
       >
-        <Globe className="w-4 h-4" />
         {t.lang}
       </button>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
-        <h1 className="text-4xl md:text-6xl font-black text-white text-center mb-10 md:mb-14 drop-shadow-md tracking-tight">
-          SCORA Challenge
-        </h1>
+        <div className="text-center mb-10 md:mb-12 space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-400">SCORA Challenge</p>
+          <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight">
+            {step === 1 ? (lang === 'ar' ? 'انضم للعبة' : 'Join game') : t.nickLabel}
+          </h1>
+          {step === 1 && (
+            <p className="text-zinc-500 text-sm max-w-sm mx-auto">{t.waiting}</p>
+          )}
+        </div>
 
         {step === 1 ? (
-          <form onSubmit={handlePinStep} className="w-full max-w-md">
-            <div className="bg-white rounded-sm shadow-2xl overflow-hidden">
+          <form onSubmit={handlePinStep} className="w-full max-w-md space-y-4">
+            <div className="rounded-[2rem] border border-white/10 bg-zinc-950 overflow-hidden shadow-2xl shadow-black/50">
               <input
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, QUIZ_PIN_LENGTH))}
-                className="w-full px-4 py-5 md:py-6 text-center text-xl md:text-2xl font-bold text-zinc-800 placeholder:text-zinc-400 border-0 outline-none focus:ring-0"
+                className="w-full bg-black px-4 py-6 md:py-7 text-center text-2xl md:text-3xl font-black text-white tracking-[0.35em] placeholder:text-zinc-600 placeholder:tracking-normal placeholder:text-lg border-0 outline-none focus:ring-0"
                 inputMode="numeric"
                 placeholder={t.pinLabel}
                 autoComplete="off"
@@ -177,29 +166,26 @@ export default function ScoraChallengeJoinView() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-4 md:py-5 bg-[#333] hover:bg-[#222] disabled:opacity-60 text-white text-lg md:text-xl font-black uppercase tracking-wide transition-colors"
+                className="w-full py-4 md:py-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm md:text-base font-black uppercase tracking-widest transition-colors"
               >
                 {loading ? t.joining : t.enter}
               </button>
             </div>
             {error && (
-              <p className="mt-4 text-center text-amber-200 text-sm font-bold leading-relaxed px-2">{error}</p>
-            )}
-            {!error && (
-              <p className="mt-6 text-center text-white/75 text-sm font-medium max-w-sm mx-auto">{t.waiting}</p>
+              <p className="text-center text-amber-400 text-xs font-bold leading-relaxed px-2">{error}</p>
             )}
           </form>
         ) : (
           <form onSubmit={handleNickStep} className="w-full max-w-md space-y-4">
-            <p className="text-center text-white/90 text-lg font-black tracking-[0.35em] mb-2">{pin}</p>
-            <div className="bg-white rounded-sm shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 pt-3">
-                <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">{t.nickLabel}</span>
+            <p className="text-center text-2xl font-black text-blue-400 tracking-[0.35em]">{pin}</p>
+            <div className="rounded-[2rem] border border-white/10 bg-zinc-950 overflow-hidden shadow-2xl shadow-black/50">
+              <div className="flex items-center justify-between px-5 pt-4">
+                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">{t.nickLabel}</span>
                 {showGenerator && (
                   <button
                     type="button"
                     onClick={() => setNickname(randomNickname())}
-                    className="text-[10px] font-black uppercase text-[#46178f] hover:underline"
+                    className="text-[9px] font-black uppercase text-orange-400 hover:text-orange-300"
                   >
                     {t.generate}
                   </button>
@@ -209,7 +195,7 @@ export default function ScoraChallengeJoinView() {
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 maxLength={24}
-                className="w-full px-4 py-5 md:py-6 text-center text-xl md:text-2xl font-bold text-zinc-800 placeholder:text-zinc-400 border-0 outline-none focus:ring-0"
+                className="w-full bg-black px-4 py-6 md:py-7 text-center text-xl md:text-2xl font-bold text-white placeholder:text-zinc-600 border-0 outline-none focus:ring-0"
                 placeholder={t.nickLabel}
                 autoComplete="nickname"
                 autoFocus
@@ -218,18 +204,18 @@ export default function ScoraChallengeJoinView() {
               <button
                 type="submit"
                 disabled={loading || nickname.trim().length < 2}
-                className="w-full py-4 md:py-5 bg-[#333] hover:bg-[#222] disabled:opacity-60 text-white text-lg md:text-xl font-black uppercase tracking-wide transition-colors"
+                className="w-full py-4 md:py-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm md:text-base font-black uppercase tracking-widest transition-colors"
               >
                 {loading ? t.joining : t.enter}
               </button>
             </div>
             {error && (
-              <p className="text-center text-amber-200 text-sm font-bold leading-relaxed px-2">{error}</p>
+              <p className="text-center text-amber-400 text-xs font-bold leading-relaxed px-2">{error}</p>
             )}
             <button
               type="button"
               onClick={goBack}
-              className="w-full text-center text-white/80 hover:text-white text-sm font-bold py-2"
+              className="w-full text-center text-zinc-500 hover:text-white text-[10px] font-black uppercase tracking-widest py-2"
             >
               {t.back}
             </button>

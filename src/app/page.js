@@ -1515,7 +1515,9 @@ const PageContent = () => {
       setPortalRealm('TCS');
       setView('TCS_DIVISION_SELECTION');
       viewStackRef.current = ['APP_SELECTION', 'TCS_DIVISION_SELECTION'];
-    } else if (host.includes('scora-quiz') || host.includes('scora-challenge')) {
+    } else if (host.includes('scora-quiz')) {
+      window.location.replace('https://samsungeg-scora.vercel.app/scora-challenge/join');
+    } else if (host.includes('scora-challenge')) {
       window.location.replace('/scora-challenge/join');
     }
 
