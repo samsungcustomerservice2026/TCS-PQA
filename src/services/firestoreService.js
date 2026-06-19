@@ -1,5 +1,6 @@
 import { db } from '../firebase';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { validateTcsWinnersCodes } from '../lib/tcsWinnersConfig';
 
 const ENGINEERS_COLLECTION = 'engineers';
 const ADMINS_COLLECTION = 'admins';
@@ -95,27 +96,38 @@ export const getTcsDashboardWinners = async () => {
 export const saveTcsDashboardWinners = async (payload) => {
     const quarterKey = String(payload?.quarterKey || '').toUpperCase().trim();
     const product = String(payload?.product || '').toUpperCase().trim();
+    const mxRole = product === 'MX'
+        ? String(payload?.mxRole || 'engineers').trim()
+        : 'engineers';
     if (!/^Q[1-4]-\d{4}$/.test(quarterKey)) {
         throw new Error('Invalid quarterKey. Expected format Q1-2026.');
     }
     if (!['MX', 'DA', 'AV'].includes(product)) {
         throw new Error('Invalid product. Expected MX, DA, or AV.');
     }
+    if (product === 'MX' && !['engineers', 'receptionists', 'galaxy_consultants'].includes(mxRole)) {
+        throw new Error('Invalid MX role. Expected engineers, receptionists, or galaxy_consultants.');
+    }
     const winners = Array.isArray(payload?.winners)
         ? payload.winners.map((code) => String(code || '').trim()).filter(Boolean)
         : [];
-    if (winners.length !== 0 && winners.length !== 6) {
-        throw new Error('Provide exactly 6 winner engineer codes, or 0 codes to clear.');
+    const validation = validateTcsWinnersCodes(winners, mxRole);
+    if (!validation.ok) {
+        throw new Error(validation.error || 'Invalid winners list.');
     }
-    const docId = `${quarterKey}-${product}`;
+    const normalizedWinners = validation.winners;
+    const docId = product === 'MX' && mxRole !== 'engineers'
+        ? `${quarterKey}-${product}-${mxRole}`
+        : `${quarterKey}-${product}`;
     const docRef = doc(db, TCS_DASHBOARD_WINNERS_COLLECTION, docId);
     const normalizedPayload = {
         quarterKey,
         product,
-        winners,
+        winners: normalizedWinners,
         updatedAt: new Date().toISOString(),
         updatedBy: payload?.updatedBy || 'admin',
     };
+    if (product === 'MX') normalizedPayload.mxRole = mxRole;
     await setDoc(docRef, normalizedPayload, { merge: true });
     return docId;
 };

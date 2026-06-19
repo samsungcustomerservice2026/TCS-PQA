@@ -90,6 +90,32 @@ import {
   TCS_MX_TEMPLATE_SHEET_NAME,
 } from '../lib/tcsExcelImport';
 import {
+  calculateReceptionistScore,
+  calculateGalaxyConsultantScore,
+  resolveMxRoleDashboardScore,
+  resolveMxRoleTierScore,
+  resolveReceptionistDrnps,
+  getMxRoleLeaderboardScoreField,
+  getMxRoleLeaderboardScoreLabel,
+  buildMxRoleEditingDefaults,
+} from '../lib/tcsMxRoleScoring';
+import {
+  buildTcsWinnersConfigMap,
+  lookupTcsWinnersConfig,
+  TCS_MX_WINNER_ROLES,
+  getTcsWinnersSlotCount,
+  validateTcsWinnersCodes,
+  TCS_WINNERS_DEFAULT_SLOTS,
+  resolveTcsWinnersConfig,
+  isWinnersMapKeyForRole,
+} from '../lib/tcsWinnersConfig';
+import {
+  TCS_MX_RECEPTIONIST_TEMPLATE_FILENAME,
+  buildReceptionistTemplateArrayBuffer,
+  parseReceptionistWorkbook,
+  isEphemeralRegistryId,
+} from '../lib/tcsMxReceptionistExcel';
+import {
   FEEDBACK_PRODUCT_OPTIONS,
   validateArabicFeedbackForm,
 } from '../lib/arabicFeedbackValidation';
@@ -1006,7 +1032,7 @@ function resolveEngineerPhotoForImport(rec, existing) {
 
 /** Home dashboard (TCS): monthly Hall of Fame + quarterly ladder list length (podium + rows below). */
 const TCS_HOME_LEADERBOARD_LIMIT = 20;
-const TCS_WINNERS_PER_PRODUCT = 6;
+const TCS_WINNERS_PER_PRODUCT = TCS_WINNERS_DEFAULT_SLOTS;
 const SAMSUNG_ACADEMY_LOCATIONS = ['الإسكندرية', 'أسيوط', 'طنطا'];
 const ACADEMY_PRODUCTS = ['موبايل', 'تلفزيون', 'أجهزة منزلية'];
 const ACADEMY_RATING_SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -1042,6 +1068,7 @@ const normalizeEngineerDigits = (value) => String(value || '').replace(/\D/g, ''
 const getTcsEngineerIdentityKey = (entry) =>
   normalizeEngineerCodeKey(entry?.engineerCode) ||
   normalizeEngineerCodeKey(entry?.code) ||
+  normalizeEngineerCodeKey(entry?.sbaId) ||
   normalizeEngineerCodeKey(entry?.id);
 const winnerCodeEqualsStrict = (a, b) => {
   const na = normalizeEngineerCodeKey(a);
@@ -1049,7 +1076,7 @@ const winnerCodeEqualsStrict = (a, b) => {
   return Boolean(na && nb && na === nb);
 };
 const getWinnerCodeCandidates = (entry) => {
-  const candidates = [entry?.engineerCode, entry?.code]
+  const candidates = [entry?.engineerCode, entry?.code, entry?.sbaId, entry?.gspnId]
     .map((v) => normalizeEngineerCodeKey(v))
     .filter(Boolean);
   return [...new Set(candidates)];
@@ -1070,7 +1097,7 @@ const engineerCodeEquals = (a, b) => {
   return false;
 };
 const recordMatchesWinnerCode = (entry, winnerCode) =>
-  getWinnerCodeCandidates(entry).includes(normalizeEngineerCodeKey(winnerCode));
+  getWinnerCodeCandidates(entry).some((candidate) => engineerCodeEquals(candidate, winnerCode));
 
 const resolveTcsDashboardProduct = (mode) => {
   if (mode === 'TCS_DA') return 'DA';
@@ -2457,16 +2484,18 @@ const PageContent = () => {
   const [winnerHubQuarter, setWinnerHubQuarter] = useState('Q1');
   const [winnerHubYear, setWinnerHubYear] = useState(String(new Date().getFullYear()));
   const [winnerHubProduct, setWinnerHubProduct] = useState('MX');
+  const [winnerHubMxRole, setWinnerHubMxRole] = useState('engineers');
   const [winnerHubCodes, setWinnerHubCodes] = useState(Array.from({ length: TCS_WINNERS_PER_PRODUCT }, () => ''));
   const winnerHubQuarterKey = `${winnerHubQuarter}-${winnerHubYear}`;
-  const winnersConfigMap = useMemo(() => {
-    const map = new Map();
-    tcsWinnersConfigs.forEach((cfg) => {
-      const key = `${String(cfg.quarterKey || '').toUpperCase()}-${String(cfg.product || '').toUpperCase()}`;
-      map.set(key, cfg);
-    });
-    return map;
-  }, [tcsWinnersConfigs]);
+  const winnerHubSlotCount = useMemo(
+    () => getTcsWinnersSlotCount(winnerHubProduct === 'MX' ? winnerHubMxRole : 'engineers'),
+    [winnerHubProduct, winnerHubMxRole],
+  );
+  const dashboardWinnersSlotCount = useMemo(
+    () => getTcsWinnersSlotCount(appMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers'),
+    [appMode, tcsMxRoleTab],
+  );
+  const winnersConfigMap = useMemo(() => buildTcsWinnersConfigMap(tcsWinnersConfigs), [tcsWinnersConfigs]);
 
   const loadTcsWinnersConfigs = React.useCallback(async (silent = false) => {
     setTcsWinnersLoading(true);
@@ -2482,10 +2511,15 @@ const PageContent = () => {
   }, [message]);
   useEffect(() => {
     if (adminModal !== 'winners') return;
-    const cfg = winnersConfigMap.get(`${winnerHubQuarterKey}-${winnerHubProduct}`);
-    const nextCodes = Array.from({ length: TCS_WINNERS_PER_PRODUCT }, (_, idx) => String(cfg?.winners?.[idx] || ''));
+    const cfg = lookupTcsWinnersConfig(
+      winnersConfigMap,
+      winnerHubQuarterKey,
+      winnerHubProduct,
+      winnerHubProduct === 'MX' ? winnerHubMxRole : 'engineers',
+    );
+    const nextCodes = Array.from({ length: winnerHubSlotCount }, (_, idx) => String(cfg?.winners?.[idx] || ''));
     setWinnerHubCodes(nextCodes);
-  }, [adminModal, winnersConfigMap, winnerHubQuarterKey, winnerHubProduct]);
+  }, [adminModal, winnersConfigMap, winnerHubQuarterKey, winnerHubProduct, winnerHubMxRole, winnerHubSlotCount]);
 
   // Scroll to top on every view change
   useEffect(() => {
@@ -2518,7 +2552,7 @@ const PageContent = () => {
   useEffect(() => {
     if (!appMode?.startsWith('TCS')) return;
     loadTcsWinnersConfigs(true);
-  }, [appMode, loadTcsWinnersConfigs]);
+  }, [appMode, tcsMxRoleTab, view, loadTcsWinnersConfigs]);
 
   // Helper to ensure PQA Service Center photo is displayed correctly
   const getPhotoUrl = (eng) => {
@@ -2584,6 +2618,9 @@ const PageContent = () => {
   /** TCS: leaderboard shows SBA ID; search uses Engineer Code (`code`). PQA: service center name. */
   const tcsDisplayPrimary = (eng) => {
     if (appMode?.startsWith('PQA')) return eng?.name || eng?.code || '—';
+    if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
+      return String(eng?.name || '').trim() || String(eng?.gspnId || eng?.code || '').trim() || '—';
+    }
     const sba = String(eng?.sbaId || '').trim();
     if (sba) return sba;
     const code = String(eng?.code || '').trim();
@@ -2592,6 +2629,12 @@ const PageContent = () => {
   };
   const tcsDisplaySecondary = (eng) => {
     if (appMode?.startsWith('PQA')) return '';
+    if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
+      const gspn = String(eng?.gspnId || eng?.code || '').trim();
+      const asc = String(eng?.asc || eng?.ascCode || '').trim();
+      if (gspn && asc) return `${gspn} · ${asc}`;
+      return gspn || asc || '';
+    }
     const asc = String(eng?.asc || '').trim();
     if (asc && asc !== 'N/A') return asc;
     return String(eng?.name || '').trim();
@@ -2684,6 +2727,8 @@ const PageContent = () => {
     const scoreOf = (eng) => {
       if (scoreField === 'avgScore') return eng?.avgScore;
       if (scoreField === 'engineerEvaluation') return eng?.engineerEvaluation;
+      if (scoreField === 'roleScore') return eng?.roleScore ?? calculateReceptionistScore(eng);
+      if (scoreField === 'galaxyConsultantTickets') return eng?.galaxyConsultantTickets;
       return eng?.tcsScore;
     };
     const PodiumCol = ({ eng, stepClass, champion, forcedRank }) => {
@@ -2824,6 +2869,15 @@ const PageContent = () => {
         const fetchedEngineers = await getEngineers(colName);
         const fetchedHiddenEngineers = await getHiddenEngineers(colName);
         const fetchedAdmins = await getAdmins();
+        let fetchedWinners = [];
+        if (appMode?.startsWith('TCS')) {
+          try {
+            fetchedWinners = await getTcsDashboardWinners();
+          } catch (winnersErr) {
+            console.warn('TCS dashboard winners load failed:', winnersErr);
+          }
+        }
+        setTcsWinnersConfigs(Array.isArray(fetchedWinners) ? fetchedWinners : []);
 
         // Data Handling
         if (fetchedEngineers && fetchedEngineers.length > 0) {
@@ -2911,9 +2965,24 @@ const PageContent = () => {
     return Object.values(byCode).sort((a, b) => b.tcsScore - a.tcsScore);
   }, [engineers, isPqaMode, appMode]);
 
+  /** Admin registry: receptionists/galaxy show every record (no code collapse). */
+  const adminRegistryList = useMemo(() => {
+    if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
+      return [...engineers].sort(
+        (a, b) => resolveMxRoleDashboardScore(b, 'receptionists') - resolveMxRoleDashboardScore(a, 'receptionists'),
+      );
+    }
+    if (appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants') {
+      return [...engineers].sort(
+        (a, b) => calculateGalaxyConsultantScore(b) - calculateGalaxyConsultantScore(a),
+      );
+    }
+    return deduplicatedEngineers;
+  }, [engineers, deduplicatedEngineers, appMode, tcsMxRoleTab]);
+
   const visibleRegistryIds = useMemo(
-    () => deduplicatedEngineers.map((e) => e.id).filter(Boolean),
-    [deduplicatedEngineers]
+    () => adminRegistryList.map((e) => e.id).filter(Boolean),
+    [adminRegistryList]
   );
 
   const allVisibleSelected = visibleRegistryIds.length > 0 && visibleRegistryIds.every((id) => bulkSelectedIds.includes(id));
@@ -2959,17 +3028,22 @@ const PageContent = () => {
   // Default to the LAST element = latest month (ascending sort → last = newest)
   const effectiveHofMonth = selectedHofMonth || allMonthPeriods[allMonthPeriods.length - 1]?.key || null;
   const resolveTierByMode = React.useCallback((eng) => {
-    if (appMode === 'TCS_MX') return getMxEvaluationTier(eng?.engineerEvaluation);
+    if (appMode === 'TCS_MX') {
+      return getMxEvaluationTier(resolveMxRoleTierScore(eng, tcsMxRoleTab));
+    }
     return getTier(parseFloat(eng?.tcsScore) || 0);
-  }, [appMode]);
+  }, [appMode, tcsMxRoleTab]);
   const resolveTcsDashboardScore = React.useCallback((eng) => {
     if (appMode === 'TCS_MX') {
+      if (tcsMxRoleTab !== 'engineers') {
+        return resolveMxRoleDashboardScore(eng, tcsMxRoleTab);
+      }
       const evalScore = parseFloat(eng?.engineerEvaluation);
       if (Number.isFinite(evalScore)) return Number(evalScore.toFixed(1));
     }
     const tcs = parseFloat(eng?.tcsScore);
     return Number.isFinite(tcs) ? Number(tcs.toFixed(1)) : 0;
-  }, [appMode]);
+  }, [appMode, tcsMxRoleTab]);
   const hofTop10 = useMemo(() => {
     if (!effectiveHofMonth) return [];
     const [m, y] = effectiveHofMonth.split('-');
@@ -3182,27 +3256,39 @@ const PageContent = () => {
     if (effectiveHomeQuarterKey) return effectiveHomeQuarterKey;
     if (effectiveQuarterKey) return effectiveQuarterKey;
     if (!isTcsMode) return null;
+    const product = resolveTcsDashboardProduct(appMode) || '';
+    const mxRole = appMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers';
     const keys = Array.from(winnersConfigMap.keys())
-      .filter((k) => k.endsWith(`-${resolveTcsDashboardProduct(appMode) || ''}`))
+      .filter((k) => isWinnersMapKeyForRole(k, product, mxRole))
       .map((k) => k.split('-').slice(0, 2).join('-'))
       .filter((k) => /^Q[1-4]-\d{4}$/.test(k))
       .sort((a, b) => quarterKeyToIndex(b) - quarterKeyToIndex(a));
     return keys[0] || null;
-  }, [effectiveHomeQuarterKey, effectiveQuarterKey, isTcsMode, winnersConfigMap, appMode]);
+  }, [effectiveHomeQuarterKey, effectiveQuarterKey, isTcsMode, winnersConfigMap, appMode, tcsMxRoleTab]);
   const tcsDashboardProduct = resolveTcsDashboardProduct(appMode);
   const resolvedTcsWinnersConfig = useMemo(() => {
     if (!isTcsMode || !tcsDashboardProduct || !winnersScopeQuarterKey) return null;
-    const key = `${winnersScopeQuarterKey}-${tcsDashboardProduct}`;
-    let cfg = winnersConfigMap.get(key);
+    const activeMxRole = appMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers';
+    let cfg = resolveTcsWinnersConfig(
+      tcsWinnersConfigs,
+      winnersConfigMap,
+      winnersScopeQuarterKey,
+      tcsDashboardProduct,
+      activeMxRole,
+    );
     let resolvedQuarter = winnersScopeQuarterKey;
     if (!cfg || !Array.isArray(cfg.winners) || cfg.winners.length === 0) {
-      const productConfigs = Array.from(winnersConfigMap.values())
-        .filter((item) =>
-          String(item?.product || '').toUpperCase() === tcsDashboardProduct &&
-          Array.isArray(item?.winners) &&
-          item.winners.length > 0 &&
-          /^Q[1-4]-\d{4}$/.test(String(item?.quarterKey || '').toUpperCase())
-        )
+      const productConfigs = tcsWinnersConfigs
+        .filter((item) => {
+          if (String(item?.product || '').toUpperCase() !== tcsDashboardProduct) return false;
+          if (appMode === 'TCS_MX') {
+            const itemRole = String(item?.mxRole || 'engineers');
+            if (itemRole !== activeMxRole) return false;
+          }
+          return Array.isArray(item?.winners) &&
+            item.winners.length > 0 &&
+            /^Q[1-4]-\d{4}$/.test(String(item?.quarterKey || '').toUpperCase());
+        })
         .sort((a, b) => (quarterKeyToIndex(String(b.quarterKey).toUpperCase()) || -1) - (quarterKeyToIndex(String(a.quarterKey).toUpperCase()) || -1));
       if (productConfigs.length > 0) {
         cfg = productConfigs[0];
@@ -3215,18 +3301,17 @@ const PageContent = () => {
       resolvedQuarterKey: resolvedQuarter,
       fallbackUsed: resolvedQuarter !== winnersScopeQuarterKey,
     };
-  }, [isTcsMode, tcsDashboardProduct, winnersScopeQuarterKey, winnersConfigMap]);
+  }, [isTcsMode, tcsDashboardProduct, winnersScopeQuarterKey, winnersConfigMap, tcsWinnersConfigs, appMode, tcsMxRoleTab]);
   const applyConfiguredTcsWinners = React.useCallback((entries) => {
     if (!isTcsMode) return entries;
     if (!resolvedTcsWinnersConfig || !Array.isArray(resolvedTcsWinnersConfig.winners)) return [];
     const configuredWinners = resolvedTcsWinnersConfig.winners.map((w) => normalizeEngineerCodeKey(w)).filter(Boolean);
-    const normalizeDigits = (value) => String(value || '').replace(/\D/g, '');
     const rowMatchesWinner = (row, winnerCode) => {
       if (recordMatchesWinnerCode(row, winnerCode)) return true;
-      const wd = normalizeDigits(winnerCode);
-      if (!wd || wd.length < 6) return false;
-      const rowDigits = [row?.engineerCode, row?.code].map((v) => normalizeDigits(v));
-      return rowDigits.some((d) => d && d === wd);
+      if (engineerCodeEquals(getTcsEngineerIdentityKey(row), winnerCode)) return true;
+      return [row?.engineerCode, row?.code, row?.sbaId, row?.gspnId].some((field) =>
+        engineerCodeEquals(field, winnerCode),
+      );
     };
     const recencyKey = (row) => {
       const y = parseInt(String(row?.year || '0'), 10) || 0;
@@ -3262,7 +3347,7 @@ const PageContent = () => {
     ranked.sort((a, b) => (a.displayRank || 999) - (b.displayRank || 999));
     // Strict behavior: when config exists, only configured winners should appear.
     return ranked;
-  }, [isTcsMode, resolvedTcsWinnersConfig, engineers, resolveTcsDashboardScore]);
+  }, [isTcsMode, resolvedTcsWinnersConfig, engineers, resolveTcsDashboardScore, appMode, tcsMxRoleTab]);
 
   /** TCS quarterly pill: Q1 · MX when product is uniform; otherwise Q1 · 2025 */
   const tcsQuarterPeriodLabel = useMemo(() => {
@@ -3437,24 +3522,48 @@ const PageContent = () => {
         return e;
       });
   }, [engineers, deduplicatedEngineers, effectiveQuarterKey, appMode, pqaMxGroupBy, resolveTcsDashboardScore]);
+  const hasTcsWinnersConfig = Boolean(resolvedTcsWinnersConfig?.winners?.length);
   const monthlyDashboardList = useMemo(() => {
     if (isTcsMode && isTcsMxAlternateRole) {
-      return hofTop10.slice(0, TCS_WINNERS_PER_PRODUCT);
+      if (resolvedTcsWinnersConfig?.winners?.length) {
+        return applyConfiguredTcsWinners(hofTop10);
+      }
+      return hofTop10.slice(0, dashboardWinnersSlotCount);
     }
     if (isTcsMode) return applyConfiguredTcsWinners(quarterlyRanking);
     return hofTop10;
-  }, [isTcsMode, isTcsMxAlternateRole, applyConfiguredTcsWinners, quarterlyRanking, hofTop10]);
+  }, [
+    isTcsMode,
+    isTcsMxAlternateRole,
+    resolvedTcsWinnersConfig,
+    applyConfiguredTcsWinners,
+    quarterlyRanking,
+    hofTop10,
+    dashboardWinnersSlotCount,
+  ]);
   const quarterlyDashboardList = useMemo(() => {
     if (!isTcsMode) return quarterlyRanking;
-    if (isTcsMxAlternateRole) return quarterlyRanking.slice(0, TCS_WINNERS_PER_PRODUCT);
+    if (isTcsMxAlternateRole) {
+      if (resolvedTcsWinnersConfig?.winners?.length) {
+        return applyConfiguredTcsWinners(quarterlyRanking);
+      }
+      return quarterlyRanking.slice(0, dashboardWinnersSlotCount);
+    }
     return applyConfiguredTcsWinners(quarterlyRanking);
-  }, [isTcsMode, isTcsMxAlternateRole, applyConfiguredTcsWinners, quarterlyRanking]);
+  }, [
+    isTcsMode,
+    isTcsMxAlternateRole,
+    resolvedTcsWinnersConfig,
+    applyConfiguredTcsWinners,
+    quarterlyRanking,
+    dashboardWinnersSlotCount,
+  ]);
 
   // ─── Engineer history: all records for the selected engineer's code, latest 3 months ───
   const engineerHistory = useMemo(() => {
     if (!selectedEngineer) return [];
     const profileRankScore = (row) => {
-      if (appMode === 'TCS_MX') return parseFloat(row?.engineerEvaluation || 0);
+      if (appMode === 'TCS_MX') return resolveMxRoleDashboardScore(row, tcsMxRoleTab);
       return parseFloat(row?.tcsScore || 0);
     };
     return engineers
@@ -3489,13 +3598,13 @@ const PageContent = () => {
         const qRank = qCohort.findIndex(e => e.code === record.code) + 1;
         return { ...record, monthRank: rank, monthTotal: cohort.length, qRank, qTotal: qCohort.length, qKey };
       });
-  }, [engineers, selectedEngineer, appMode]);
+  }, [engineers, selectedEngineer, appMode, tcsMxRoleTab]);
 
   // ─── Summary ranks for the currently selected engineer ──────────────────────────
   const engineerSummaryRanks = useMemo(() => {
     if (!selectedEngineer) return null;
     const profileRankScore = (row) => {
-      if (appMode === 'TCS_MX') return parseFloat(row?.engineerEvaluation || 0);
+      if (appMode === 'TCS_MX') return resolveMxRoleDashboardScore(row, tcsMxRoleTab);
       return parseFloat(row?.tcsScore || 0);
     };
     const monthCohort = engineers
@@ -3522,7 +3631,7 @@ const PageContent = () => {
       quarter: q, year: y,
       month: selectedEngineer.month,
     };
-  }, [engineers, selectedEngineer, appMode]);
+  }, [engineers, selectedEngineer, appMode, tcsMxRoleTab]);
 
 
   /** Digits-only comparison for long numeric service center / engineer IDs (handles spaced display). */
@@ -3835,6 +3944,7 @@ const PageContent = () => {
       setWinnerHubYear(m[2]);
     }
     setWinnerHubProduct(resolveTcsDashboardProduct(appMode) || 'MX');
+    setWinnerHubMxRole(appMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers');
     setAdminModal('winners');
     await loadTcsWinnersConfigs();
   };
@@ -3845,38 +3955,45 @@ const PageContent = () => {
       message.warning('Please enter a valid 4-digit year.');
       return;
     }
-    const cleaned = winnerHubCodes.map((code) => normalizeEngineerCodeKey(code)).filter(Boolean);
-    if (cleaned.length !== 0 && cleaned.length !== TCS_WINNERS_PER_PRODUCT) {
-      message.warning(`Provide exactly ${TCS_WINNERS_PER_PRODUCT} engineer codes, or clear all fields to disable winners.`);
+    const mxRole = winnerHubProduct === 'MX' ? winnerHubMxRole : 'engineers';
+    const cleaned = winnerHubCodes
+      .slice(0, getTcsWinnersSlotCount(mxRole))
+      .map((code) => normalizeEngineerCodeKey(code))
+      .filter(Boolean);
+    const validation = validateTcsWinnersCodes(cleaned, mxRole);
+    if (!validation.ok) {
+      message.warning(validation.error || 'Invalid winners list.');
       return;
     }
-    if (cleaned.length > 0 && new Set(cleaned).size !== cleaned.length) {
-      message.warning('Winner codes must be unique.');
-      return;
-    }
+    const winnersToSave = validation.winners;
     setTcsWinnersSaving(true);
     try {
       const quarterKey = `${winnerHubQuarter}-${year}`;
       await saveTcsDashboardWinners({
         quarterKey,
         product: winnerHubProduct,
-        winners: cleaned,
+        mxRole,
+        winners: winnersToSave,
         updatedBy: currentUser?.username || currentUser?.name || 'admin',
       });
       await loadTcsWinnersConfigs();
       setSelectedQuarterKey(quarterKey);
       setHomeViewMode('QUARTERLY');
       setWinnerHubYear(year);
-      if (cleaned.length === 0) {
+      if (winnersToSave.length === 0) {
         message.success(`Cleared dashboard winners for ${winnerHubProduct} (${quarterKey}).`);
+      } else if (mxRole === 'receptionists') {
+        message.success(`Saved ${winnersToSave.length} receptionist winner${winnersToSave.length === 1 ? '' : 's'} for ${winnerHubProduct} (${quarterKey}).`);
+      } else if (mxRole === 'galaxy_consultants') {
+        message.success(`Saved ${winnersToSave.length} galaxy consultant winner${winnersToSave.length === 1 ? '' : 's'} for ${winnerHubProduct} (${quarterKey}).`);
       } else {
-        message.success(`Saved Top ${TCS_WINNERS_PER_PRODUCT} winners for ${winnerHubProduct} (${quarterKey}).`);
+        message.success(`Saved Top ${winnersToSave.length} winners for ${winnerHubProduct} (${quarterKey}).`);
       }
       writeLog({
         type: 'ADMIN_ACTION',
         actor: currentUser?.username || 'admin',
-        action: cleaned.length === 0 ? 'Cleared TCS dashboard winners' : 'Saved TCS dashboard winners',
-        details: { product: winnerHubProduct, quarterKey, winners: cleaned.join(',') || 'none' },
+        action: winnersToSave.length === 0 ? 'Cleared TCS dashboard winners' : 'Saved TCS dashboard winners',
+        details: { product: winnerHubProduct, quarterKey, winners: winnersToSave.join(',') || 'none' },
         severity: 'info',
       });
     } catch (e) {
@@ -3907,16 +4024,37 @@ const PageContent = () => {
     const hide = message.loading("Saving engineer data...", 0);
 
     try {
+      if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
+        const gspn = String(updated.code || updated.gspnId || '').trim().toUpperCase();
+        if (gspn.length < 2) {
+          hide();
+          setIsSaving(false);
+          message.warning('GSPN ID is required (at least 2 characters). Each receptionist must have a unique GSPN ID.');
+          return;
+        }
+        updated = {
+          ...updated,
+          code: gspn,
+          gspnId: gspn,
+          asc: String(updated.asc || updated.ascCode || '').trim(),
+          ascCode: String(updated.ascCode || '').trim(),
+        };
+      }
+
       const isPqa = appMode?.startsWith('PQA');
       const newScore = isPqa
         ? calculatePQAScore(updated)
-        : (() => {
-            const manual = parseFloat(updated.tcsScore);
-            if (!Number.isFinite(manual)) return 0;
-            return Math.min(100, Math.max(0, Number(manual.toFixed(1))));
-          })();
+        : appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists'
+          ? calculateReceptionistScore(updated)
+          : appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants'
+            ? calculateGalaxyConsultantScore(updated)
+            : (() => {
+                const manual = parseFloat(updated.tcsScore);
+                if (!Number.isFinite(manual)) return 0;
+                return Math.min(100, Math.max(0, Number(manual.toFixed(1))));
+              })();
       const newTier = appMode === 'TCS_MX'
-        ? getMxEvaluationTier(updated?.engineerEvaluation)
+        ? getMxEvaluationTier(resolveMxRoleTierScore(updated, tcsMxRoleTab))
         : getTier(newScore);
 
       let finalPhotoUrl = updated.photoUrl;
@@ -3937,15 +4075,21 @@ const PageContent = () => {
         ...updated,
         tcsScore: newScore,
         tier: newTier,
-        photoUrl: finalPhotoUrl
+        photoUrl: finalPhotoUrl,
       };
+      if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
+        finalEng.roleScore = newScore;
+      }
+      if (appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants') {
+        finalEng.galaxyConsultantTickets = calculateGalaxyConsultantScore(updated);
+      }
       delete finalEng.pendingFile;
 
       // ── Smart Month-History Logic ───────────────────────────────
-      // Find ALL existing records with same engineer code
-      const sameCodeRecords = engineers.filter(
-        e => e.code?.toUpperCase() === finalEng.code?.toUpperCase()
-      );
+      const recordCode = String(finalEng.code || finalEng.gspnId || '').trim().toUpperCase();
+      const sameCodeRecords = recordCode
+        ? engineers.filter((e) => String(e.code || e.gspnId || '').trim().toUpperCase() === recordCode)
+        : [];
 
       // Check if a record for the same (month, year) already exists
       const duplicateRecord = sameCodeRecords.find(
@@ -4225,13 +4369,19 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
   const deleteEngineerHandler = async (id) => {
     modal.confirm({
-      title: 'Archive Record',
-      content: 'Are you sure you want to archive this engineer record? The data will be hidden but preserved.',
+      title: `Archive ${tcsMxPersonLabel}`,
+      content: `Are you sure you want to archive this ${tcsMxPersonLabel.toLowerCase()} record? The data will be hidden but preserved.`,
       okText: 'Archive',
       okType: 'danger',
       onOk: async () => {
         try {
           const archivedEng = engineers.find(e => e.id === id);
+          if (isEphemeralRegistryId(id)) {
+            setEngineers(prev => prev.filter(e => e.id !== id));
+            message.success(`${tcsMxPersonLabel} removed from the local demo registry.`);
+            writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: `Removed local ${tcsMxPersonLabel.toLowerCase()} record`, details: { id, name: archivedEng?.name, code: archivedEng?.code }, severity: 'warning' });
+            return;
+          }
           if (archivedEng) {
             pushUndoEntry(adminUndoStackRef, setAdminUndoCount, {
               type: 'ARCHIVE',
@@ -4245,12 +4395,12 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           if (archivedEng) {
             setFetchedHiddenEngineers(prev => [...prev, { ...archivedEng, hidden: true }]);
           }
-          message.success("Engineer archived");
-          writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: 'Archived engineer', details: { id, name: archivedEng?.name, code: archivedEng?.code }, severity: 'warning' });
+          message.success(`${tcsMxPersonLabel} archived`);
+          writeLog({ type: 'ADMIN_ACTION', actor: currentUser?.username || 'admin', action: `Archived ${tcsMxPersonLabel.toLowerCase()}`, details: { id, name: archivedEng?.name, code: archivedEng?.code }, severity: 'warning' });
         } catch (error) {
           console.error("Error deleting engineer:", error);
-          message.error("Failed to archive engineer record.");
-          writeLog({ type: 'ERROR', actor: currentUser?.username || 'admin', action: 'Error archiving engineer', details: { id, error: String(error)?.slice(0, 200) }, severity: 'error' });
+          message.error(`Failed to archive ${tcsMxPersonLabel.toLowerCase()} record.`);
+          writeLog({ type: 'ERROR', actor: currentUser?.username || 'admin', action: `Error archiving ${tcsMxPersonLabel.toLowerCase()}`, details: { id, error: String(error)?.slice(0, 200) }, severity: 'error' });
         }
       }
     });
@@ -4283,14 +4433,22 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               records: archived.map((r) => cloneSnapshot(r)),
             });
           }
-          await Promise.all(bulkSelectedIds.map((id) => archiveEngineer(id, colName)));
-
-          setEngineers((prev) => prev.filter((e) => !idSet.has(e.id)));
-          setFetchedHiddenEngineers((prev) => [...prev, ...archived.map((e) => ({ ...e, hidden: true }))]);
-          if (selectedEngineer && idSet.has(selectedEngineer.id)) setSelectedEngineer(null);
+          const ephemeralIds = bulkSelectedIds.filter((id) => isEphemeralRegistryId(id));
+          const firestoreIds = bulkSelectedIds.filter((id) => !isEphemeralRegistryId(id));
+          if (ephemeralIds.length) {
+            const ephemeralSet = new Set(ephemeralIds);
+            setEngineers((prev) => prev.filter((e) => !ephemeralSet.has(e.id)));
+          }
+          if (firestoreIds.length) {
+            await Promise.all(firestoreIds.map((id) => archiveEngineer(id, colName)));
+            const firestoreSet = new Set(firestoreIds);
+            setEngineers((prev) => prev.filter((e) => !firestoreSet.has(e.id)));
+            setFetchedHiddenEngineers((prev) => [...prev, ...archived.filter((e) => firestoreSet.has(e.id)).map((e) => ({ ...e, hidden: true }))]);
+          }
+          if (selectedEngineer && bulkSelectedIds.includes(selectedEngineer.id)) setSelectedEngineer(null);
           setBulkSelectedIds([]);
 
-          message.success(`${archived.length} records archived.`);
+          message.success(`${bulkSelectedIds.length} records archived.`);
           writeLog({
             type: 'ADMIN_ACTION',
             actor: currentUser?.username || 'admin',
@@ -4526,10 +4684,35 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
     window.URL.revokeObjectURL(url);
   };
 
+  const downloadReceptionistTemplate = () => {
+    const excelBuffer = buildReceptionistTemplateArrayBuffer();
+    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    const url = window.URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = TCS_MX_RECEPTIONIST_TEMPLATE_FILENAME;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadTcsBulkTemplate = (mxRole = tcsMxRoleTab) => {
+    if (appMode === 'TCS_MX' && mxRole === 'receptionists') {
+      downloadReceptionistTemplate();
+      return;
+    }
+    downloadExcelTemplate();
+  };
+
   const downloadExcelTemplate = () => {
     const isPqaMode = appMode === 'PQA_MX' || appMode === 'PQA_CE';
 
     if (!isPqaMode) {
+      if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
+        downloadReceptionistTemplate();
+        return;
+      }
       const div =
         appMode === 'TCS_DA' ? 'TCS_DA' : appMode === 'TCS_AV' || appMode === 'TCS_VD' ? 'TCS_AV' : 'TCS_MX';
       downloadTcsDivisionTemplate(div);
@@ -5074,6 +5257,19 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
            uploadedRecords.push(pqaRecord);
         }
 
+      } else if (uploadMode === 'TCS_MX' && uploadMxRole === 'receptionists') {
+        const { records, headerRow, sheetName } = parseReceptionistWorkbook(workbook);
+        if (headerRow < 0) {
+          message.warning('No receptionist header row found. Use the downloaded template (Quarter, GSPN ID, ASC_Recep, ASC_CODE, Vote for Me, IQC First Time Fail, DRNPS, Exam, Co.A, TCS Score).');
+          return;
+        }
+        if (sheetName) {
+          console.info(`Receptionist import: using sheet "${sheetName}" (${records.length} rows)`);
+        }
+        uploadedRecords = records.map((eng) => ({
+          ...eng,
+          tier: getMxEvaluationTier(calculateReceptionistScore(eng)),
+        }));
       } else {
         const tcsModeForProduct = targetTcsMode || appMode;
         const expectedProduct =
@@ -5513,22 +5709,24 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         ? 'All 7 Partners — Monthly Ranking'
                         : appMode?.startsWith('PQA')
                           ? 'All Service Centers — Monthly Ranking'
-                          : `Top ${TCS_WINNERS_PER_PRODUCT} Winners`}
+                          : `Top ${dashboardWinnersSlotCount} Winners`}
                     </h3>
-                    {monthlyDashboardList.length === 0 ? (
+                        {monthlyDashboardList.length === 0 ? (
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         {isTcsMode && isTcsMxAlternateRole
                           ? `No ${tcsMxPersonLabel.toLowerCase()} data for this period. Add records in Admin → TCS MX → ${TCS_MX_ROLE_TABS.find((t) => t.key === tcsMxRoleTab)?.label || 'Role'}.`
                           : isTcsMode
-                          ? `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${TCS_WINNERS_PER_PRODUCT} in Admin Portal → Dashboard Winners.`
+                          ? hasTcsWinnersConfig
+                            ? `No roster matches for your configured winners (${winnersScopeQuarterKey || ''}). Check SBA ID / engineer codes in Admin → Dashboard Winners.`
+                            : `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${dashboardWinnersSlotCount} in Admin Portal → Dashboard Winners.`
                           : 'No data for this period.'}
                       </div>
                     ) : (
                       <>
                         {renderHomeRankingPodium(
                           monthlyDashboardList,
-                          appMode === 'TCS_MX' ? 'engineerEvaluation' : 'tcsScore',
-                          appMode?.startsWith('PQA') ? 'PQA Score' : appMode === 'TCS_MX' ? 'Engineer Evaluation' : 'TCS Score'
+                          appMode === 'TCS_MX' ? getMxRoleLeaderboardScoreField(tcsMxRoleTab) : 'tcsScore',
+                          appMode?.startsWith('PQA') ? 'PQA Score' : appMode === 'TCS_MX' ? getMxRoleLeaderboardScoreLabel(tcsMxRoleTab) : 'TCS Score'
                         )}
                         {monthlyDashboardList.slice(3).map((eng, idx) => {
                           const displayRank = eng.displayRank ?? idx + 4;
@@ -5536,8 +5734,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           const isSecond = displayRank === 2;
                           const isThird = displayRank === 3;
                           const cardBorder = isFirst ? 'border-yellow-500/40 shadow-yellow-500/10 shadow-2xl' : isSecond ? 'border-zinc-300/20' : isThird ? 'border-orange-700/20' : 'border-white/5';
-                          const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : appMode === 'TCS_MX' ? 'Engineer Evaluation' : 'TCS Score';
-                          const displayScore = appMode === 'TCS_MX' ? parseFloat(eng.engineerEvaluation) : parseFloat(eng.tcsScore);
+                          const scoreLabel = appMode?.startsWith('PQA') ? 'PQA Score' : appMode === 'TCS_MX' ? getMxRoleLeaderboardScoreLabel(tcsMxRoleTab) : 'TCS Score';
+                          const displayScore = appMode === 'TCS_MX' ? resolveTcsDashboardScore(eng) : parseFloat(eng.tcsScore);
                           return (
                             <div key={eng.id || eng.code} className={`glass-card rounded-[2.5rem] p-4 md:p-8 flex items-center gap-4 md:gap-6 border transition-all hover:border-white/20 ${cardBorder}`}>
                               {renderRankBadgeList(displayRank, isFirst, isSecond, isThird, eng)}
@@ -5609,14 +5807,18 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <div className="text-center p-20 text-zinc-700 font-black uppercase tracking-widest bg-zinc-900/30 rounded-[3rem] border border-white/5">
                         {appMode?.startsWith('PQA')
                           ? 'No accumulated data — upload Excel with ★Partner Ranking sheet.'
-                          : isTcsMxAlternateRole
+                          : isTcsMode && isTcsMxAlternateRole
                           ? `No ${tcsMxPersonLabel.toLowerCase()} data for this quarter. Add records in Admin → TCS MX → ${TCS_MX_ROLE_TABS.find((t) => t.key === tcsMxRoleTab)?.label || 'Role'}.`
-                          : `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${TCS_WINNERS_PER_PRODUCT} in Admin Portal → Dashboard Winners.`}
+                          : isTcsMode
+                          ? hasTcsWinnersConfig
+                            ? `No roster matches for your configured winners (${winnersScopeQuarterKey || ''}). Check SBA ID / engineer codes in Admin → Dashboard Winners.`
+                            : `No configured winners for ${tcsDashboardProduct || 'TCS'} ${winnersScopeQuarterKey || ''}. Add Top ${dashboardWinnersSlotCount} in Admin Portal → Dashboard Winners.`
+                          : 'No data for this quarter.'}
                       </div>
                     ) : (() => {
                       const accLimit = appMode?.startsWith('PQA') ? 500 : TCS_HOME_LEADERBOARD_LIMIT;
                       const accList = isTcsMode ? quarterlyDashboardList : quarterlyDashboardList.slice(0, accLimit);
-                      const avgLabel = appMode?.startsWith('PQA') ? 'Acc. Avg PQA' : appMode === 'TCS_MX' ? 'Engineer Evaluation' : 'TCS Score';
+                      const avgLabel = appMode?.startsWith('PQA') ? 'Acc. Avg PQA' : appMode === 'TCS_MX' ? getMxRoleLeaderboardScoreLabel(tcsMxRoleTab) : 'TCS Score';
                       return (
                         <>
                           {renderHomeRankingPodium(accList, 'avgScore', avgLabel)}
@@ -5753,7 +5955,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           searchIsPqaContext
                             ? 'SERVICE_CENTER_CODE'
                             : appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists'
-                              ? 'RECEPTIONIST_CODE'
+                              ? 'GSPN_ID'
                               : appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants'
                                 ? 'GALAXY_CONSULTANT_CODE'
                                 : 'ENGINEER_CODE'
@@ -6043,7 +6245,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <p className="text-[9px] font-black uppercase tracking-[0.35em] text-blue-400 mb-1">TCS bulk data — {cur.short}{mxRoleLabel ? ` · ${mxRoleLabel}` : ''}</p>
                       <h3 className="text-lg font-black text-white uppercase tracking-tight">{cur.label}{mxRoleLabel ? ` — ${mxRoleLabel}` : ''}</h3>
                       <p className="text-[10px] text-zinc-500 font-medium max-w-2xl">
-                        Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">{getTcsMxRolePersonLabel(tcsMxRoleTab)} Code</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.
+                        Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">{tcsMxRoleTab === 'receptionists' ? 'GSPN ID' : `${getTcsMxRolePersonLabel(tcsMxRoleTab)} Code`}</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/30 p-5 flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:items-center sm:justify-between">
@@ -6060,7 +6262,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         {adminCanReadData && (
                         <button
                           type="button"
-                          onClick={() => downloadTcsDivisionTemplate(activeTcs)}
+                          onClick={() => downloadTcsBulkTemplate(tcsMxRoleTab)}
                           className="flex flex-1 items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-800/80 border border-white/10 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-zinc-700 hover:text-white transition-all"
                         >
                           <Download className="w-4 h-4" /> Template
@@ -6111,12 +6313,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <button
                   type="button"
                   onClick={() => setEditingEng({
-                    id: '', name: '', code: '',
+                    ...buildMxRoleEditingDefaults(appMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers'),
                     photoUrl: appMode?.startsWith('PQA') ? PQA_SERVICE_CENTER_PHOTO : DEFAULT_ENGINEER_PHOTO_URL,
-                    asc: '', partnerName: '', month: 'March', year: '2026',
-                    redoRatio: '', iqcSkipRatio: '', maintenanceModeRatio: '', oqcPassRate: '',
-                    trainingAttendance: '', corePartsPBA: '', corePartsOcta: '', multiPartsRatio: '',
-                    examScore: '', promoters: '', detractors: '', tcsScore: 0, tier: 'Bronze'
                   })}
                   className="flex items-center gap-2 bg-white text-black px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all shadow-xl"
                 >
@@ -6244,13 +6442,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   </>
                 )}
 
-                {/* Active Registry Stack — deduplicated: one row per engineer (newest record) */}
+                {/* Active Registry Stack */}
                 <div className="grid grid-cols-1 gap-px bg-white/5 border border-white/5 rounded-[3rem] overflow-hidden shadow-3xl">
-                  {deduplicatedEngineers.length === 0 ? (
+                  {adminRegistryList.length === 0 ? (
                     <div className="p-24 text-center text-zinc-700 italic font-black uppercase tracking-[0.3em]">No registry entries detected.</div>
-                  ) : deduplicatedEngineers.map((eng, idx) => (
+                  ) : adminRegistryList.map((eng, idx) => (
 
-                    <div key={eng.id} className="bg-black hover:bg-zinc-900/50 transition-all p-3 md:p-6 flex items-center justify-between gap-2 group">
+                    <div key={eng.id || `${eng.code}-${eng.month}-${eng.year}-${idx}`} className="bg-black hover:bg-zinc-900/50 transition-all p-3 md:p-6 flex items-center justify-between gap-2 group">
                       <div className="flex items-center gap-3 md:gap-6 min-w-0 flex-1">
                       {currentUser?.role === 'SUPER_ADMIN' && (
                         <button
@@ -6812,9 +7010,14 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               >
                 <div className="space-y-6">
                   <p className="text-[10px] font-bold text-zinc-500">
-                    Configure fixed Top {TCS_WINNERS_PER_PRODUCT} engineer codes per quarter/product for TCS dashboard ranking.
+                    {winnerHubProduct === 'MX' && winnerHubMxRole === 'receptionists'
+                      ? `Configure up to Top ${winnerHubSlotCount} receptionist codes per quarter. Fill only the ranks you have — empty slots are fine.`
+                      : winnerHubProduct === 'MX' && winnerHubMxRole === 'galaxy_consultants'
+                        ? `Configure up to Top ${winnerHubSlotCount} galaxy consultant codes per quarter. Fill only the ranks you have — empty slots are fine.`
+                        : `Configure fixed Top ${winnerHubSlotCount} codes per quarter/product for TCS dashboard ranking.`}
+                    {winnerHubProduct === 'MX' ? ' For MX, pick Engineers, Receptionists, or Galaxy Consultants.' : ''}
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className={`grid grid-cols-1 gap-3 ${winnerHubProduct === 'MX' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Quarter</label>
                       <select
@@ -6841,7 +7044,10 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Product</label>
                       <select
                         value={winnerHubProduct}
-                        onChange={(e) => setWinnerHubProduct(e.target.value)}
+                        onChange={(e) => {
+                          setWinnerHubProduct(e.target.value);
+                          if (e.target.value !== 'MX') setWinnerHubMxRole('engineers');
+                        }}
                         className="w-full bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white"
                       >
                         <option value="MX">MX</option>
@@ -6849,9 +7055,23 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         <option value="AV">AV</option>
                       </select>
                     </div>
+                    {winnerHubProduct === 'MX' && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">MX role</label>
+                        <select
+                          value={winnerHubMxRole}
+                          onChange={(e) => setWinnerHubMxRole(e.target.value)}
+                          className="w-full bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white"
+                        >
+                          {TCS_MX_WINNER_ROLES.map((role) => (
+                            <option key={role.key} value={role.key}>{role.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
-                    {Array.from({ length: TCS_WINNERS_PER_PRODUCT }, (_, idx) => (
+                    {Array.from({ length: winnerHubSlotCount }, (_, idx) => (
                       <div key={`winner-rank-${idx + 1}`} className="grid grid-cols-[56px_1fr] gap-2 items-center">
                         <div className="text-[10px] font-black uppercase tracking-widest text-zinc-400">#{idx + 1}</div>
                         <input
@@ -6860,7 +7080,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                             const v = normalizeEngineerCodeKey(e.target.value);
                             setWinnerHubCodes((prev) => prev.map((code, i) => (i === idx ? v : code)));
                           }}
-                          placeholder="Engineer Code"
+                          placeholder={
+                            winnerHubProduct === 'MX' && winnerHubMxRole === 'receptionists'
+                              ? 'GSPN ID'
+                              : winnerHubProduct === 'MX' && winnerHubMxRole === 'galaxy_consultants'
+                                ? 'Galaxy Consultant Code'
+                                : 'SBA ID or Engineer Code'
+                          }
                           className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase tracking-widest text-white outline-none"
                         />
                       </div>
@@ -6887,7 +7113,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       disabled={tcsWinnersSaving}
                       className="px-5 py-3 rounded-xl bg-blue-600/20 border border-blue-500/30 text-[10px] font-black uppercase tracking-widest text-blue-200 hover:bg-blue-600/30 transition-all disabled:opacity-40"
                     >
-                      {tcsWinnersSaving ? 'Saving…' : `Save Top ${TCS_WINNERS_PER_PRODUCT}`}
+                      {tcsWinnersSaving ? 'Saving…' : (winnerHubMxRole === 'receptionists' || winnerHubMxRole === 'galaxy_consultants') && winnerHubProduct === 'MX' ? 'Save winners' : `Save Top ${winnerHubSlotCount}`}
                     </button>
                   </div>
                 </div>
@@ -7309,7 +7535,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     const dispTrain = parseFloat(eng.q1TrainingScore ?? eng.trainingAttendance ?? 0);
                     const dispExam = parseFloat(eng.examScore || 0);
                     const dispDrnpsSheet = parseFloat(eng.drnpsScore ?? calculateDRNPS(eng.promoters, eng.detractors));
-                    const isDaAvExactProfile = !isPqaMode && (
+                    const isReceptionistProfile = appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists';
+                    const isGalaxyProfile = appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants';
+                    const isDaAvExactProfile = !isPqaMode && !isReceptionistProfile && !isGalaxyProfile && (
                       appMode === 'TCS_DA' ||
                       appMode === 'TCS_AV' ||
                       appMode === 'TCS_VD' ||
@@ -7322,9 +7550,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                           <p className="text-xs text-zinc-500 leading-relaxed">
                             {isPqaMode
                               ? `KPIs from the ★Evaluation point sheet — ${(eng.pqaBranch || appMode) === 'PQA_CE' ? 'CE' : 'MX'} registry only (MX vs CE are stored separately). Targets follow headers such as SSR (20), D-RNPS (10).`
-                              : isDaAvExactProfile
-                                ? 'DA/AV criteria from uploaded sheet: SSR, REDO, Chatbot, HASS, Acc Core Parts (VD), Training Attendance, Linkage ratio. Ranking score uses Final Score.'
-                                : 'Metrics match the TCS MX template: IQC Skip % (column M), Repair cases (L), Engineer evaluation, DRNPS, Exam, TCS Score. Download the updated template from Admin if needed.'}
+                              : isReceptionistProfile
+                                ? 'Receptionist KPIs: Vote for Me (customers rated 10), IQC first time fail %, DRNPS %, Exam points, and Co.A bonus points.'
+                                : isGalaxyProfile
+                                  ? 'Galaxy Consultant KPI: number of Galaxy Consultant tickets.'
+                                  : isDaAvExactProfile
+                                    ? 'DA/AV criteria from uploaded sheet: SSR, REDO, Chatbot, HASS, Acc Core Parts (VD), Training Attendance, Linkage ratio. Ranking score uses Final Score.'
+                                    : 'Metrics match the TCS MX template: IQC Skip % (column M), Repair cases (L), Engineer evaluation, DRNPS, Exam, TCS Score. Download the updated template from Admin if needed.'}
                           </p>
                         </div>
                         {isPqaMode && pqaExactMonthPeriods.length > 0 && (
@@ -7346,7 +7578,40 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                         )}
                         {!isPqaMode ? (
                           <div className="space-y-8">
-                            {isDaAvExactProfile ? (
+                            {isReceptionistProfile ? (
+                              <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
+                                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
+                                  <div>
+                                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.35em]">Receptionist KPIs</p>
+                                    <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">Vote for Me · IQC first time fail · DRNPS · Exam · Co.A</p>
+                                  </div>
+                                  <div className="text-left sm:text-right">
+                                    <TierLogo tier={resolveTierByMode(eng)} size="lg" />
+                                  </div>
+                                </div>
+                                <div className="space-y-5 pl-2 md:pl-4 border-l-2 border-emerald-500/35">
+                                  <MetricBar label="Vote for Me" value={parseFloat(eng.voteForMe || 0)} max={50} suffix="" target={30} />
+                                  <MetricBar label="IQC first time fail" value={parseFloat(eng.iqcFirstTimeFail || 0)} max={100} suffix="%" target={5} inverse />
+                                  <MetricBar label="DRNPS" value={resolveReceptionistDrnps(eng)} max={100} suffix="%" target={80} />
+                                  <MetricBar label="Exam" value={parseFloat(eng.examScore || 0)} max={100} suffix=" pts" target={90} />
+                                  <MetricBar label="Co.A (bonus)" value={parseFloat(eng.coa || 0)} max={10} suffix=" pts" target={10} />
+                                </div>
+                              </div>
+                            ) : isGalaxyProfile ? (
+                              <div className="rounded-2xl border border-cyan-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
+                                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
+                                  <div>
+                                    <p className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.35em]">Galaxy Consultant</p>
+                                    <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">Galaxy consultant tickets</p>
+                                  </div>
+                                  <div className="text-left sm:text-right">
+                                    <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">{parseFloat(eng.galaxyConsultantTickets || 0)}</span>
+                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Tickets</p>
+                                  </div>
+                                </div>
+                                <MetricBar label="Galaxy consultant tickets" value={parseFloat(eng.galaxyConsultantTickets || 0)} max={60} suffix="" target={40} />
+                              </div>
+                            ) : isDaAvExactProfile ? (
                               <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
                                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
                                   <div>
@@ -8973,12 +9238,12 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   <div className="lg:col-span-8 space-y-12">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Full Operational Name</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">{tcsMxRoleTab === 'receptionists' ? 'Receptionist name' : 'Full Operational Name'}</label>
                         <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.name} onChange={e => setEditingEng({ ...editingEng, name: e.target.value })} />
                       </div>
                       <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Engineer Protocol Code</label>
-                        <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none uppercase placeholder:text-zinc-800" placeholder="SAM-2026-X" value={editingEng.code} onChange={e => setEditingEng({ ...editingEng, code: e.target.value.toUpperCase() })} />
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">{tcsMxRoleTab === 'receptionists' ? 'GSPN ID' : `${getTcsMxRolePersonLabel(tcsMxRoleTab)} Protocol Code`}</label>
+                        <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-base font-bold text-white focus:border-blue-500 transition-all outline-none uppercase placeholder:text-zinc-800" placeholder={tcsMxRoleTab === 'receptionists' ? 'GSPN-XXXX' : 'SAM-2026-X'} value={editingEng.code || editingEng.gspnId || ''} onChange={e => setEditingEng({ ...editingEng, code: e.target.value.toUpperCase(), gspnId: e.target.value.toUpperCase() })} />
                       </div>
                       <div className="space-y-3 md:col-span-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-4">Active Audit Period</label>
@@ -8995,6 +9260,49 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] border-b border-white/5 pb-6">Performance Matrix Allocation</h3>
 
                       {!appMode?.startsWith('PQA') ? (
+                        appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists' ? (
+                          <div className="space-y-6">
+                            <p className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.4em]">Receptionist KPIs</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">ASC_CODE</label>
+                                <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-zinc-500 transition-all outline-none uppercase" value={editingEng.ascCode || ''} onChange={e => setEditingEng({ ...editingEng, ascCode: e.target.value.toUpperCase() })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">ASC Name</label>
+                                <input className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-zinc-500 transition-all outline-none" value={editingEng.asc || editingEng.partnerName || ''} onChange={e => setEditingEng({ ...editingEng, asc: e.target.value, partnerName: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest ml-1">Vote for Me <span className="text-zinc-600 normal-case">customers rated 10</span></label>
+                                <input type="number" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-emerald-500 transition-all outline-none" value={editingEng.voteForMe} onChange={e => setEditingEng({ ...editingEng, voteForMe: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest ml-1">IQC First Time Fail (%) <span className="text-zinc-600 normal-case">lower is better</span></label>
+                                <input type="number" step="0.1" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-orange-500 transition-all outline-none" value={editingEng.iqcFirstTimeFail} onChange={e => setEditingEng({ ...editingEng, iqcFirstTimeFail: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-1">DRNPS (%) <span className="text-zinc-600 normal-case">target ≥ 80</span></label>
+                                <input type="number" step="0.1" min="0" max="100" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-purple-500 transition-all outline-none" value={editingEng.drnpsPercent} onChange={e => setEditingEng({ ...editingEng, drnpsPercent: e.target.value })} />
+                              </div>
+                              <div className="space-y-3">
+                                <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">Exam (points) <span className="text-zinc-600 normal-case">target ≥ 90</span></label>
+                                <input type="number" step="0.1" min="0" max="100" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-blue-500 transition-all outline-none" value={editingEng.examScore} onChange={e => setEditingEng({ ...editingEng, examScore: e.target.value })} />
+                              </div>
+                              <div className="space-y-3 md:col-span-2">
+                                <label className="text-[10px] font-black text-yellow-400 uppercase tracking-widest ml-1">Co.A (bonus points)</label>
+                                <input type="number" step="0.1" min="0" max="10" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-yellow-500 transition-all outline-none" value={editingEng.coa} onChange={e => setEditingEng({ ...editingEng, coa: e.target.value })} />
+                              </div>
+                            </div>
+                          </div>
+                        ) : appMode === 'TCS_MX' && tcsMxRoleTab === 'galaxy_consultants' ? (
+                          <div className="space-y-6">
+                            <p className="text-[9px] font-black text-cyan-500 uppercase tracking-[0.4em]">Galaxy Consultant KPI</p>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest ml-1">Galaxy Consultant Tickets <span className="text-zinc-600 normal-case">count</span></label>
+                              <input type="number" min="0" className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-cyan-500 transition-all outline-none" value={editingEng.galaxyConsultantTickets} onChange={e => setEditingEng({ ...editingEng, galaxyConsultantTickets: e.target.value })} />
+                            </div>
+                          </div>
+                        ) : (
                         <>
                           {/* ── TCS Mode: Exam & DRNPS ── */}
                           <div>
@@ -9054,6 +9362,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                             </div>
                           </div>
                         </>
+                        )
                       ) : (
                         <>
                           {/* ── PQA Mode: Operations Metrics ── */}

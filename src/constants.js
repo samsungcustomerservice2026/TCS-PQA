@@ -226,20 +226,20 @@ export const INITIAL_ENGINEERS = [
 
 /** Demo seed for TCS MX Receptionists (separate Firestore collection). */
 export const INITIAL_MX_RECEPTIONISTS = [
-    buildMxDemoRecord({ id: 'rx-demo-1', name: 'Sara Hassan', code: 'RX-001', engineerEvaluation: 94 }),
-    buildMxDemoRecord({ id: 'rx-demo-2', name: 'Nour Ali', code: 'RX-002', engineerEvaluation: 91 }),
-    buildMxDemoRecord({ id: 'rx-demo-3', name: 'Mona Farid', code: 'RX-003', engineerEvaluation: 88 }),
-    buildMxDemoRecord({ id: 'rx-demo-4', name: 'Hana Youssef', code: 'RX-004', engineerEvaluation: 85 }),
-    buildMxDemoRecord({ id: 'rx-demo-5', name: 'Laila Kamal', code: 'RX-005', engineerEvaluation: 82 }),
-    buildMxDemoRecord({ id: 'rx-demo-6', name: 'Dina Mahmoud', code: 'RX-006', engineerEvaluation: 79 }),
-].map((r) => ({ ...r, roleType: 'receptionist' }));
+    { id: 'rx-demo-1', name: 'Sara Hassan', code: 'RX-001', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', voteForMe: 42, iqcFirstTimeFail: 3.2, drnpsPercent: 88, examScore: 94, coa: 8, roleType: 'receptionist', tcsScore: 0, tier: 'Bronze' },
+    { id: 'rx-demo-2', name: 'Nour Ali', code: 'RX-002', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', voteForMe: 38, iqcFirstTimeFail: 4.1, drnpsPercent: 85, examScore: 91, coa: 7, roleType: 'receptionist', tcsScore: 0, tier: 'Bronze' },
+    { id: 'rx-demo-3', name: 'Mona Farid', code: 'RX-003', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', voteForMe: 35, iqcFirstTimeFail: 4.8, drnpsPercent: 82, examScore: 88, coa: 6, roleType: 'receptionist', tcsScore: 0, tier: 'Bronze' },
+    { id: 'rx-demo-4', name: 'Hana Youssef', code: 'RX-004', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', voteForMe: 31, iqcFirstTimeFail: 5.5, drnpsPercent: 80, examScore: 85, coa: 5, roleType: 'receptionist', tcsScore: 0, tier: 'Bronze' },
+    { id: 'rx-demo-5', name: 'Laila Kamal', code: 'RX-005', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', voteForMe: 28, iqcFirstTimeFail: 6.2, drnpsPercent: 78, examScore: 82, coa: 4, roleType: 'receptionist', tcsScore: 0, tier: 'Bronze' },
+    { id: 'rx-demo-6', name: 'Dina Mahmoud', code: 'RX-006', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', voteForMe: 24, iqcFirstTimeFail: 7.0, drnpsPercent: 75, examScore: 79, coa: 3, roleType: 'receptionist', tcsScore: 0, tier: 'Bronze' },
+];
 
 /** Demo seed for TCS MX Galaxy Consultants (separate Firestore collection). */
 export const INITIAL_MX_GALAXY_CONSULTANTS = [
-    buildMxDemoRecord({ id: 'gc-demo-1', name: 'Omar Galaxy', code: 'GC-001', engineerEvaluation: 96 }),
-    buildMxDemoRecord({ id: 'gc-demo-2', name: 'Youssef Galaxy', code: 'GC-002', engineerEvaluation: 93 }),
-    buildMxDemoRecord({ id: 'gc-demo-3', name: 'Karim Galaxy', code: 'GC-003', engineerEvaluation: 90 }),
-    buildMxDemoRecord({ id: 'gc-demo-4', name: 'Tarek Galaxy', code: 'GC-004', engineerEvaluation: 87 }),
-    buildMxDemoRecord({ id: 'gc-demo-5', name: 'Amr Galaxy', code: 'GC-005', engineerEvaluation: 84 }),
-    buildMxDemoRecord({ id: 'gc-demo-6', name: 'Hadi Galaxy', code: 'GC-006', engineerEvaluation: 81 }),
-].map((r) => ({ ...r, roleType: 'galaxy_consultant' }));
+    { id: 'gc-demo-1', name: 'Omar Galaxy', code: 'GC-001', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', galaxyConsultantTickets: 48, roleType: 'galaxy_consultant', tcsScore: 0, tier: 'Bronze' },
+    { id: 'gc-demo-2', name: 'Youssef Galaxy', code: 'GC-002', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', galaxyConsultantTickets: 44, roleType: 'galaxy_consultant', tcsScore: 0, tier: 'Bronze' },
+    { id: 'gc-demo-3', name: 'Karim Galaxy', code: 'GC-003', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', galaxyConsultantTickets: 40, roleType: 'galaxy_consultant', tcsScore: 0, tier: 'Bronze' },
+    { id: 'gc-demo-4', name: 'Tarek Galaxy', code: 'GC-004', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', galaxyConsultantTickets: 36, roleType: 'galaxy_consultant', tcsScore: 0, tier: 'Bronze' },
+    { id: 'gc-demo-5', name: 'Amr Galaxy', code: 'GC-005', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', galaxyConsultantTickets: 32, roleType: 'galaxy_consultant', tcsScore: 0, tier: 'Bronze' },
+    { id: 'gc-demo-6', name: 'Hadi Galaxy', code: 'GC-006', photoUrl: DEFAULT_ENGINEER_PHOTO_URL, asc: 'Samsung ASC', partnerName: 'MX Division', month: 'March', year: '2026', product: 'MX', galaxyConsultantTickets: 28, roleType: 'galaxy_consultant', tcsScore: 0, tier: 'Bronze' },
+];
