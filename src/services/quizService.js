@@ -287,6 +287,7 @@ export async function hostStartQuestion(sessionId, hostUsername) {
     status: QUIZ_SESSION_STATUS.QUESTION,
     currentQuestionIndex: nextIndex,
     questionStartedAt: new Date().toISOString(),
+    revealStartedAt: null,
     answerCount: 0,
     prevRanks,
   });
@@ -322,7 +323,10 @@ export async function updateQuizSessionSettings(sessionId, settingsPatch, actor)
 export async function hostRevealQuestion(sessionId, hostUsername) {
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Session not found');
-  await updateDoc(sessionRef(sessionId), { status: QUIZ_SESSION_STATUS.REVEAL });
+  await updateDoc(sessionRef(sessionId), {
+    status: QUIZ_SESSION_STATUS.REVEAL,
+    revealStartedAt: new Date().toISOString(),
+  });
   await writeQuizLog({
     type: 'HOST',
     action: 'question_revealed',
@@ -434,7 +438,10 @@ export async function submitQuizAnswer({
 
   await updateDoc(sessionRef(sessionId), {
     answerCount: increment(1),
-    ...(shouldReveal ? { status: QUIZ_SESSION_STATUS.REVEAL } : {}),
+    ...(shouldReveal ? {
+      status: QUIZ_SESSION_STATUS.REVEAL,
+      revealStartedAt: new Date().toISOString(),
+    } : {}),
   });
 
   return { correct, points, revealed: shouldReveal };

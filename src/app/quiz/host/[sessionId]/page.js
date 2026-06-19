@@ -22,6 +22,7 @@ import QuizQuestionDisplay from '../../../../components/quiz/QuizQuestionDisplay
 import QuizResultsSummary from '../../../../components/quiz/QuizResultsSummary';
 import QuizJoinQR from '../../../../components/quiz/QuizJoinQR';
 import QuizGameSettingsPanel from '../../../../components/quiz/QuizGameSettingsPanel';
+import QuizRevealCountdown from '../../../../components/quiz/QuizRevealCountdown';
 
 export default function QuizHostPage() {
   const { sessionId } = useParams();
@@ -115,13 +116,31 @@ export default function QuizHostPage() {
     }
     if (autoPlayRef.current) return undefined;
     autoPlayRef.current = true;
+    const startedAt = session.revealStartedAt
+      ? new Date(session.revealStartedAt).getTime()
+      : Date.now();
+    const delayMs = (settings.revealDelaySec || 5) * 1000;
+    const remaining = Math.max(0, delayMs - (Date.now() - startedAt));
     const id = setTimeout(() => {
       autoPlayRef.current = false;
       if (qIndex + 1 < totalQ) run(() => hostStartQuestion(sessionId, hostUser));
       else run(() => hostEndQuiz(sessionId, hostUser));
-    }, (settings.revealDelaySec || 5) * 1000);
+    }, remaining);
     return () => { clearTimeout(id); autoPlayRef.current = false; };
-  }, [session?.status, session?.currentQuestionIndex, settings.autoPlay, settings.revealDelaySec, qIndex, totalQ, busy, run, sessionId, hostUser, session]);
+  }, [
+    session?.status,
+    session?.revealStartedAt,
+    session?.currentQuestionIndex,
+    settings.autoPlay,
+    settings.revealDelaySec,
+    qIndex,
+    totalQ,
+    busy,
+    run,
+    sessionId,
+    hostUser,
+    session,
+  ]);
 
   useEffect(() => {
     if (session?.status === QUIZ_SESSION_STATUS.FINISHED && sessionId) {
@@ -162,12 +181,17 @@ export default function QuizHostPage() {
                   )}
                 </div>
               )}
-              {isReveal && !settings.autoPlay && (
-                <div className="shrink-0 flex justify-center gap-3">
+              {isReveal && (
+                <div className="shrink-0 space-y-5">
+                  <QuizRevealCountdown session={session} lang={lang} />
+                  {!settings.autoPlay && (
+                    <div className="flex justify-center gap-3">
                   {qIndex + 1 < totalQ ? (
                     <button type="button" disabled={busy} onClick={() => run(() => hostStartQuestion(sessionId, hostUser))} className="bg-blue-600 px-10 py-4 rounded-2xl font-black uppercase disabled:opacity-40">{lang === 'ar' ? 'التالي' : 'Next question'}</button>
                   ) : (
                     <button type="button" disabled={busy} onClick={() => run(() => hostEndQuiz(sessionId, hostUser))} className="bg-emerald-600 px-10 py-4 rounded-2xl font-black uppercase disabled:opacity-40">{lang === 'ar' ? 'إنهاء' : 'Finish'}</button>
+                  )}
+                    </div>
                   )}
                 </div>
               )}
@@ -182,6 +206,7 @@ export default function QuizHostPage() {
                 answers={finishedAnswers}
                 lang={lang}
                 showPortalLink
+                animatePodium
               />
             </div>
           )}
