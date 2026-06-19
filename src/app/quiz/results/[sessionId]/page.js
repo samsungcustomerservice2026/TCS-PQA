@@ -8,11 +8,13 @@ import {
   getQuizSessionAnswers,
 } from '../../../../services/quizService';
 import QuizPodium from '../../../../components/quiz/QuizPodium';
+import QuizJoinAnotherGame from '../../../../components/quiz/QuizJoinAnotherGame';
 
 function ResultsContent() {
   const { sessionId } = useParams();
   const searchParams = useSearchParams();
   const lang = searchParams.get('lang') === 'ar' ? 'ar' : 'en';
+  const isHostView = searchParams.get('host') === '1';
   const [session, setSession] = useState(null);
   const [players, setPlayers] = useState([]);
   const [answers, setAnswers] = useState([]);
@@ -27,6 +29,10 @@ function ResultsContent() {
 
   if (!session) {
     return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">Loading…</div>;
+  }
+
+  if (!isHostView) {
+    return <QuizJoinAnotherGame lang={lang} />;
   }
 
   return (
@@ -74,12 +80,6 @@ function ResultsContent() {
             </div>
           </div>
         )}
-
-        <div className="text-center pt-6">
-          <a href="/quiz/join" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white">
-            {lang === 'ar' ? 'انضم للعبة أخرى' : 'Join another game'}
-          </a>
-        </div>
       </div>
     </div>
   );

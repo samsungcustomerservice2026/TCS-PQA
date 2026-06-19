@@ -1,11 +1,13 @@
-/** Live quiz (Kahoot-style) — isolated from TCS/PQA data */
+/** Live quiz (SCORA Challenge) — isolated from TCS/PQA data */
 
 export const QUIZ_DIVISIONS = ['MX', 'DA', 'AV'];
 
 export const QUIZ_QUESTION_TYPES = {
   CHOICE: 'choice',
+  MULTI_CHOICE: 'multi_choice',
   TRUE_FALSE: 'true_false',
   TYPE_ANSWER: 'type_answer',
+  POLL: 'poll',
 };
 
 export const QUIZ_SESSION_STATUS = {
@@ -24,6 +26,22 @@ export const QUIZ_COLLECTIONS = {
   templates: 'quiz_templates',
   sessions: 'quiz_live_sessions',
   logs: 'quiz_logs',
+};
+
+export const DEFAULT_QUIZ_SETTINGS = {
+  autoPlay: false,
+  autoRevealWhenAllAnswered: true,
+  randomizeQuestions: false,
+  randomizeAnswers: true,
+  defaultTimeSec: QUIZ_DEFAULT_TIME_SEC,
+  revealDelaySec: 5,
+  showQuestionsOnDevices: true,
+  reactions: true,
+  defaultLanguage: 'en',
+  highContrast: false,
+  unlimitedTime: false,
+  nicknameGenerator: false,
+  twoStepJoin: false,
 };
 
 export const EMPTY_QUIZ_QUESTION = {
@@ -45,4 +63,5 @@ export const EMPTY_QUIZ_TEMPLATE = {
   titleAr: '',
   division: 'MX',
   questions: [],
+  settings: { ...DEFAULT_QUIZ_SETTINGS },
 };

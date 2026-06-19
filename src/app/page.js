@@ -5995,7 +5995,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   },
                   { key: 'survey', label: 'Survey', show: canAccessModule(currentUser, 'survey') },
                   { key: 'feedback', label: 'Feedback', show: canAccessModule(currentUser, 'feedback') },
-                  { key: 'quiz', label: 'Live Quiz', show: currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' || canAccessModule(currentUser, 'quiz') },
+                  { key: 'quiz', label: 'SCORA Challenge', show: currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' || canAccessModule(currentUser, 'quiz') },
                   ...(currentUser.role === 'SUPER_ADMIN'
                     ? [
                         { key: 'insights', label: 'Insights' },

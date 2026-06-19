@@ -11,7 +11,7 @@ export default function AdminQuizEntryPage() {
   }, [router]);
   return (
     <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500 text-[10px] font-black uppercase tracking-widest">
-      Loading Live Quiz admin…
+      Loading SCORA Challenge…
     </div>
   );
 }

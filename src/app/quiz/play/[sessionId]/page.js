@@ -2,33 +2,17 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import {
-  subscribeQuizSession,
-  submitQuizAnswer,
-} from '../../../../services/quizService';
+import { subscribeQuizSession, submitQuizAnswer } from '../../../../services/quizService';
 import { QUIZ_QUESTION_TYPES, QUIZ_SESSION_STATUS } from '../../../../constants/quiz';
+import QuizChallengeHeader from '../../../../components/quiz/QuizChallengeHeader';
+import QuizLiveStats from '../../../../components/quiz/QuizLiveStats';
+import QuizQuestionDisplay from '../../../../components/quiz/QuizQuestionDisplay';
+import QuizJoinAnotherGame from '../../../../components/quiz/QuizJoinAnotherGame';
+import { normalizeQuizSettings } from '../../../../lib/quizSessionHelpers';
 
 const T = {
-  en: {
-    wait: 'Waiting for host…',
-    lobby: 'You are in! Wait for the host to start.',
-    answer: 'Submit',
-    correct: 'Correct!',
-    wrong: 'Wrong',
-    done: 'Answer locked in',
-    ended: 'Game over — see results',
-    typePh: 'Type your answer',
-  },
-  ar: {
-    wait: 'في انتظار المضيف…',
-    lobby: 'تم الانضمام! انتظر بدء اللعبة.',
-    answer: 'إرسال',
-    correct: 'إجابة صحيحة!',
-    wrong: 'إجابة خاطئة',
-    done: 'تم تسجيل إجابتك',
-    ended: 'انتهت اللعبة',
-    typePh: 'اكتب إجابتك',
-  },
+  en: { wait: 'Waiting…', lobby: 'You are in! Wait for the host.', correct: 'Correct!', wrong: 'Wrong', done: 'Answer locked in', waitingReveal: 'Waiting for others…', pollDone: 'Vote recorded!' },
+  ar: { wait: 'في الانتظار…', lobby: 'تم الانضمام!', correct: 'صحيح!', wrong: 'خطأ', done: 'تم التسجيل', waitingReveal: 'في انتظار الآخرين…', pollDone: 'تم التصويت!' },
 };
 
 function PlayContent() {
@@ -43,6 +27,7 @@ function PlayContent() {
   const [feedback, setFeedback] = useState(null);
   const [answeredIndex, setAnsweredIndex] = useState(-1);
   const [submitting, setSubmitting] = useState(false);
+  const [multiSelected, setMultiSelected] = useState([]);
 
   useEffect(() => {
     if (!sessionId) return undefined;
@@ -51,147 +36,73 @@ function PlayContent() {
 
   const qIndex = session?.currentQuestionIndex ?? -1;
   const question = session?.questions?.[qIndex];
-  const nickname = typeof window !== 'undefined'
-    ? sessionStorage.getItem(`quiz_nick_${sessionId}`) || 'Player'
-    : 'Player';
+  const nickname = typeof window !== 'undefined' ? sessionStorage.getItem(`quiz_nick_${sessionId}`) || 'Player' : 'Player';
 
   useEffect(() => {
-    if (searchParams.get('playerId')) {
-      try {
-        const n = searchParams.get('nick');
-        if (n) sessionStorage.setItem(`quiz_nick_${sessionId}`, n);
-      } catch { /* ignore */ }
-    }
-  }, [searchParams, sessionId]);
+    if (qIndex !== answeredIndex) { setTyped(''); setFeedback(null); setMultiSelected([]); }
+  }, [qIndex, answeredIndex]);
 
   const pickAnswer = async (value) => {
-    if (!playerId || submitting || answeredIndex === qIndex) return;
-    if (session?.status !== QUIZ_SESSION_STATUS.QUESTION) return;
+    if (!playerId || submitting || answeredIndex === qIndex || session?.status !== QUIZ_SESSION_STATUS.QUESTION) return;
     setSubmitting(true);
     try {
-      const res = await submitQuizAnswer({
-        sessionId,
-        playerId,
-        nickname,
-        answer: value,
-      });
+      const res = await submitQuizAnswer({ sessionId, playerId, nickname, answer: value });
       setAnsweredIndex(qIndex);
-      setFeedback(res.correct ? t.correct : t.wrong);
-    } catch (e) {
-      setFeedback(e.message);
-    } finally {
-      setSubmitting(false);
-    }
+      setFeedback(question?.type === QUIZ_QUESTION_TYPES.POLL ? t.pollDone : (res.correct ? t.correct : t.wrong));
+    } catch (e) { setFeedback(e.message); } finally { setSubmitting(false); }
   };
 
-  if (!session) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">{t.wait}</div>;
-  }
-
+  if (!session) return <div className="fixed inset-0 bg-black flex items-center justify-center text-zinc-500">{t.wait}</div>;
   if (session.status === QUIZ_SESSION_STATUS.FINISHED) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <p className="text-xl font-black text-white uppercase">{t.ended}</p>
-        <a href={`/quiz/results/${sessionId}?lang=${lang}`} className="text-blue-400 font-bold underline">
-          {lang === 'ar' ? 'عرض النتائج' : 'View results'}
-        </a>
-      </div>
-    );
+    return <QuizJoinAnotherGame lang={lang} />;
   }
-
   if (session.status === QUIZ_SESSION_STATUS.LOBBY || qIndex < 0) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 p-6 text-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <p className="text-2xl font-black text-blue-400">{session.pin}</p>
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-6 p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <QuizChallengeHeader lang={lang} pin={session.pin} division={session.division} />
         <p className="text-zinc-400">{t.lobby}</p>
-        <p className="text-[10px] text-zinc-600 uppercase tracking-widest">{session.division} · {session.playerCount || 0} players</p>
       </div>
     );
   }
 
-  const prompt = lang === 'ar' && question?.promptAr ? question.promptAr : question?.prompt;
-  const options = lang === 'ar' && question?.optionsAr?.some(Boolean)
-    ? question.optionsAr
-    : question?.options;
+  const hasAnswered = answeredIndex === qIndex;
+  const isReveal = session.status === QUIZ_SESSION_STATUS.REVEAL;
+  const disabled = submitting || hasAnswered || isReveal;
+  const settings = normalizeQuizSettings(session.settings);
+  const hidePrompt = !settings.showQuestionsOnDevices;
+  const highContrast = settings.highContrast;
 
-  if (session.status === QUIZ_SESSION_STATUS.REVEAL || answeredIndex === qIndex) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <p className="text-lg font-black text-white">{feedback || t.done}</p>
-        <p className="text-zinc-500 text-sm">{t.wait}</p>
-      </div>
-    );
-  }
+  const toggleMulti = (idx) => {
+    if (disabled) return;
+    setMultiSelected((prev) => prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx].sort((a, b) => a - b));
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 flex flex-col" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest text-center mb-4">
-        Q{qIndex + 1} · {session.division}
-      </p>
-      <h2 className="text-xl font-black text-center mb-8 px-2">{prompt}</h2>
-
-      {question?.type === QUIZ_QUESTION_TYPES.TYPE_ANSWER ? (
-        <form
-          className="mt-auto space-y-4 max-w-md mx-auto w-full"
-          onSubmit={(e) => {
-            e.preventDefault();
-            pickAnswer(typed);
-          }}
-        >
-          <input
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            className="w-full bg-zinc-950 border border-white/10 rounded-2xl p-4 text-center text-lg outline-none focus:border-blue-500"
-            placeholder={t.typePh}
+    <div className={`fixed inset-0 bg-black text-white flex flex-col overflow-hidden ${highContrast ? 'contrast-125' : ''}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="shrink-0 px-4 py-3 border-b border-white/10">
+        <QuizChallengeHeader lang={lang} pin={session.pin} division={session.division} />
+      </div>
+      <div className="flex-1 flex flex-col min-h-0 p-4 overflow-y-auto">
+        {!isReveal && !hasAnswered && <div className="shrink-0 mb-4"><QuizLiveStats session={session} question={question} lang={lang} large /></div>}
+        {hasAnswered && !isReveal ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <p className="text-zinc-500">{t.waitingReveal}</p>
+            <p className="text-sm text-zinc-600">{session.answerCount || 0} / {session.playerCount || 0}</p>
+          </div>
+        ) : (
+          <QuizQuestionDisplay
+            question={question} lang={lang} qIndex={qIndex} totalQ={session.questions?.length || 0}
+            reveal={isReveal} large disabled={disabled} typedValue={typed} onTypedChange={setTyped}
+            onSubmitTyped={() => (question?.type === QUIZ_QUESTION_TYPES.MULTI_CHOICE ? pickAnswer(multiSelected.join(',')) : pickAnswer(typed))}
+            onPick={pickAnswer} multiSelected={multiSelected} onToggleMulti={toggleMulti}
+            hidePrompt={hidePrompt}
           />
-          <button type="submit" disabled={submitting || !typed.trim()} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase tracking-widest disabled:opacity-40">
-            {t.answer}
-          </button>
-        </form>
-      ) : question?.type === QUIZ_QUESTION_TYPES.TRUE_FALSE ? (
-        <div className="grid grid-cols-2 gap-3 mt-auto max-w-md mx-auto w-full">
-          {[
-            { v: 'true', label: lang === 'ar' ? 'صح' : 'True', color: 'bg-emerald-600' },
-            { v: 'false', label: lang === 'ar' ? 'خطأ' : 'False', color: 'bg-red-600' },
-          ].map((opt) => (
-            <button
-              key={opt.v}
-              type="button"
-              onClick={() => pickAnswer(opt.v)}
-              disabled={submitting}
-              className={`${opt.color} py-8 rounded-2xl font-black text-lg uppercase disabled:opacity-40`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 mt-auto max-w-md mx-auto w-full">
-          {(options || []).map((opt, i) => {
-            const colors = ['bg-red-600', 'bg-blue-600', 'bg-amber-500', 'bg-emerald-600'];
-            if (!String(opt || '').trim()) return null;
-            return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => pickAnswer(String(i))}
-                disabled={submitting}
-                className={`${colors[i % 4]} py-5 px-4 rounded-2xl font-black text-left disabled:opacity-40`}
-              >
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
 export default function QuizPlayPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-black" />}>
-      <PlayContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="fixed inset-0 bg-black" />}><PlayContent /></Suspense>;
 }

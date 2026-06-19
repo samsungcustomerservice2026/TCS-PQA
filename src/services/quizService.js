@@ -22,8 +22,14 @@ import {
   QUIZ_SESSION_STATUS,
   QUIZ_DIVISIONS,
 } from '../constants/quiz';
-import { checkQuizAnswer } from '../lib/quizAnswerCheck';
+import { checkQuizAnswer, isScoredQuestionType } from '../lib/quizAnswerCheck';
 import { computeQuizPoints } from '../lib/quizScoring';
+import {
+  normalizeQuizSettings,
+  prepareSessionQuestions,
+  buildRankMap,
+  getQuestionTimeLimit,
+} from '../lib/quizSessionHelpers';
 
 const templatesCol = () => collection(db, QUIZ_COLLECTIONS.templates);
 const sessionsCol = () => collection(db, QUIZ_COLLECTIONS.sessions);
@@ -93,6 +99,7 @@ export async function saveQuizTemplate(template, actor = 'admin') {
     titleAr: String(template.titleAr || '').trim(),
     division,
     questions: Array.isArray(template.questions) ? template.questions : [],
+    settings: normalizeQuizSettings(template.settings),
     updatedAt: new Date().toISOString(),
     updatedBy: actor,
     hidden: false,
@@ -163,16 +170,21 @@ export async function startQuizLiveSession({ templateId, hostUsername }) {
   const pin = await allocateUniquePin();
   const division = QUIZ_DIVISIONS.includes(template.division) ? template.division : 'MX';
 
+  const settings = normalizeQuizSettings(template.settings);
+  const questions = prepareSessionQuestions(template.questions, settings);
+
   const sessionPayload = {
     pin,
     division,
     templateId,
-    templateTitle: template.title || 'Quiz',
+    templateTitle: template.title || 'SCORA Challenge',
     templateTitleAr: template.titleAr || '',
-    questions: template.questions,
+    questions,
+    settings,
     status: QUIZ_SESSION_STATUS.LOBBY,
     currentQuestionIndex: -1,
     questionStartedAt: null,
+    prevRanks: {},
     hostUsername: hostUsername || 'admin',
     playerCount: 0,
     maxPlayers: QUIZ_MAX_PLAYERS,
@@ -267,11 +279,15 @@ export async function hostStartQuestion(sessionId, hostUsername) {
   const nextIndex = (sess.currentQuestionIndex ?? -1) + 1;
   if (nextIndex >= (sess.questions?.length || 0)) throw new Error('No more questions');
 
+  const players = await getQuizSessionPlayers(sessionId);
+  const prevRanks = buildRankMap(players);
+
   await updateDoc(sessionRef(sessionId), {
     status: QUIZ_SESSION_STATUS.QUESTION,
     currentQuestionIndex: nextIndex,
     questionStartedAt: new Date().toISOString(),
     answerCount: 0,
+    prevRanks,
   });
   await writeQuizLog({
     type: 'HOST',
@@ -339,8 +355,10 @@ export async function submitQuizAnswer({
   const startedAt = sess.questionStartedAt ? new Date(sess.questionStartedAt).getTime() : Date.now();
   const responseTimeMs = Math.max(0, Date.now() - startedAt);
   const correct = checkQuizAnswer(question, answer);
-  const points = correct
-    ? computeQuizPoints(question.points || 1000, question.timeLimitSec, responseTimeMs)
+  const timeLimitSec = getQuestionTimeLimit(sess, question);
+  const scored = isScoredQuestionType(question.type);
+  const points = scored && correct
+    ? computeQuizPoints(question.points || 1000, timeLimitSec, responseTimeMs)
     : 0;
 
   await setDoc(existingRef, {
@@ -363,7 +381,15 @@ export async function submitQuizAnswer({
     });
   }
 
-  await updateDoc(sessionRef(sessionId), { answerCount: increment(1) });
+  const newAnswerCount = (sess.answerCount || 0) + 1;
+  const settings = normalizeQuizSettings(sess.settings);
+  const revealPatch = settings.autoRevealWhenAllAnswered
+    && newAnswerCount >= (sess.playerCount || 0)
+    && (sess.playerCount || 0) > 0
+    ? { status: QUIZ_SESSION_STATUS.REVEAL }
+    : {};
+
+  await updateDoc(sessionRef(sessionId), { answerCount: increment(1), ...revealPatch });
 
   return { correct, points };
 }

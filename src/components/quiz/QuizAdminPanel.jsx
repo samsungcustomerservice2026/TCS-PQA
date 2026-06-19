@@ -15,11 +15,12 @@ import {
 } from 'lucide-react';
 import {
   QUIZ_DIVISIONS,
-  QUIZ_QUESTION_TYPES,
-  EMPTY_QUIZ_QUESTION,
   EMPTY_QUIZ_TEMPLATE,
+  DEFAULT_QUIZ_SETTINGS,
+  QUIZ_DEFAULT_TIME_SEC,
 } from '../../constants/quiz';
 import { SCORA_QUIZ_JOIN_URL } from '../../constants/scoraDomains';
+import { normalizeQuizSettings, SCORA_CHALLENGE_NAME } from '../../lib/quizSessionHelpers';
 import {
   listQuizTemplates,
   saveQuizTemplate,
@@ -32,12 +33,9 @@ import {
   fetchQuizLogs,
 } from '../../services/quizService';
 import QuizPodium from './QuizPodium';
-
-const TYPE_LABELS = {
-  choice: 'Single choice',
-  true_false: 'True / False',
-  type_answer: 'Type answer',
-};
+import QuizQuestionEditor, { createEmptyQuestion } from './QuizQuestionEditor';
+import QuizGameSettingsPanel from './QuizGameSettingsPanel';
+import QuizJoinQR from './QuizJoinQR';
 
 export default function QuizAdminPanel({
   currentUser,
@@ -137,16 +135,30 @@ export default function QuizAdminPanel({
   const addQuestion = () => {
     setEditing((prev) => ({
       ...prev,
-      questions: [...(prev?.questions || []), { ...EMPTY_QUIZ_QUESTION, id: `q-${Date.now()}` }],
+      questions: [...(prev?.questions || []), createEmptyQuestion()],
     }));
   };
 
-  const updateQuestion = (idx, patch) => {
+  const updateQuestion = (idx, updated) => {
     setEditing((prev) => {
       const questions = [...(prev.questions || [])];
-      questions[idx] = { ...questions[idx], ...patch };
+      questions[idx] = updated;
       return { ...prev, questions };
     });
+  };
+
+  const applyTimeToAll = (timeSec) => {
+    setEditing((prev) => ({
+      ...prev,
+      questions: (prev.questions || []).map((q) => ({ ...q, timeLimitSec: timeSec })),
+    }));
+  };
+
+  const updateSettings = (patch) => {
+    setEditing((prev) => ({
+      ...prev,
+      settings: { ...normalizeQuizSettings(prev?.settings), ...patch },
+    }));
   };
 
   const removeQuestion = (idx) => {
@@ -158,7 +170,7 @@ export default function QuizAdminPanel({
 
   if (!canRead) {
     return (
-      <p className="text-zinc-500 text-sm p-8 text-center">You do not have access to Live Quiz.</p>
+      <p className="text-zinc-500 text-sm p-8 text-center">You do not have access to {SCORA_CHALLENGE_NAME}.</p>
     );
   }
 
@@ -166,10 +178,10 @@ export default function QuizAdminPanel({
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.35em] text-orange-400">Live Quiz</p>
-          <h3 className="text-lg font-black text-white uppercase">Kahoot-style games (MX · DA · AV)</h3>
+          <p className="text-[9px] font-black uppercase tracking-[0.35em] text-orange-400">{SCORA_CHALLENGE_NAME}</p>
+          <h3 className="text-lg font-black text-white uppercase">Live quiz games (MX · DA · AV)</h3>
           <p className="text-[10px] text-zinc-500 mt-1 max-w-2xl">
-            Multiple live games can run at once — each gets a unique PIN per division. Max 200 players per game.
+            Kahoot-style colors, timers, randomization, multi-select &amp; poll questions. Max 200 players per game.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -189,14 +201,20 @@ export default function QuizAdminPanel({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-orange-500/20 bg-zinc-950/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+      <div className="rounded-2xl border border-orange-500/20 bg-zinc-950/60 p-6 flex flex-col lg:flex-row gap-8 items-center lg:items-start">
+        <QuizJoinQR
+          url={SCORA_QUIZ_JOIN_URL}
+          title="Join link QR"
+          subtitle="Players scan to open the join page"
+          size={160}
+        />
+        <div className="flex-1 space-y-3 text-center lg:text-left">
           <p className="text-[10px] font-black uppercase text-orange-300">Player join link</p>
           <p className="text-[10px] font-mono text-zinc-400 break-all">{SCORA_QUIZ_JOIN_URL}</p>
+          <button type="button" onClick={() => copyJoinLink()} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-600/20 border border-orange-500/30 text-orange-200 text-[10px] font-black uppercase">
+            <Copy className="w-4 h-4" /> Copy link
+          </button>
         </div>
-        <button type="button" onClick={() => copyJoinLink()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-600/20 border border-orange-500/30 text-orange-200 text-[10px] font-black uppercase">
-          <Copy className="w-4 h-4" /> Copy
-        </button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -219,7 +237,11 @@ export default function QuizAdminPanel({
           {canWrite && (
             <button
               type="button"
-              onClick={() => setEditing({ ...EMPTY_QUIZ_TEMPLATE, questions: [{ ...EMPTY_QUIZ_QUESTION }] })}
+              onClick={() => setEditing({
+                ...EMPTY_QUIZ_TEMPLATE,
+                settings: { ...DEFAULT_QUIZ_SETTINGS },
+                questions: [createEmptyQuestion()],
+              })}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-black text-[10px] font-black uppercase"
             >
               <Plus className="w-4 h-4" /> New quiz
@@ -227,111 +249,41 @@ export default function QuizAdminPanel({
           )}
 
           {editing && canWrite && (
-            <div className="rounded-[2rem] border border-orange-500/25 bg-zinc-900/40 p-6 space-y-5">
+            <div className="rounded-[2rem] border border-orange-500/25 bg-zinc-900/40 p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  placeholder="Title (EN)"
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                  className="bg-black border border-white/10 rounded-xl p-3 text-sm text-white"
-                />
-                <input
-                  placeholder="العنوان (AR)"
-                  value={editing.titleAr}
-                  onChange={(e) => setEditing({ ...editing, titleAr: e.target.value })}
-                  className="bg-black border border-white/10 rounded-xl p-3 text-sm text-white"
-                  dir="rtl"
-                />
-                <select
-                  value={editing.division}
-                  onChange={(e) => setEditing({ ...editing, division: e.target.value })}
-                  className="bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase text-white"
-                >
+                <input placeholder="Title (EN)" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} className="bg-black border border-white/10 rounded-xl p-3 text-sm text-white" />
+                <input placeholder="العنوان (AR)" value={editing.titleAr} onChange={(e) => setEditing({ ...editing, titleAr: e.target.value })} className="bg-black border border-white/10 rounded-xl p-3 text-sm text-white" dir="rtl" />
+                <select value={editing.division} onChange={(e) => setEditing({ ...editing, division: e.target.value })} className="bg-black border border-white/10 rounded-xl p-3 text-[10px] font-black uppercase text-white">
                   {QUIZ_DIVISIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
 
-              {(editing.questions || []).map((q, qi) => (
-                <div key={qi} className="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3">
-                  <div className="flex flex-wrap gap-2 items-center justify-between">
-                    <span className="text-[10px] font-black text-zinc-500">Q{qi + 1}</span>
-                    <select
-                      value={q.type}
-                      onChange={(e) => updateQuestion(qi, { type: e.target.value })}
-                      className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white"
-                    >
-                      {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                    <button type="button" onClick={() => removeQuestion(qi)} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                  <input
-                    placeholder="Question EN"
-                    value={q.prompt}
-                    onChange={(e) => updateQuestion(qi, { prompt: e.target.value })}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white"
-                  />
-                  <input
-                    placeholder="السؤال AR"
-                    value={q.promptAr}
-                    onChange={(e) => updateQuestion(qi, { promptAr: e.target.value })}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white"
-                    dir="rtl"
-                  />
-                  {q.type === QUIZ_QUESTION_TYPES.CHOICE && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {[0, 1, 2, 3].map((oi) => (
-                        <input
-                          key={oi}
-                          placeholder={`Option ${oi + 1}`}
-                          value={q.options?.[oi] || ''}
-                          onChange={(e) => {
-                            const options = [...(q.options || ['', '', '', ''])];
-                            options[oi] = e.target.value;
-                            updateQuestion(qi, { options });
-                          }}
-                          className="bg-zinc-950 border border-white/10 rounded-lg p-2 text-xs text-white"
-                        />
-                      ))}
-                      <select
-                        value={q.correctIndex ?? 0}
-                        onChange={(e) => updateQuestion(qi, { correctIndex: parseInt(e.target.value, 10) })}
-                        className="col-span-2 bg-zinc-900 border border-white/10 rounded-lg p-2 text-[10px] text-white"
-                      >
-                        {[0, 1, 2, 3].map((i) => (
-                          <option key={i} value={i}>Correct: option {i + 1}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {q.type === QUIZ_QUESTION_TYPES.TRUE_FALSE && (
-                    <select
-                      value={q.correctIndex ?? 0}
-                      onChange={(e) => updateQuestion(qi, { correctIndex: parseInt(e.target.value, 10) })}
-                      className="bg-zinc-900 border border-white/10 rounded-lg p-2 text-[10px] text-white"
-                    >
-                      <option value={0}>Correct: True</option>
-                      <option value={1}>Correct: False</option>
-                    </select>
-                  )}
-                  {q.type === QUIZ_QUESTION_TYPES.TYPE_ANSWER && (
-                    <input
-                      placeholder="Accepted answers (comma-separated)"
-                      value={(q.acceptedAnswers || []).join(', ')}
-                      onChange={(e) => updateQuestion(qi, {
-                        acceptedAnswers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                      })}
-                      className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white"
+              <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-8 items-start">
+                <div className="space-y-5 min-w-0">
+                  {(editing.questions || []).map((q, qi) => (
+                    <QuizQuestionEditor
+                      key={q.id || qi}
+                      question={q}
+                      qIndex={qi}
+                      onChange={(updated) => updateQuestion(qi, updated)}
+                      onRemove={() => removeQuestion(qi)}
+                      onApplyTimeToAll={applyTimeToAll}
                     />
-                  )}
+                  ))}
+                  <button type="button" onClick={addQuestion} className="w-full py-3 rounded-xl border border-dashed border-white/15 text-[10px] font-black uppercase text-zinc-500 hover:text-white hover:border-white/30">+ Add question</button>
                 </div>
-              ))}
 
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={addQuestion} className="px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black uppercase text-zinc-400">+ Question</button>
-                <button type="button" onClick={saveTemplate} className="px-6 py-2 rounded-xl bg-orange-600 text-white text-[10px] font-black uppercase">Save quiz</button>
-                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 text-zinc-500 text-[10px] font-black uppercase">Cancel</button>
+                <div className="xl:sticky xl:top-4 rounded-2xl border border-white/10 bg-zinc-950/80 p-5 max-h-[85vh] overflow-y-auto">
+                  <QuizGameSettingsPanel
+                    settings={editing.settings}
+                    onChange={(patch) => updateSettings(patch)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">
+                <button type="button" onClick={saveTemplate} className="px-6 py-2.5 rounded-xl bg-orange-600 text-white text-[10px] font-black uppercase">Save quiz</button>
+                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2.5 text-zinc-500 text-[10px] font-black uppercase">Cancel</button>
               </div>
             </div>
           )}
@@ -346,7 +298,7 @@ export default function QuizAdminPanel({
                 <div className="flex gap-2">
                   {canWrite && (
                     <>
-                      <button type="button" onClick={() => setEditing({ ...t, questions: t.questions || [] })} className="p-2 rounded-lg bg-zinc-900 text-zinc-400 hover:text-white"><ClipboardList className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => setEditing({ ...t, questions: t.questions || [], settings: normalizeQuizSettings(t.settings) })} className="p-2 rounded-lg bg-zinc-900 text-zinc-400 hover:text-white"><ClipboardList className="w-4 h-4" /></button>
                       <button type="button" onClick={() => startLive(t.id)} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 text-[10px] font-black uppercase"><Play className="w-3 h-3" /> Start</button>
                       <button type="button" onClick={() => archiveQuizTemplate(t.id, actor).then(reload)} className="p-2 rounded-lg bg-zinc-900 text-red-400"><Trash2 className="w-4 h-4" /></button>
                     </>
@@ -363,14 +315,23 @@ export default function QuizAdminPanel({
           {activeSessions.length === 0 ? (
             <p className="text-zinc-600 text-center py-12 text-[10px] font-black uppercase">No active games</p>
           ) : activeSessions.map((s) => (
-            <div key={s.id} className="rounded-2xl border border-emerald-500/20 bg-zinc-950 p-4 flex flex-wrap justify-between gap-3 items-center">
-              <div>
-                <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
-                <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
-                <button type="button" onClick={() => window.open(`/quiz/host/${s.id}`, '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
+            <div key={s.id} className="rounded-2xl border border-emerald-500/20 bg-zinc-950 p-5 flex flex-col lg:flex-row gap-6 items-center">
+              <QuizJoinQR
+                url={`${SCORA_QUIZ_JOIN_URL}?pin=${s.pin}`}
+                pin={s.pin}
+                title="Scan to join"
+                size={140}
+                className="shrink-0"
+              />
+              <div className="flex-1 w-full flex flex-wrap justify-between gap-3 items-center">
+                <div>
+                  <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
+                  <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => window.open(`/quiz/host/${s.id}`, '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
+                </div>
               </div>
             </div>
           ))}
