@@ -10,6 +10,7 @@ import {
   ExternalLink,
   RefreshCw,
   ClipboardList,
+  Octagon,
 } from 'lucide-react';
 import {
   QUIZ_DIVISIONS,
@@ -29,6 +30,7 @@ import {
   getQuizSessionAnswers,
   getQuizSessionPlayers,
   fetchQuizLogs,
+  adminEndQuizSession,
 } from '../../services/quizService';
 import QuizQuestionEditor, { createEmptyQuestion } from './QuizQuestionEditor';
 import QuizJoinQR from './QuizJoinQR';
@@ -39,7 +41,7 @@ export default function QuizAdminPanel({
   canRead,
   canWrite,
 }) {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const actor = currentUser?.username || currentUser?.name || 'admin';
 
   const [divisionFilter, setDivisionFilter] = useState('ALL');
@@ -53,6 +55,7 @@ export default function QuizAdminPanel({
   const [reportSession, setReportSession] = useState(null);
   const [reportPlayers, setReportPlayers] = useState([]);
   const [reportAnswers, setReportAnswers] = useState([]);
+  const [endingSessionId, setEndingSessionId] = useState(null);
 
   const div = divisionFilter === 'ALL' ? null : divisionFilter;
 
@@ -139,6 +142,30 @@ export default function QuizAdminPanel({
     } catch {
       message.error('Copy failed');
     }
+  };
+
+  const confirmEndGame = (session) => {
+    if (!canWrite) return;
+    modal.confirm({
+      title: 'End this hosted game?',
+      content: `PIN ${session.pin} · ${session.templateTitle || 'SCORA Challenge'} · ${session.playerCount || 0} players. Players will no longer be able to join.`,
+      okText: 'End game',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        setEndingSessionId(session.id);
+        try {
+          await adminEndQuizSession(session.id, actor);
+          message.success(`Game ${session.pin} ended`);
+          await reload();
+        } catch (e) {
+          message.error(e.message || 'Failed to end game');
+        } finally {
+          setEndingSessionId(null);
+        }
+      },
+    });
   };
 
   const addQuestion = () => {
@@ -309,6 +336,9 @@ export default function QuizAdminPanel({
 
       {subTab === 'live' && (
         <div className="space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            {activeSessions.length} active game{activeSessions.length === 1 ? '' : 's'}
+          </p>
           {activeSessions.length === 0 ? (
             <p className="text-zinc-600 text-center py-12 text-[10px] font-black uppercase">No active games</p>
           ) : activeSessions.map((s) => (
@@ -325,9 +355,20 @@ export default function QuizAdminPanel({
                   <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
                   <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
-                  <button type="button" onClick={() => window.open(scoraChallengeHostPath(s.id), '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400 hover:text-white" title="Copy join link"><Copy className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => window.open(scoraChallengeHostPath(s.id), '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase hover:bg-blue-600/30"><ExternalLink className="w-3 h-3" /> Host</button>
+                  {canWrite && (
+                    <button
+                      type="button"
+                      disabled={endingSessionId === s.id}
+                      onClick={() => confirmEndGame(s)}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-600/20 text-red-300 text-[10px] font-black uppercase hover:bg-red-600/30 disabled:opacity-40"
+                    >
+                      <Octagon className="w-3 h-3" />
+                      {endingSessionId === s.id ? 'Ending…' : 'End game'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

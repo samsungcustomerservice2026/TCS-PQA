@@ -337,6 +337,7 @@ export async function hostRevealQuestion(sessionId, hostUsername) {
 export async function hostEndQuiz(sessionId, hostUsername) {
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Session not found');
+  if (sess.status === QUIZ_SESSION_STATUS.FINISHED) return;
   await updateDoc(sessionRef(sessionId), {
     status: QUIZ_SESSION_STATUS.FINISHED,
     finishedAt: new Date().toISOString(),
@@ -349,6 +350,31 @@ export async function hostEndQuiz(sessionId, hostUsername) {
     pin: sess.pin,
     division: sess.division,
     details: { playerCount: sess.playerCount },
+  });
+}
+
+export async function adminEndQuizSession(sessionId, actor = 'admin') {
+  const sess = await getQuizSession(sessionId);
+  if (!sess) throw new Error('Session not found');
+  if (sess.status === QUIZ_SESSION_STATUS.FINISHED) throw new Error('Game already ended');
+  await updateDoc(sessionRef(sessionId), {
+    status: QUIZ_SESSION_STATUS.FINISHED,
+    finishedAt: new Date().toISOString(),
+    endedFrom: 'portal',
+    endedBy: actor,
+  });
+  await writeQuizLog({
+    type: 'ADMIN',
+    action: 'game_ended',
+    actor,
+    sessionId,
+    pin: sess.pin,
+    division: sess.division,
+    details: {
+      previousStatus: sess.status,
+      playerCount: sess.playerCount || 0,
+      templateTitle: sess.templateTitle,
+    },
   });
 }
 
