@@ -3,6 +3,8 @@
 import React from 'react';
 import QRCode from 'react-qr-code';
 import { Copy } from 'lucide-react';
+import { scoraChallengeJoinUrl } from '../../constants/scoraChallengePaths';
+import { SCORA_CHALLENGE_JOIN_URL } from '../../constants/scoraDomains';
 
 export default function QuizJoinQR({
   url,
@@ -12,7 +14,10 @@ export default function QuizJoinQR({
   size = 200,
   className = '',
 }) {
-  const joinUrl = url || (typeof window !== 'undefined' ? window.location.origin : '');
+  const joinUrl = url || scoraChallengeJoinUrl(
+    pin,
+    typeof window !== 'undefined' ? window.location.origin : undefined,
+  );
 
   const copyLink = async () => {
     try {
@@ -32,7 +37,7 @@ export default function QuizJoinQR({
       {pin && (
         <p className="text-3xl font-black text-blue-400 tracking-[0.3em]">{pin}</p>
       )}
-      <p className="text-[10px] font-mono text-zinc-500 break-all max-w-[240px]">{joinUrl}</p>
+      <p className="text-[10px] font-mono text-zinc-500 break-all max-w-[260px]">{joinUrl}</p>
       <button
         type="button"
         onClick={copyLink}
@@ -45,6 +50,5 @@ export default function QuizJoinQR({
 }
 
 export function getQuizJoinUrl(pin, baseUrl) {
-  const origin = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
-  return `${origin}/quiz/join${pin ? `?pin=${pin}` : ''}`;
+  return scoraChallengeJoinUrl(pin, baseUrl);
 }

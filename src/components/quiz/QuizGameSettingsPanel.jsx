@@ -126,8 +126,8 @@ export default function QuizGameSettingsPanel({ settings, onChange }) {
         />
         <SettingRow
           icon={Eye}
-          title="Reveal when all answered"
-          description="Show correct answers once every player has submitted."
+          title="Skip timer when everyone answered"
+          description="Reveal answers and move on as soon as all connected players submit — no need to wait for the countdown."
           checked={s.autoRevealWhenAllAnswered}
           onChange={(v) => patch('autoRevealWhenAllAnswered', v)}
         />

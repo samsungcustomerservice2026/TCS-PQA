@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getQuizSessionByPin, joinQuizSession } from '../../../services/quizService';
 import { QUIZ_PIN_LENGTH } from '../../../constants/quiz';
 import { normalizeQuizSettings } from '../../../lib/quizSessionHelpers';
-import QuizJoinQR, { getQuizJoinUrl } from '../../../components/quiz/QuizJoinQR';
+import { scoraChallengePlayPath } from '../../../constants/scoraChallengePaths';
+import { scoraChallengeJoinUrl } from '../../../constants/scoraChallengePaths';
+import QuizJoinQR from '../../../components/quiz/QuizJoinQR';
 
 const NICK_PARTS = ['Swift', 'Blue', 'Mega', 'Super', 'Cosmic', 'Turbo', 'Nova', 'Pixel', 'Flash', 'Star'];
 const NICK_SUFFIX = ['Fox', 'Wolf', 'Hawk', 'Tiger', 'Eagle', 'Ninja', 'Hero', 'Ace', 'Pro', 'King'];
@@ -20,35 +22,37 @@ const T = {
   en: {
     title: 'SCORA Challenge',
     subtitle: 'Enter the 6-digit game code from your host',
+    hint: 'This page always works — enter your code when the host starts a live game.',
     pin: 'Game code',
     nick: 'Nickname',
     join: 'Join game',
     next: 'Continue',
     joining: 'Joining…',
     lang: 'العربية',
-    invalid: 'Invalid or ended game code',
+    invalid: 'No active game with this code. Ask your host to start SCORA Challenge, then try again.',
     generate: 'Generate nickname',
-    scan: 'Scan QR from host screen',
+    scan: 'SCORA Challenge join link',
   },
   ar: {
     title: 'تحدي SCORA',
     subtitle: 'أدخل رمز اللعبة المكون من 6 أرقام',
+    hint: 'هذه الصفحة متاحة دائماً — أدخل الرمز عندما يبدأ المضيف اللعبة.',
     pin: 'رمز اللعبة',
     nick: 'الاسم المستعار',
     join: 'انضم',
     next: 'متابعة',
     joining: 'جاري الانضمام…',
     lang: 'English',
-    invalid: 'رمز غير صالح أو انتهت اللعبة',
+    invalid: 'لا توجد لعبة نشطة بهذا الرمز. اطلب من المضيف بدء التحدي ثم حاول مرة أخرى.',
     generate: 'اسم عشوائي',
-    scan: 'امسح رمز QR من الشاشة',
+    scan: 'رابط الانضمام لتحدي SCORA',
   },
 };
 
 function JoinForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [lang, setLang] = useState('en');
+  const [lang, setLang] = useState(searchParams.get('lang') === 'ar' ? 'ar' : 'en');
   const [step, setStep] = useState(1);
   const [pin, setPin] = useState(searchParams.get('pin') || '');
   const [nickname, setNickname] = useState('');
@@ -59,7 +63,11 @@ function JoinForm() {
   const t = T[lang];
 
   const pinFromUrl = searchParams.get('pin');
-  const joinUrl = typeof window !== 'undefined' ? getQuizJoinUrl(pinFromUrl || pin) : '';
+  const [joinUrl, setJoinUrl] = useState('');
+
+  useEffect(() => {
+    setJoinUrl(scoraChallengeJoinUrl(pinFromUrl || pin || undefined, window.location.origin));
+  }, [pinFromUrl, pin]);
 
   useEffect(() => {
     const p = searchParams.get('pin');
@@ -103,8 +111,9 @@ function JoinForm() {
     try {
       const { playerId } = await joinQuizSession(session.id, nick);
       try { sessionStorage.setItem(`quiz_nick_${session.id}`, nick); } catch { /* ignore */ }
-      const playLang = sessionSettings?.defaultLanguage === 'ar' ? 'ar' : sessionSettings?.defaultLanguage === 'en' ? 'en' : lang;
-      router.push(`/quiz/play/${session.id}?playerId=${playerId}&lang=${playLang}`);
+      const settings = normalizeQuizSettings(session.settings);
+      const playLang = settings.defaultLanguage === 'ar' ? 'ar' : settings.defaultLanguage === 'en' ? 'en' : lang;
+      router.push(`${scoraChallengePlayPath(session.id)}?playerId=${playerId}&lang=${playLang}`);
     } catch (err) {
       setError(err.message || t.invalid);
     } finally {
@@ -128,13 +137,15 @@ function JoinForm() {
 
       <div className="w-full max-w-lg space-y-8">
         <div className="text-center space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-400">SCORA Challenge</p>
           <h1 className="text-3xl font-black uppercase tracking-tight">{t.title}</h1>
           <p className="text-zinc-500 text-sm">{step === 1 ? t.subtitle : t.nick}</p>
+          {step === 1 && <p className="text-[11px] text-zinc-600 max-w-sm mx-auto">{t.hint}</p>}
         </div>
 
-        {step === 1 && pinFromUrl && joinUrl && (
+        {step === 1 && joinUrl && (
           <div className="flex justify-center">
-            <QuizJoinQR url={joinUrl} pin={pinFromUrl} title={t.scan} size={140} />
+            <QuizJoinQR url={joinUrl} pin={pinFromUrl || undefined} title={t.scan} size={140} />
           </div>
         )}
 
@@ -155,7 +166,7 @@ function JoinForm() {
                 <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={24} className="w-full bg-black border border-white/10 rounded-2xl p-4 text-center text-lg font-bold outline-none focus:border-blue-500" />
               </div>
             )}
-            {error && <p className="text-red-400 text-xs text-center font-bold">{error}</p>}
+            {error && <p className="text-amber-400 text-xs text-center font-bold leading-relaxed">{error}</p>}
             <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-4 rounded-2xl font-black text-sm uppercase tracking-widest">
               {loading ? t.joining : (twoStep ? t.next : t.join)}
             </button>
@@ -172,7 +183,7 @@ function JoinForm() {
               </div>
               <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={24} autoFocus className="w-full bg-black border border-white/10 rounded-2xl p-4 text-center text-lg font-bold outline-none focus:border-blue-500" />
             </div>
-            {error && <p className="text-red-400 text-xs text-center font-bold">{error}</p>}
+            {error && <p className="text-amber-400 text-xs text-center font-bold">{error}</p>}
             <button type="submit" disabled={loading || nickname.trim().length < 2} className="w-full bg-blue-600 py-4 rounded-2xl font-black text-sm uppercase tracking-widest disabled:opacity-40">{loading ? t.joining : t.join}</button>
             <button type="button" onClick={() => setStep(1)} className="w-full text-zinc-500 text-[10px] font-black uppercase">← Back</button>
           </form>
@@ -182,9 +193,9 @@ function JoinForm() {
   );
 }
 
-export default function QuizJoinPage() {
+export default function ScoraChallengeJoinPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">SCORA Challenge…</div>}>
       <JoinForm />
     </Suspense>
   );

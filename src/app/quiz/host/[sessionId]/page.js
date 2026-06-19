@@ -8,16 +8,18 @@ import {
   hostStartQuestion,
   hostRevealQuestion,
   hostEndQuiz,
+  getQuizSessionAnswers,
 } from '../../../../services/quizService';
 import { QUIZ_SESSION_STATUS } from '../../../../constants/quiz';
-import { SCORA_QUIZ_JOIN_URL } from '../../../../constants/scoraDomains';
+import { SCORA_CHALLENGE_JOIN_URL } from '../../../../constants/scoraDomains';
+import { scoraChallengeJoinUrl } from '../../../../constants/scoraChallengePaths';
 import { normalizeQuizSettings } from '../../../../lib/quizSessionHelpers';
 import QuizChallengeHeader from '../../../../components/quiz/QuizChallengeHeader';
 import QuizLiveStats from '../../../../components/quiz/QuizLiveStats';
 import QuizLeaderboardTop6 from '../../../../components/quiz/QuizLeaderboardTop6';
 import QuizQuestionDisplay from '../../../../components/quiz/QuizQuestionDisplay';
+import QuizResultsSummary from '../../../../components/quiz/QuizResultsSummary';
 import QuizJoinQR from '../../../../components/quiz/QuizJoinQR';
-import QuizPodium from '../../../../components/quiz/QuizPodium';
 
 export default function QuizHostPage() {
   const { sessionId } = useParams();
@@ -25,7 +27,9 @@ export default function QuizHostPage() {
   const [players, setPlayers] = useState([]);
   const [lang, setLang] = useState('en');
   const [busy, setBusy] = useState(false);
+  const [finishedAnswers, setFinishedAnswers] = useState([]);
   const autoPlayRef = useRef(false);
+  const allAnsweredRevealRef = useRef(false);
   const hostUser = typeof window !== 'undefined'
     ? (() => { try { const raw = localStorage.getItem('adminSession'); if (!raw) return 'host'; return JSON.parse(raw).user?.username || 'host'; } catch { return 'host'; } })()
     : 'host';
@@ -46,9 +50,8 @@ export default function QuizHostPage() {
   const highContrast = settings.highContrast;
 
   const joinUrl = useMemo(() => {
-    if (!session?.pin) return SCORA_QUIZ_JOIN_URL;
-    if (typeof window !== 'undefined') return `${window.location.origin}/quiz/join?pin=${session.pin}`;
-    return `${SCORA_QUIZ_JOIN_URL}?pin=${session.pin}`;
+    if (!session?.pin) return SCORA_CHALLENGE_JOIN_URL;
+    return scoraChallengeJoinUrl(session.pin, typeof window !== 'undefined' ? window.location.origin : undefined);
   }, [session?.pin]);
 
   const run = useCallback(async (fn) => {
@@ -64,6 +67,38 @@ export default function QuizHostPage() {
   }, [session?.status, busy, run, sessionId, hostUser, settings.unlimitedTime]);
 
   useEffect(() => {
+    if (!session || busy || !settings.autoRevealWhenAllAnswered) {
+      allAnsweredRevealRef.current = false;
+      return undefined;
+    }
+    if (session.status !== QUIZ_SESSION_STATUS.QUESTION) {
+      allAnsweredRevealRef.current = false;
+      return undefined;
+    }
+    const connected = players.length;
+    const answered = session.answerCount || 0;
+    if (connected > 0 && answered >= connected) {
+      if (allAnsweredRevealRef.current) return undefined;
+      allAnsweredRevealRef.current = true;
+      run(() => hostRevealQuestion(sessionId, hostUser));
+    } else {
+      allAnsweredRevealRef.current = false;
+    }
+    return undefined;
+  }, [
+    session?.status,
+    session?.answerCount,
+    session?.currentQuestionIndex,
+    players.length,
+    settings.autoRevealWhenAllAnswered,
+    busy,
+    run,
+    sessionId,
+    hostUser,
+    session,
+  ]);
+
+  useEffect(() => {
     if (!session || session.status !== QUIZ_SESSION_STATUS.REVEAL || !settings.autoPlay || busy) {
       autoPlayRef.current = false;
       return undefined;
@@ -77,6 +112,12 @@ export default function QuizHostPage() {
     }, (settings.revealDelaySec || 5) * 1000);
     return () => { clearTimeout(id); autoPlayRef.current = false; };
   }, [session?.status, session?.currentQuestionIndex, settings.autoPlay, settings.revealDelaySec, qIndex, totalQ, busy, run, sessionId, hostUser, session]);
+
+  useEffect(() => {
+    if (session?.status === QUIZ_SESSION_STATUS.FINISHED && sessionId) {
+      getQuizSessionAnswers(sessionId).then(setFinishedAnswers);
+    }
+  }, [session?.status, sessionId]);
 
   if (!session) return <div className="fixed inset-0 bg-black flex items-center justify-center text-zinc-500">Loading…</div>;
 
@@ -124,9 +165,14 @@ export default function QuizHostPage() {
           )}
 
           {session.status === QUIZ_SESSION_STATUS.FINISHED && (
-            <div className="flex-1 flex flex-col items-center justify-center space-y-8">
-              <QuizPodium players={players} lang={lang} />
-              <a href={`/quiz/results/${sessionId}?host=1&lang=${lang}`} className="text-blue-400 font-black uppercase text-sm underline">{lang === 'ar' ? 'النتائج' : 'Full results'}</a>
+            <div className="flex-1 overflow-y-auto py-4">
+              <QuizResultsSummary
+                session={session}
+                players={players}
+                answers={finishedAnswers}
+                lang={lang}
+                showPortalLink
+              />
             </div>
           )}
         </div>

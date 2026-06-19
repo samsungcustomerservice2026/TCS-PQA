@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { SCORA_CHALLENGE_PATHS } from '../../constants/scoraChallengePaths';
 import QuizChallengeHeader from './QuizChallengeHeader';
 
 const T = {
@@ -29,7 +30,7 @@ export default function QuizJoinAnotherGame({ lang = 'en', className = '' }) {
           <p className="text-zinc-500 text-sm">{t.subtitle}</p>
         </div>
         <Link
-          href={`/quiz/join?lang=${lang}`}
+          href={`${SCORA_CHALLENGE_PATHS.join}?lang=${lang}`}
           className="w-full max-w-sm py-6 md:py-8 px-8 rounded-3xl bg-blue-600 hover:bg-blue-500 text-white font-black text-lg md:text-xl uppercase tracking-widest text-center shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           {t.join}

@@ -10,8 +10,6 @@ import {
   ExternalLink,
   RefreshCw,
   ClipboardList,
-  Users,
-  Award,
 } from 'lucide-react';
 import {
   QUIZ_DIVISIONS,
@@ -19,7 +17,8 @@ import {
   DEFAULT_QUIZ_SETTINGS,
   QUIZ_DEFAULT_TIME_SEC,
 } from '../../constants/quiz';
-import { SCORA_QUIZ_JOIN_URL } from '../../constants/scoraDomains';
+import { SCORA_CHALLENGE_JOIN_URL } from '../../constants/scoraDomains';
+import { scoraChallengeHostPath } from '../../constants/scoraChallengePaths';
 import { normalizeQuizSettings, SCORA_CHALLENGE_NAME } from '../../lib/quizSessionHelpers';
 import {
   listQuizTemplates,
@@ -31,11 +30,47 @@ import {
   getQuizSessionAnswers,
   getQuizSessionPlayers,
   fetchQuizLogs,
+  updateQuizSessionSettings,
 } from '../../services/quizService';
-import QuizPodium from './QuizPodium';
 import QuizQuestionEditor, { createEmptyQuestion } from './QuizQuestionEditor';
 import QuizGameSettingsPanel from './QuizGameSettingsPanel';
 import QuizJoinQR from './QuizJoinQR';
+import QuizResultsSummary from './QuizResultsSummary';
+
+const PORTAL_DEFAULTS_KEY = 'scoraChallengePortalDefaults';
+
+function loadPortalDefaults() {
+  if (typeof window === 'undefined') return { autoRevealWhenAllAnswered: true };
+  try {
+    const raw = localStorage.getItem(PORTAL_DEFAULTS_KEY);
+    if (!raw) return { autoRevealWhenAllAnswered: true };
+    const parsed = JSON.parse(raw);
+    return { autoRevealWhenAllAnswered: parsed.autoRevealWhenAllAnswered !== false };
+  } catch {
+    return { autoRevealWhenAllAnswered: true };
+  }
+}
+
+function savePortalDefaults(next) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PORTAL_DEFAULTS_KEY, JSON.stringify(next));
+  } catch { /* ignore */ }
+}
+
+function PortalToggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${checked ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+    >
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : ''}`} />
+    </button>
+  );
+}
 
 export default function QuizAdminPanel({
   currentUser,
@@ -56,8 +91,13 @@ export default function QuizAdminPanel({
   const [reportSession, setReportSession] = useState(null);
   const [reportPlayers, setReportPlayers] = useState([]);
   const [reportAnswers, setReportAnswers] = useState([]);
+  const [portalDefaults, setPortalDefaults] = useState({ autoRevealWhenAllAnswered: true });
 
   const div = divisionFilter === 'ALL' ? null : divisionFilter;
+
+  useEffect(() => {
+    setPortalDefaults(loadPortalDefaults());
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -80,6 +120,15 @@ export default function QuizAdminPanel({
   }, [div, message]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !finishedSessions.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const reportId = params.get('challengeReport') || params.get('quizReport');
+    if (!reportId || reportSession?.id === reportId) return;
+    const session = finishedSessions.find((s) => s.id === reportId);
+    if (session) openReport(session);
+  }, [finishedSessions, reportSession?.id]);
 
   const openReport = async (session) => {
     setReportSession(session);
@@ -115,7 +164,7 @@ export default function QuizAdminPanel({
     try {
       const { sessionId, pin, division } = await startQuizLiveSession({ templateId, hostUsername: actor });
       message.success(`Live game started — PIN ${pin} (${division})`);
-      window.open(`/quiz/host/${sessionId}`, '_blank', 'noopener,noreferrer');
+      window.open(scoraChallengeHostPath(sessionId), '_blank', 'noopener,noreferrer');
       reload();
     } catch (e) {
       message.error(e.message);
@@ -123,7 +172,7 @@ export default function QuizAdminPanel({
   };
 
   const copyJoinLink = async (pin) => {
-    const url = `${SCORA_QUIZ_JOIN_URL}${pin ? `?pin=${pin}` : ''}`;
+    const url = `${SCORA_CHALLENGE_JOIN_URL}${pin ? `?pin=${pin}` : ''}`;
     try {
       await navigator.clipboard.writeText(url);
       message.success('Join link copied');
@@ -159,6 +208,24 @@ export default function QuizAdminPanel({
       ...prev,
       settings: { ...normalizeQuizSettings(prev?.settings), ...patch },
     }));
+  };
+
+  const setPortalDefault = (key, value) => {
+    setPortalDefaults((prev) => {
+      const next = { ...prev, [key]: value };
+      savePortalDefaults(next);
+      return next;
+    });
+  };
+
+  const toggleLiveSessionSetting = async (session, key, value) => {
+    try {
+      await updateQuizSessionSettings(session.id, { [key]: value }, actor);
+      message.success('Live game setting updated');
+      reload();
+    } catch (e) {
+      message.error(e.message);
+    }
   };
 
   const removeQuestion = (idx) => {
@@ -203,18 +270,32 @@ export default function QuizAdminPanel({
 
       <div className="rounded-2xl border border-orange-500/20 bg-zinc-950/60 p-6 flex flex-col lg:flex-row gap-8 items-center lg:items-start">
         <QuizJoinQR
-          url={SCORA_QUIZ_JOIN_URL}
-          title="Join link QR"
-          subtitle="Players scan to open the join page"
+          url={SCORA_CHALLENGE_JOIN_URL}
+          title="SCORA Challenge — Join link QR"
+          subtitle="Always open — enter PIN when the host starts a game"
           size={160}
         />
         <div className="flex-1 space-y-3 text-center lg:text-left">
           <p className="text-[10px] font-black uppercase text-orange-300">Player join link</p>
-          <p className="text-[10px] font-mono text-zinc-400 break-all">{SCORA_QUIZ_JOIN_URL}</p>
+          <p className="text-[10px] font-mono text-zinc-400 break-all">{SCORA_CHALLENGE_JOIN_URL}</p>
           <button type="button" onClick={() => copyJoinLink()} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-600/20 border border-orange-500/30 text-orange-200 text-[10px] font-black uppercase">
             <Copy className="w-4 h-4" /> Copy link
           </button>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-5 flex flex-col md:flex-row md:items-center gap-4 justify-between">
+        <div className="space-y-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Live game option</p>
+          <p className="text-sm font-bold text-white">Skip timer when everyone answered</p>
+          <p className="text-[11px] text-zinc-500 max-w-xl">
+            When ON, the host moves to reveal as soon as all connected players submit — no need to wait for the question timer. Default for new quizzes; toggle per live game below.
+          </p>
+        </div>
+        <PortalToggle
+          checked={portalDefaults.autoRevealWhenAllAnswered}
+          onChange={(v) => setPortalDefault('autoRevealWhenAllAnswered', v)}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -239,7 +320,7 @@ export default function QuizAdminPanel({
               type="button"
               onClick={() => setEditing({
                 ...EMPTY_QUIZ_TEMPLATE,
-                settings: { ...DEFAULT_QUIZ_SETTINGS },
+                settings: { ...DEFAULT_QUIZ_SETTINGS, ...portalDefaults },
                 questions: [createEmptyQuestion()],
               })}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-black text-[10px] font-black uppercase"
@@ -314,27 +395,40 @@ export default function QuizAdminPanel({
         <div className="space-y-3">
           {activeSessions.length === 0 ? (
             <p className="text-zinc-600 text-center py-12 text-[10px] font-black uppercase">No active games</p>
-          ) : activeSessions.map((s) => (
+          ) : activeSessions.map((s) => {
+            const liveSettings = normalizeQuizSettings(s.settings);
+            return (
             <div key={s.id} className="rounded-2xl border border-emerald-500/20 bg-zinc-950 p-5 flex flex-col lg:flex-row gap-6 items-center">
               <QuizJoinQR
-                url={`${SCORA_QUIZ_JOIN_URL}?pin=${s.pin}`}
+                url={`${SCORA_CHALLENGE_JOIN_URL}?pin=${s.pin}`}
                 pin={s.pin}
                 title="Scan to join"
                 size={140}
                 className="shrink-0"
               />
-              <div className="flex-1 w-full flex flex-wrap justify-between gap-3 items-center">
-                <div>
-                  <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
-                  <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
+              <div className="flex-1 w-full space-y-4">
+                <div className="flex flex-wrap justify-between gap-3 items-center">
+                  <div>
+                    <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
+                    <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => window.open(scoraChallengeHostPath(s.id), '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
-                  <button type="button" onClick={() => window.open(`/quiz/host/${s.id}`, '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
-                </div>
+                {canWrite && (
+                  <div className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-black/40 px-4 py-3">
+                    <p className="text-[10px] font-bold text-zinc-400">Skip timer when everyone answered</p>
+                    <PortalToggle
+                      checked={liveSettings.autoRevealWhenAllAnswered}
+                      onChange={(v) => toggleLiveSessionSetting(s, 'autoRevealWhenAllAnswered', v)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -358,21 +452,31 @@ export default function QuizAdminPanel({
           ) : (
             <div className="space-y-6">
               <button type="button" onClick={() => setReportSession(null)} className="text-[10px] font-black uppercase text-zinc-500">← Back</button>
-              <div className="text-center">
-                <h4 className="text-xl font-black">{reportSession.templateTitle}</h4>
-                <p className="text-zinc-500 text-sm">{reportSession.division} · PIN {reportSession.pin}</p>
-                <p className="text-[10px] text-zinc-600 mt-2 flex items-center justify-center gap-2"><Users className="w-3 h-3" /> {reportPlayers.length} joined · <Award className="w-3 h-3" /> {reportAnswers.length} answers</p>
-              </div>
-              <QuizPodium players={reportPlayers} lang="en" />
-              <div className="max-h-48 overflow-y-auto space-y-1 text-xs">
-                {reportAnswers.map((a) => (
-                  <div key={a.id} className="flex gap-2 text-zinc-500 border-b border-white/5 py-1">
-                    <span className="text-white">{a.nickname}</span>
-                    <span>Q{(a.questionIndex ?? 0) + 1}</span>
-                    <span className={a.correct ? 'text-emerald-400' : 'text-red-400'}>{a.answer}</span>
-                    <span>+{a.points}</span>
-                  </div>
-                ))}
+              <QuizResultsSummary
+                session={reportSession}
+                players={reportPlayers}
+                answers={reportAnswers}
+                lang="en"
+                showPortalLink={false}
+              />
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950 p-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  Full answer log (portal)
+                </p>
+                <div className="max-h-64 overflow-y-auto space-y-1 text-xs">
+                  {reportAnswers.length === 0 ? (
+                    <p className="text-zinc-600 py-4 text-center">No answers recorded</p>
+                  ) : reportAnswers.map((a) => (
+                    <div key={a.id} className="flex flex-wrap gap-2 text-zinc-500 border-b border-white/5 py-2">
+                      <span className="text-white font-bold">{a.nickname}</span>
+                      <span>Q{(a.questionIndex ?? 0) + 1}</span>
+                      <span className={a.correct ? 'text-emerald-400' : 'text-red-400'}>
+                        {a.correct ? '✓' : '✗'} {a.answer}
+                      </span>
+                      <span>+{a.points || 0}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

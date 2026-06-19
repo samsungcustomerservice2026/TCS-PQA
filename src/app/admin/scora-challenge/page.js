@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SCORA_CHALLENGE_ADMIN_TAB } from '../../../constants/scoraChallengePaths';
 
-export default function AdminQuizEntryPage() {
+export default function AdminScoraChallengeEntryPage() {
   const router = useRouter();
   useEffect(() => {
     router.replace(`/?portal=admin&tab=${SCORA_CHALLENGE_ADMIN_TAB}`);

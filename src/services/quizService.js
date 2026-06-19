@@ -22,6 +22,7 @@ import {
   QUIZ_SESSION_STATUS,
   QUIZ_DIVISIONS,
 } from '../constants/quiz';
+import { scoraChallengeJoinUrl, scoraChallengeHostPath, scoraChallengeResultsPath } from '../constants/scoraChallengePaths';
 import { checkQuizAnswer, isScoredQuestionType } from '../lib/quizAnswerCheck';
 import { computeQuizPoints } from '../lib/quizScoring';
 import {
@@ -300,6 +301,24 @@ export async function hostStartQuestion(sessionId, hostUsername) {
   });
 }
 
+export async function updateQuizSessionSettings(sessionId, settingsPatch, actor) {
+  const sess = await getQuizSession(sessionId);
+  if (!sess) throw new Error('Session not found');
+  if (sess.status === QUIZ_SESSION_STATUS.FINISHED) throw new Error('Game has ended');
+  const settings = normalizeQuizSettings({ ...sess.settings, ...settingsPatch });
+  await updateDoc(sessionRef(sessionId), { settings });
+  await writeQuizLog({
+    type: 'HOST',
+    action: 'settings_updated',
+    actor: actor || 'admin',
+    sessionId,
+    pin: sess.pin,
+    division: sess.division,
+    details: settingsPatch,
+  });
+  return settings;
+}
+
 export async function hostRevealQuestion(sessionId, hostUsername) {
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Session not found');
@@ -383,15 +402,16 @@ export async function submitQuizAnswer({
 
   const newAnswerCount = (sess.answerCount || 0) + 1;
   const settings = normalizeQuizSettings(sess.settings);
-  const revealPatch = settings.autoRevealWhenAllAnswered
+  const shouldReveal = settings.autoRevealWhenAllAnswered
     && newAnswerCount >= (sess.playerCount || 0)
-    && (sess.playerCount || 0) > 0
-    ? { status: QUIZ_SESSION_STATUS.REVEAL }
-    : {};
+    && (sess.playerCount || 0) > 0;
 
-  await updateDoc(sessionRef(sessionId), { answerCount: increment(1), ...revealPatch });
+  await updateDoc(sessionRef(sessionId), {
+    answerCount: increment(1),
+    ...(shouldReveal ? { status: QUIZ_SESSION_STATUS.REVEAL } : {}),
+  });
 
-  return { correct, points };
+  return { correct, points, revealed: shouldReveal };
 }
 
 export async function getQuizSessionAnswers(sessionId) {
@@ -423,15 +443,15 @@ export async function fetchQuizLogs(limitN = 100) {
 
 export function getQuizJoinUrl(pin) {
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/quiz/join${pin ? `?pin=${pin}` : ''}`;
+    return scoraChallengeJoinUrl(pin, window.location.origin);
   }
-  return `/quiz/join${pin ? `?pin=${pin}` : ''}`;
+  return scoraChallengeJoinUrl(pin);
 }
 
 export function getQuizHostPath(sessionId) {
-  return `/quiz/host/${sessionId}`;
+  return scoraChallengeHostPath(sessionId);
 }
 
 export function getQuizResultsPath(sessionId) {
-  return `/quiz/results/${sessionId}`;
+  return scoraChallengeResultsPath(sessionId);
 }

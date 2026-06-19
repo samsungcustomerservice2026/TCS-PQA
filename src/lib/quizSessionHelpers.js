@@ -17,6 +17,10 @@ export function normalizeQuizSettings(raw = {}) {
     unlimitedTime: !!raw.unlimitedTime,
     nicknameGenerator: !!raw.nicknameGenerator,
     twoStepJoin: !!raw.twoStepJoin,
+    autoRevealWhenAllAnswered: raw.autoRevealWhenAllAnswered !== false,
+    autoPlay: !!raw.autoPlay,
+    randomizeQuestions: !!raw.randomizeQuestions,
+    randomizeAnswers: raw.randomizeAnswers !== false,
     defaultLanguage: ['en', 'ar', 'both'].includes(raw.defaultLanguage) ? raw.defaultLanguage : 'en',
   };
 }
