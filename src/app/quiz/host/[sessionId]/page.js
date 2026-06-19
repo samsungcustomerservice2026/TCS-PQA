@@ -9,6 +9,7 @@ import {
   hostRevealQuestion,
   hostEndQuiz,
   getQuizSessionAnswers,
+  updateQuizSessionSettings,
 } from '../../../../services/quizService';
 import { QUIZ_SESSION_STATUS } from '../../../../constants/quiz';
 import { SCORA_CHALLENGE_JOIN_URL } from '../../../../constants/scoraDomains';
@@ -20,6 +21,7 @@ import QuizLeaderboardTop6 from '../../../../components/quiz/QuizLeaderboardTop6
 import QuizQuestionDisplay from '../../../../components/quiz/QuizQuestionDisplay';
 import QuizResultsSummary from '../../../../components/quiz/QuizResultsSummary';
 import QuizJoinQR from '../../../../components/quiz/QuizJoinQR';
+import QuizGameSettingsPanel from '../../../../components/quiz/QuizGameSettingsPanel';
 
 export default function QuizHostPage() {
   const { sessionId } = useParams();
@@ -58,6 +60,14 @@ export default function QuizHostPage() {
     setBusy(true);
     try { await fn(); } catch (e) { alert(e.message); } finally { setBusy(false); }
   }, []);
+
+  const updateLiveSettings = useCallback(async (patch) => {
+    try {
+      await updateQuizSessionSettings(sessionId, patch, hostUser);
+    } catch (e) {
+      alert(e.message);
+    }
+  }, [sessionId, hostUser]);
 
   const onTimerExpired = useCallback(() => {
     if (settings.unlimitedTime) return;
@@ -177,11 +187,21 @@ export default function QuizHostPage() {
           )}
         </div>
 
-        {(isQuestion || isReveal) && (
-          <div className="lg:w-80 shrink-0 p-4 border-t lg:border-l border-white/10 overflow-y-auto">
-            <QuizLeaderboardTop6 players={players} prevRanks={session.prevRanks || {}} lang={lang} />
+        <aside className="w-full lg:w-[min(100%,400px)] xl:w-[400px] shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-zinc-950/40 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-6">
+            <QuizGameSettingsPanel
+              variant="live"
+              settings={session.settings}
+              onChange={updateLiveSettings}
+            />
+            {(isQuestion || isReveal) && (
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 px-1 pb-3">Leaderboard</p>
+                <QuizLeaderboardTop6 players={players} prevRanks={session.prevRanks || {}} lang={lang} />
+              </div>
+            )}
           </div>
-        )}
+        </aside>
       </div>
     </div>
   );

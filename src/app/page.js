@@ -5208,7 +5208,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         appMode={appMode}
       />
 
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+      <main className={`flex-1 w-full mx-auto px-4 py-8 ${view === 'ADMIN_DASHBOARD' && adminPanelTab === 'scora-challenge' ? 'max-w-[min(100%,1680px)]' : 'max-w-4xl'}`}>
         {/* Error Notification */}
         {fetchError && (
           <div className="mb-8 p-4 bg-red-600/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-500 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -6614,7 +6614,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               )}
 
               {adminPanelTab === 'scora-challenge' && canAccessModule(currentUser, 'quiz') && (
-                <div className="rounded-[2rem] border border-orange-500/15 bg-zinc-900/35 p-6 md:p-8">
+                <div className="rounded-[2rem] border border-orange-500/15 bg-zinc-900/35 p-4 md:p-6 lg:p-8 w-full">
                   <QuizAdminPanel
                     currentUser={currentUser}
                     canRead={canReadModule(currentUser, 'quiz')}

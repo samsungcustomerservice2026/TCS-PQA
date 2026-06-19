@@ -15,7 +15,6 @@ import {
   QUIZ_DIVISIONS,
   EMPTY_QUIZ_TEMPLATE,
   DEFAULT_QUIZ_SETTINGS,
-  QUIZ_DEFAULT_TIME_SEC,
 } from '../../constants/quiz';
 import { SCORA_CHALLENGE_JOIN_URL } from '../../constants/scoraDomains';
 import { scoraChallengeHostPath } from '../../constants/scoraChallengePaths';
@@ -30,47 +29,10 @@ import {
   getQuizSessionAnswers,
   getQuizSessionPlayers,
   fetchQuizLogs,
-  updateQuizSessionSettings,
 } from '../../services/quizService';
 import QuizQuestionEditor, { createEmptyQuestion } from './QuizQuestionEditor';
-import QuizGameSettingsPanel from './QuizGameSettingsPanel';
 import QuizJoinQR from './QuizJoinQR';
 import QuizResultsSummary from './QuizResultsSummary';
-
-const PORTAL_DEFAULTS_KEY = 'scoraChallengePortalDefaults';
-
-function loadPortalDefaults() {
-  if (typeof window === 'undefined') return { autoRevealWhenAllAnswered: true };
-  try {
-    const raw = localStorage.getItem(PORTAL_DEFAULTS_KEY);
-    if (!raw) return { autoRevealWhenAllAnswered: true };
-    const parsed = JSON.parse(raw);
-    return { autoRevealWhenAllAnswered: parsed.autoRevealWhenAllAnswered !== false };
-  } catch {
-    return { autoRevealWhenAllAnswered: true };
-  }
-}
-
-function savePortalDefaults(next) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(PORTAL_DEFAULTS_KEY, JSON.stringify(next));
-  } catch { /* ignore */ }
-}
-
-function PortalToggle({ checked, onChange }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${checked ? 'bg-emerald-500' : 'bg-zinc-700'}`}
-    >
-      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : ''}`} />
-    </button>
-  );
-}
 
 export default function QuizAdminPanel({
   currentUser,
@@ -91,13 +53,8 @@ export default function QuizAdminPanel({
   const [reportSession, setReportSession] = useState(null);
   const [reportPlayers, setReportPlayers] = useState([]);
   const [reportAnswers, setReportAnswers] = useState([]);
-  const [portalDefaults, setPortalDefaults] = useState({ autoRevealWhenAllAnswered: true });
 
   const div = divisionFilter === 'ALL' ? null : divisionFilter;
-
-  useEffect(() => {
-    setPortalDefaults(loadPortalDefaults());
-  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -151,7 +108,10 @@ export default function QuizAdminPanel({
       return;
     }
     try {
-      await saveQuizTemplate(editing, actor);
+      await saveQuizTemplate({
+        ...editing,
+        settings: normalizeQuizSettings(editing.settings),
+      }, actor);
       message.success('Quiz saved');
       setEditing(null);
       reload();
@@ -201,31 +161,6 @@ export default function QuizAdminPanel({
       ...prev,
       questions: (prev.questions || []).map((q) => ({ ...q, timeLimitSec: timeSec })),
     }));
-  };
-
-  const updateSettings = (patch) => {
-    setEditing((prev) => ({
-      ...prev,
-      settings: { ...normalizeQuizSettings(prev?.settings), ...patch },
-    }));
-  };
-
-  const setPortalDefault = (key, value) => {
-    setPortalDefaults((prev) => {
-      const next = { ...prev, [key]: value };
-      savePortalDefaults(next);
-      return next;
-    });
-  };
-
-  const toggleLiveSessionSetting = async (session, key, value) => {
-    try {
-      await updateQuizSessionSettings(session.id, { [key]: value }, actor);
-      message.success('Live game setting updated');
-      reload();
-    } catch (e) {
-      message.error(e.message);
-    }
   };
 
   const removeQuestion = (idx) => {
@@ -284,20 +219,6 @@ export default function QuizAdminPanel({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-5 flex flex-col md:flex-row md:items-center gap-4 justify-between">
-        <div className="space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Live game option</p>
-          <p className="text-sm font-bold text-white">Skip timer when everyone answered</p>
-          <p className="text-[11px] text-zinc-500 max-w-xl">
-            When ON, the host moves to reveal as soon as all connected players submit — no need to wait for the question timer. Default for new quizzes; toggle per live game below.
-          </p>
-        </div>
-        <PortalToggle
-          checked={portalDefaults.autoRevealWhenAllAnswered}
-          onChange={(v) => setPortalDefault('autoRevealWhenAllAnswered', v)}
-        />
-      </div>
-
       <div className="flex flex-wrap gap-2">
         {['templates', 'live', 'reports', 'logs'].map((key) => (
           <button
@@ -320,7 +241,7 @@ export default function QuizAdminPanel({
               type="button"
               onClick={() => setEditing({
                 ...EMPTY_QUIZ_TEMPLATE,
-                settings: { ...DEFAULT_QUIZ_SETTINGS, ...portalDefaults },
+                settings: { ...DEFAULT_QUIZ_SETTINGS },
                 questions: [createEmptyQuestion()],
               })}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-black text-[10px] font-black uppercase"
@@ -330,7 +251,7 @@ export default function QuizAdminPanel({
           )}
 
           {editing && canWrite && (
-            <div className="rounded-[2rem] border border-orange-500/25 bg-zinc-900/40 p-6 space-y-6">
+            <div className="rounded-[2rem] border border-orange-500/25 bg-zinc-900/40 p-4 md:p-6 lg:p-8 space-y-6 w-full">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <input placeholder="Title (EN)" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} className="bg-black border border-white/10 rounded-xl p-3 text-sm text-white" />
                 <input placeholder="العنوان (AR)" value={editing.titleAr} onChange={(e) => setEditing({ ...editing, titleAr: e.target.value })} className="bg-black border border-white/10 rounded-xl p-3 text-sm text-white" dir="rtl" />
@@ -339,27 +260,22 @@ export default function QuizAdminPanel({
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-8 items-start">
-                <div className="space-y-5 min-w-0">
-                  {(editing.questions || []).map((q, qi) => (
-                    <QuizQuestionEditor
-                      key={q.id || qi}
-                      question={q}
-                      qIndex={qi}
-                      onChange={(updated) => updateQuestion(qi, updated)}
-                      onRemove={() => removeQuestion(qi)}
-                      onApplyTimeToAll={applyTimeToAll}
-                    />
-                  ))}
-                  <button type="button" onClick={addQuestion} className="w-full py-3 rounded-xl border border-dashed border-white/15 text-[10px] font-black uppercase text-zinc-500 hover:text-white hover:border-white/30">+ Add question</button>
-                </div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+                Game settings (timer, autoplay, reactions, etc.) are configured on the host screen when you start a live game.
+              </p>
 
-                <div className="xl:sticky xl:top-4 rounded-2xl border border-white/10 bg-zinc-950/80 p-5 max-h-[85vh] overflow-y-auto">
-                  <QuizGameSettingsPanel
-                    settings={editing.settings}
-                    onChange={(patch) => updateSettings(patch)}
+              <div className="space-y-5 min-w-0 max-w-5xl">
+                {(editing.questions || []).map((q, qi) => (
+                  <QuizQuestionEditor
+                    key={q.id || qi}
+                    question={q}
+                    qIndex={qi}
+                    onChange={(updated) => updateQuestion(qi, updated)}
+                    onRemove={() => removeQuestion(qi)}
+                    onApplyTimeToAll={applyTimeToAll}
                   />
-                </div>
+                ))}
+                <button type="button" onClick={addQuestion} className="w-full py-3 rounded-xl border border-dashed border-white/15 text-[10px] font-black uppercase text-zinc-500 hover:text-white hover:border-white/30">+ Add question</button>
               </div>
 
               <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">
@@ -395,9 +311,7 @@ export default function QuizAdminPanel({
         <div className="space-y-3">
           {activeSessions.length === 0 ? (
             <p className="text-zinc-600 text-center py-12 text-[10px] font-black uppercase">No active games</p>
-          ) : activeSessions.map((s) => {
-            const liveSettings = normalizeQuizSettings(s.settings);
-            return (
+          ) : activeSessions.map((s) => (
             <div key={s.id} className="rounded-2xl border border-emerald-500/20 bg-zinc-950 p-5 flex flex-col lg:flex-row gap-6 items-center">
               <QuizJoinQR
                 url={`${SCORA_CHALLENGE_JOIN_URL}?pin=${s.pin}`}
@@ -406,29 +320,18 @@ export default function QuizAdminPanel({
                 size={140}
                 className="shrink-0"
               />
-              <div className="flex-1 w-full space-y-4">
-                <div className="flex flex-wrap justify-between gap-3 items-center">
-                  <div>
-                    <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
-                    <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => window.open(scoraChallengeHostPath(s.id), '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
-                  </div>
+              <div className="flex-1 w-full flex flex-wrap justify-between gap-3 items-center">
+                <div>
+                  <p className="text-2xl font-black text-emerald-400 tracking-widest">{s.pin}</p>
+                  <p className="text-[10px] text-zinc-500">{s.division} · {s.templateTitle} · {s.playerCount || 0} players · {s.status}</p>
                 </div>
-                {canWrite && (
-                  <div className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-black/40 px-4 py-3">
-                    <p className="text-[10px] font-bold text-zinc-400">Skip timer when everyone answered</p>
-                    <PortalToggle
-                      checked={liveSettings.autoRevealWhenAllAnswered}
-                      onChange={(v) => toggleLiveSessionSetting(s, 'autoRevealWhenAllAnswered', v)}
-                    />
-                  </div>
-                )}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => copyJoinLink(s.pin)} className="p-2 rounded-lg bg-zinc-900 text-zinc-400"><Copy className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => window.open(scoraChallengeHostPath(s.id), '_blank')} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-300 text-[10px] font-black uppercase"><ExternalLink className="w-3 h-3" /> Host</button>
+                </div>
               </div>
             </div>
-          );})}
+          ))}
         </div>
       )}
 

@@ -58,16 +58,29 @@ function Section({ title, children }) {
   );
 }
 
-export default function QuizGameSettingsPanel({ settings, onChange }) {
+export default function QuizGameSettingsPanel({
+  settings,
+  onChange,
+  variant = 'template',
+}) {
   const s = normalizeQuizSettings(settings);
   const patch = (key, value) => onChange({ [key]: value });
+  const isLive = variant === 'live';
+
+  const subtitle = isLive
+    ? 'Changes apply to this live game immediately'
+    : 'Saved with this quiz template';
+
+  const footer = isLive
+    ? 'Runtime settings update the current session for all players.'
+    : 'Settings are saved with this quiz template.';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h4 className="text-lg font-black text-white">Settings</h4>
-          <p className="text-[11px] text-zinc-500 mt-0.5">Saved with this quiz template</p>
+          <p className="text-[11px] text-zinc-500 mt-0.5">{subtitle}</p>
         </div>
       </div>
 
@@ -89,13 +102,14 @@ export default function QuizGameSettingsPanel({ settings, onChange }) {
         <SettingRow
           icon={Globe}
           title="Default language"
-          description="Language shown when players join."
-          onChange={null}
+          description={isLive ? 'Locked during live game — players already joined.' : 'Language shown when players join.'}
+          onChange={isLive ? null : null}
         >
           <select
             value={s.defaultLanguage || 'en'}
             onChange={(e) => patch('defaultLanguage', e.target.value)}
-            className="mt-2 w-full max-w-xs bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-bold"
+            disabled={isLive}
+            className="mt-2 w-full max-w-xs bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-bold disabled:opacity-40"
           >
             <option value="en">English</option>
             <option value="ar">العربية</option>
@@ -109,13 +123,15 @@ export default function QuizGameSettingsPanel({ settings, onChange }) {
           icon={Shuffle}
           title="Randomize order of questions"
           checked={s.randomizeQuestions}
-          onChange={(v) => patch('randomizeQuestions', v)}
+          onChange={isLive ? null : (v) => patch('randomizeQuestions', v)}
+          description={isLive ? 'Locked during live game — edit in quiz template.' : undefined}
         />
         <SettingRow
           icon={Shuffle}
           title="Randomize order of answers"
           checked={s.randomizeAnswers}
-          onChange={(v) => patch('randomizeAnswers', v)}
+          onChange={isLive ? null : (v) => patch('randomizeAnswers', v)}
+          description={isLive ? 'Locked during live game — edit in quiz template.' : undefined}
         />
         <SettingRow
           icon={Play}
@@ -124,13 +140,15 @@ export default function QuizGameSettingsPanel({ settings, onChange }) {
           checked={s.autoPlay}
           onChange={(v) => patch('autoPlay', v)}
         />
-        <SettingRow
-          icon={Eye}
-          title="Skip timer when everyone answered"
-          description="Reveal answers and move on as soon as all connected players submit — no need to wait for the countdown."
-          checked={s.autoRevealWhenAllAnswered}
-          onChange={(v) => patch('autoRevealWhenAllAnswered', v)}
-        />
+        {isLive && (
+          <SettingRow
+            icon={Eye}
+            title="Skip timer when everyone answered"
+            description="Reveal answers and move on as soon as all connected players submit — no need to wait for the countdown."
+            checked={s.autoRevealWhenAllAnswered}
+            onChange={(v) => patch('autoRevealWhenAllAnswered', v)}
+          />
+        )}
         <SettingRow
           icon={Timer}
           title="Default question time"
@@ -186,20 +204,20 @@ export default function QuizGameSettingsPanel({ settings, onChange }) {
         <SettingRow
           icon={UserRound}
           title="Nickname generator"
-          description="Suggest fun random nicknames on the join screen."
+          description={isLive ? 'Locked — players already joined.' : 'Suggest fun random nicknames on the join screen.'}
           checked={s.nicknameGenerator}
-          onChange={(v) => patch('nicknameGenerator', v)}
+          onChange={isLive ? null : (v) => patch('nicknameGenerator', v)}
         />
         <SettingRow
           icon={Shield}
           title="2-step join"
-          description="Players confirm PIN then enter nickname in two steps."
+          description={isLive ? 'Locked — players already joined.' : 'Players confirm PIN then enter nickname in two steps.'}
           checked={s.twoStepJoin}
-          onChange={(v) => patch('twoStepJoin', v)}
+          onChange={isLive ? null : (v) => patch('twoStepJoin', v)}
         />
       </Section>
 
-      <p className="text-[10px] text-zinc-600 text-center">Settings are saved with this quiz template.</p>
+      <p className="text-[10px] text-zinc-600 text-center">{footer}</p>
     </div>
   );
 }
