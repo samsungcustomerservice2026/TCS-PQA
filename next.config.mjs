@@ -11,6 +11,7 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      { source: '/scora-challenge', destination: '/scora-challenge/join', permanent: false },
       { source: '/quiz', destination: '/scora-challenge/join', permanent: false },
       { source: '/quiz/join', destination: '/scora-challenge/join', permanent: false },
       { source: '/quiz/play/:sessionId', destination: '/scora-challenge/play/:sessionId', permanent: false },

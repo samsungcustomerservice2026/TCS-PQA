@@ -1,16 +1,35 @@
 import { NextResponse } from 'next/server';
 
-/** SCORA Challenge player domain: always land on join page (works even before a host starts). */
+const JOIN_PATH = '/scora-challenge/join';
+
+function isScoraChallengePlayerHost(host) {
+  return host.includes('scora-quiz') || host.includes('scora-challenge');
+}
+
+/** Player domain: always land on join page (works even before a host starts a game). */
 export function middleware(request) {
   const host = (request.headers.get('host') || '').toLowerCase();
   const { pathname } = request.nextUrl;
 
+  if (!isScoraChallengePlayerHost(host)) {
+    return NextResponse.next();
+  }
+
   if (
-    (host.includes('scora-quiz') || host.includes('scora-challenge'))
-    && (pathname === '/' || pathname === '/quiz' || pathname === '/quiz/')
+    pathname === '/'
+    || pathname === '/join'
+    || pathname === '/scora-challenge'
+    || pathname === '/quiz'
+    || pathname === '/quiz/'
   ) {
     const url = request.nextUrl.clone();
-    url.pathname = '/scora-challenge/join';
+    url.pathname = JOIN_PATH;
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname.startsWith('/quiz/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/scora-challenge${pathname.slice('/quiz'.length)}`;
     return NextResponse.redirect(url);
   }
 
@@ -18,5 +37,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/', '/quiz', '/quiz/'],
+  matcher: ['/', '/join', '/scora-challenge', '/quiz', '/quiz/:path*'],
 };

@@ -12,6 +12,9 @@ export const SCORA_TCS_ORIGIN = 'https://samsungeg-scora-tcs.vercel.app';
 export const SCORA_PQA_ORIGIN = 'https://samsungeg-scora-pqa.vercel.app';
 export const SCORA_QUIZ_ORIGIN = 'https://samsungeg-scora-quiz.vercel.app';
 
+/** Player-facing SCORA Challenge domain (join / play routes) */
+export const SCORA_CHALLENGE_PLAYER_ORIGIN = SCORA_QUIZ_ORIGIN;
+
 export { SCORA_CHALLENGE_ADMIN_TAB, SCORA_CHALLENGE_PATHS, scoraChallengeJoinUrl };
 
 export const SCORA_PUBLIC_PATHS = {
@@ -23,8 +26,8 @@ export const SCORA_PUBLIC_PATHS = {
 export const SCORA_PUBLIC_SURVEY_URL = `${SCORA_TCS_ORIGIN}${SCORA_PUBLIC_PATHS.survey}`;
 export const SCORA_PUBLIC_FEEDBACK_URL = `${SCORA_TCS_ORIGIN}${SCORA_PUBLIC_PATHS.feedback}`;
 
-export const SCORA_CHALLENGE_JOIN_URL = scoraChallengeJoinUrl('', SCORA_QUIZ_ORIGIN);
-export const SCORA_CHALLENGE_JOIN_URL_MAIN = scoraChallengeJoinUrl('', SCORA_MAIN_ORIGIN);
+export const SCORA_CHALLENGE_JOIN_URL = `${SCORA_CHALLENGE_PLAYER_ORIGIN}${SCORA_CHALLENGE_PATHS.join}`;
+export const SCORA_CHALLENGE_JOIN_URL_MAIN = `${SCORA_MAIN_ORIGIN}${SCORA_CHALLENGE_PATHS.join}`;
 
 /** @deprecated use SCORA_CHALLENGE_JOIN_URL */
 export const SCORA_QUIZ_JOIN_URL = SCORA_CHALLENGE_JOIN_URL;
