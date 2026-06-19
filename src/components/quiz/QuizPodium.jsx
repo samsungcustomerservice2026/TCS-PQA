@@ -3,41 +3,76 @@
 import React, { useState, useEffect } from 'react';
 
 const RANK_STYLES = {
-  1: 'border-yellow-500/50 text-yellow-400 shadow-yellow-500/20',
-  2: 'border-zinc-300/40 text-zinc-200',
-  3: 'border-orange-600/40 text-orange-400',
+  1: 'border-yellow-500/50 text-yellow-400 shadow-lg shadow-yellow-500/20',
+  2: 'border-zinc-300/40 text-zinc-200 shadow-lg shadow-zinc-400/10',
+  3: 'border-orange-600/40 text-orange-400 shadow-lg shadow-orange-500/10',
 };
+
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 const REVEAL_MS = {
-  third: 600,
-  second: 2800,
-  first: 5000,
-  runners: 20000,
-  full: 21500,
+  third: 900,
+  second: 3400,
+  first: 5900,
+  runners: 20900,
+  full: 22600,
 };
 
-function PodiumSlot({ player, rank, tall, visible, animate }) {
-  if (!player) return <div className="flex-1" />;
+function PodiumSlot({ player, rank, tall, visible }) {
+  if (!player) {
+    return <div className="flex-1 min-w-0" aria-hidden />;
+  }
+
   const style = RANK_STYLES[rank] || 'border-white/10 text-white';
+  const barHeight = tall ? 'h-24 md:h-32' : rank === 2 ? 'h-16 md:h-20' : 'h-12 md:h-16';
+  const orderClass = tall ? 'order-2' : rank === 2 ? 'order-1' : 'order-3';
+
   return (
     <div
-      className={`flex flex-1 flex-col items-center gap-2 transition-all duration-700 ${
-        tall ? 'order-2' : rank === 2 ? 'order-1' : 'order-3'
-      } ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-6'}`}
-      style={{ transitionDelay: animate && visible ? '0ms' : '0ms' }}
+      className={`flex flex-1 min-w-0 flex-col items-center gap-3 ${orderClass}`}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.92)',
+        transition: `opacity 1.1s ${EASE}, transform 1.1s ${EASE}`,
+      }}
     >
-      <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 flex items-center justify-center text-xl font-black ${style}`}>
+      <div
+        className={`w-14 h-14 md:w-[4.5rem] md:h-[4.5rem] rounded-2xl border-2 flex items-center justify-center text-xl font-black ${style}`}
+        style={{
+          transform: visible ? 'scale(1)' : 'scale(0)',
+          transition: `transform 0.9s ${EASE} 0.15s`,
+        }}
+      >
         #{rank}
       </div>
-      <p className="text-xs md:text-sm font-black uppercase tracking-wide text-white text-center line-clamp-2 max-w-[9rem]">
+      <p
+        className="text-xs md:text-sm font-black uppercase tracking-wide text-white text-center line-clamp-2 max-w-[9rem]"
+        style={{
+          opacity: visible ? 1 : 0,
+          transition: `opacity 0.8s ease 0.35s`,
+        }}
+      >
         {player.nickname}
       </p>
-      <p className="text-[10px] font-bold text-zinc-500">{player.score || 0}</p>
-      <div
-        className={`w-full rounded-t-xl bg-gradient-to-b from-zinc-700/80 to-zinc-950 border border-white/10 transition-all duration-700 ${
-          tall ? 'h-24 md:h-28' : rank === 2 ? 'h-16 md:h-20' : 'h-12 md:h-14'
-        } ${visible ? 'opacity-100' : 'opacity-0'}`}
-      />
+      <p
+        className="text-[10px] font-bold text-zinc-500 tabular-nums"
+        style={{
+          opacity: visible ? 1 : 0,
+          transition: `opacity 0.8s ease 0.45s`,
+        }}
+      >
+        {player.score || 0}
+      </p>
+      <div className="w-full flex items-end justify-center" style={{ height: tall ? '8rem' : rank === 2 ? '5.5rem' : '4rem' }}>
+        <div
+          className={`w-full rounded-t-xl bg-gradient-to-b from-zinc-600/90 to-zinc-950 border border-white/10 ${barHeight}`}
+          style={{
+            transform: visible ? 'scaleY(1)' : 'scaleY(0)',
+            transformOrigin: 'bottom',
+            transition: `transform 1.2s ${EASE} 0.2s`,
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -72,8 +107,8 @@ export default function QuizPodium({
   }, [phase, onRevealPhaseChange]);
 
   const labels = lang === 'ar'
-    ? { podium: 'منصة الفائزين', pts: 'نقطة', revealing: 'كشف النتائج…' }
-    : { podium: 'Winner Podium', pts: 'pts', revealing: 'Revealing results…' };
+    ? { podium: 'منصة الفائزين', revealing: 'كشف النتائج…' }
+    : { podium: 'Winner Podium', revealing: 'Revealing results…' };
 
   if (top.length === 0) {
     return (
@@ -88,14 +123,17 @@ export default function QuizPodium({
   const showFirst = !animateReveal || phase >= 3;
 
   return (
-    <div className="space-y-4">
-      <p className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500">
+    <div className="space-y-5">
+      <p
+        className="text-center text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500 transition-opacity duration-500"
+        style={{ opacity: animateReveal && phase < 3 ? 0.7 : 1 }}
+      >
         {animateReveal && phase < 3 ? labels.revealing : labels.podium}
       </p>
-      <div className="flex items-end justify-center gap-2 max-w-lg mx-auto px-2 min-h-[200px]">
-        <PodiumSlot player={showSecond ? top[1] : null} rank={2} visible={showSecond} animate={animateReveal} />
-        <PodiumSlot player={showFirst ? top[0] : null} rank={1} tall visible={showFirst} animate={animateReveal} />
-        <PodiumSlot player={showThird ? top[2] : null} rank={3} visible={showThird} animate={animateReveal} />
+      <div className="flex items-end justify-center gap-3 md:gap-4 max-w-xl mx-auto px-2 min-h-[220px] md:min-h-[260px]">
+        <PodiumSlot player={top[1]} rank={2} visible={showSecond} />
+        <PodiumSlot player={top[0]} rank={1} tall visible={showFirst} />
+        <PodiumSlot player={top[2]} rank={3} visible={showThird} />
       </div>
     </div>
   );

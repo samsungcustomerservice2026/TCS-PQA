@@ -101,7 +101,7 @@ export default function QuizResultsSummary({
       />
 
       {showRunners && runners.length > 0 && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className={`space-y-3 ${animatePodium ? 'animate-quiz-reveal-up' : ''}`}>
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500 text-center">{labels.runners}</p>
           <div className="space-y-2">
             {runners.map((p, i) => {
@@ -121,7 +121,7 @@ export default function QuizResultsSummary({
       )}
 
       {showFullList && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className={`space-y-3 ${animatePodium ? 'animate-quiz-reveal-up' : ''}`}>
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500 text-center">{labels.full}</p>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {players.map((p, i) => {
@@ -137,7 +137,7 @@ export default function QuizResultsSummary({
       )}
 
       {showAnalysis && (
-        <div className="space-y-4 rounded-2xl border border-orange-500/20 bg-zinc-950/80 p-5 animate-in fade-in duration-700">
+        <div className={`space-y-4 rounded-2xl border border-orange-500/20 bg-zinc-950/80 p-5 ${animatePodium ? 'animate-quiz-reveal-up' : ''}`}>
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-orange-400 flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
             {labels.analysis}

@@ -23,6 +23,7 @@ import QuizResultsSummary from '../../../../components/quiz/QuizResultsSummary';
 import QuizJoinQR from '../../../../components/quiz/QuizJoinQR';
 import QuizGameSettingsPanel from '../../../../components/quiz/QuizGameSettingsPanel';
 import QuizRevealCountdown from '../../../../components/quiz/QuizRevealCountdown';
+import QuizParticipantList from '../../../../components/quiz/QuizParticipantList';
 
 export default function QuizHostPage() {
   const { sessionId } = useParams();
@@ -160,11 +161,23 @@ export default function QuizHostPage() {
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-h-0 p-4 md:p-8 overflow-y-auto">
           {session.status === QUIZ_SESSION_STATUS.LOBBY && (
-            <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-10">
-              <div className="text-center space-y-4">
-                <p className="text-3xl md:text-5xl font-black uppercase">{lang === 'ar' ? 'قاعة الانتظار' : 'Lobby'}</p>
-                <p className="text-zinc-500 text-lg">{players.length} {lang === 'ar' ? 'لاعب متصل' : 'players connected'}</p>
-                <button type="button" disabled={busy} onClick={() => run(() => hostStartQuestion(sessionId, hostUser))} className="bg-blue-600 px-12 py-5 rounded-2xl font-black uppercase text-lg disabled:opacity-40">{lang === 'ar' ? 'ابدأ' : 'Start first question'}</button>
+            <div className="flex-1 flex flex-col lg:flex-row items-start lg:items-center justify-center gap-10 py-4">
+              <div className="flex-1 w-full flex flex-col items-center gap-6">
+                <div className="text-center space-y-2">
+                  <p className="text-3xl md:text-5xl font-black uppercase">{lang === 'ar' ? 'قاعة الانتظار' : 'Lobby'}</p>
+                  <p className="text-zinc-500 text-lg">
+                    {players.length} {lang === 'ar' ? 'لاعب متصل' : 'players connected'}
+                  </p>
+                </div>
+                <QuizParticipantList players={players} lang={lang} variant="chips" />
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => hostStartQuestion(sessionId, hostUser))}
+                  className="bg-blue-600 px-12 py-5 rounded-2xl font-black uppercase text-lg disabled:opacity-40"
+                >
+                  {lang === 'ar' ? 'ابدأ' : 'Start first question'}
+                </button>
               </div>
               <QuizJoinQR url={joinUrl} pin={session.pin} title={lang === 'ar' ? 'امسح للانضمام' : 'Scan to join'} subtitle={lang === 'ar' ? 'أو أدخل الرمز يدوياً' : 'Or enter the PIN manually'} size={180} />
             </div>
@@ -218,6 +231,11 @@ export default function QuizHostPage() {
               variant="live"
               settings={session.settings}
               onChange={updateLiveSettings}
+            />
+            <QuizParticipantList
+              players={players}
+              lang={lang}
+              maxHeight={session.status === QUIZ_SESSION_STATUS.LOBBY ? '360px' : '200px'}
             />
             {(isQuestion || isReveal) && (
               <div className="pt-2 border-t border-white/10">

@@ -13,8 +13,8 @@ import QuizRevealCountdown from '../../../../components/quiz/QuizRevealCountdown
 import { normalizeQuizSettings } from '../../../../lib/quizSessionHelpers';
 
 const T = {
-  en: { wait: 'Waiting…', lobby: 'You are in! Wait for the host.', correct: 'Correct!', wrong: 'Wrong', done: 'Answer locked in', waitingReveal: 'Waiting for others…', pollDone: 'Vote recorded!' },
-  ar: { wait: 'في الانتظار…', lobby: 'تم الانضمام!', correct: 'صحيح!', wrong: 'خطأ', done: 'تم التسجيل', waitingReveal: 'في انتظار الآخرين…', pollDone: 'تم التصويت!' },
+  en: { wait: 'Waiting…', lobby: 'You are in! Wait for the host.', done: 'Answer locked in', waitingReveal: 'Waiting for others…', pollDone: 'Vote recorded!' },
+  ar: { wait: 'في الانتظار…', lobby: 'تم الانضمام!', done: 'تم التسجيل', waitingReveal: 'في انتظار الآخرين…', pollDone: 'تم التصويت!' },
 };
 
 function PlayContent() {
@@ -51,15 +51,17 @@ function PlayContent() {
     }
   }, [qIndex, answeredIndex]);
 
+  const isReveal = session?.status === QUIZ_SESSION_STATUS.REVEAL;
+
   useEffect(() => {
-    if (qIndex < 0 || answeredIndex !== qIndex || !sessionId) return;
+    if (!isReveal || answeredIndex !== qIndex || qIndex < 0 || !sessionId) return;
     try {
       const raw = sessionStorage.getItem(`quiz_result_${sessionId}_q${qIndex}`);
       if (!raw) return;
       const stored = JSON.parse(raw);
       setAnswerCorrect(stored.correct);
     } catch { /* ignore */ }
-  }, [qIndex, answeredIndex, sessionId]);
+  }, [isReveal, qIndex, answeredIndex, sessionId]);
 
   const pickAnswer = async (value) => {
     if (!playerId || submitting || answeredIndex === qIndex || session?.status !== QUIZ_SESSION_STATUS.QUESTION) return;
@@ -68,9 +70,8 @@ function PlayContent() {
       const res = await submitQuizAnswer({ sessionId, playerId, nickname, answer: value });
       setAnsweredIndex(qIndex);
       const isPoll = question?.type === QUIZ_QUESTION_TYPES.POLL;
-      setAnswerCorrect(isPoll ? null : res.correct);
       resultStorage.save(res.correct, isPoll);
-      setFeedback(isPoll ? t.pollDone : (res.correct ? t.correct : t.wrong));
+      setFeedback(isPoll ? t.pollDone : t.done);
     } catch (e) { setFeedback(e.message); } finally { setSubmitting(false); }
   };
 
@@ -88,7 +89,6 @@ function PlayContent() {
   }
 
   const hasAnswered = answeredIndex === qIndex;
-  const isReveal = session.status === QUIZ_SESSION_STATUS.REVEAL;
   const disabled = submitting || hasAnswered || isReveal;
   const settings = normalizeQuizSettings(session.settings);
   const hidePrompt = !settings.showQuestionsOnDevices;
@@ -110,21 +110,17 @@ function PlayContent() {
           <div className="shrink-0 mb-6 space-y-4">
             <QuizRevealCountdown session={session} lang={lang} />
             {isScoredFeedbackType(question?.type) && answerCorrect !== null && (
-              <QuizAnswerFeedback correct={answerCorrect} lang={lang} size="large" />
+              <QuizAnswerFeedback correct={answerCorrect} lang={lang} size="large" className="animate-in fade-in zoom-in-95 duration-700" />
             )}
           </div>
         )}
         {hasAnswered && !isReveal ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-6">
-            {isScoredFeedbackType(question?.type) && answerCorrect !== null ? (
-              <QuizAnswerFeedback correct={answerCorrect} lang={lang} size="large" />
-            ) : (
-              <p className="text-emerald-400 font-black text-xl">{feedback || t.done}</p>
-            )}
-            <div>
-              <p className="text-zinc-500">{t.waitingReveal}</p>
-              <p className="text-sm text-zinc-600 mt-1">{session.answerCount || 0} / {session.playerCount || 0}</p>
+            <div className="rounded-2xl border border-white/10 bg-zinc-950 px-8 py-6 space-y-2">
+              <p className="text-emerald-400 font-black text-xl uppercase tracking-wide">{feedback || t.done}</p>
+              <p className="text-zinc-500 text-sm">{t.waitingReveal}</p>
             </div>
+            <p className="text-sm text-zinc-600 tabular-nums">{session.answerCount || 0} / {session.playerCount || 0}</p>
           </div>
         ) : (
           <QuizQuestionDisplay
