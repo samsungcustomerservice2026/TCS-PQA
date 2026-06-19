@@ -1,0 +1,411 @@
+import { db } from '../firebase';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  setDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  increment,
+  serverTimestamp,
+} from 'firebase/firestore';
+import {
+  QUIZ_COLLECTIONS,
+  QUIZ_MAX_PLAYERS,
+  QUIZ_PIN_LENGTH,
+  QUIZ_SESSION_STATUS,
+  QUIZ_DIVISIONS,
+} from '../constants/quiz';
+import { checkQuizAnswer } from '../lib/quizAnswerCheck';
+import { computeQuizPoints } from '../lib/quizScoring';
+
+const templatesCol = () => collection(db, QUIZ_COLLECTIONS.templates);
+const sessionsCol = () => collection(db, QUIZ_COLLECTIONS.sessions);
+const logsCol = () => collection(db, QUIZ_COLLECTIONS.logs);
+
+function playersCol(sessionId) {
+  return collection(db, QUIZ_COLLECTIONS.sessions, sessionId, 'players');
+}
+
+function answersCol(sessionId) {
+  return collection(db, QUIZ_COLLECTIONS.sessions, sessionId, 'answers');
+}
+
+function sessionRef(sessionId) {
+  return doc(db, QUIZ_COLLECTIONS.sessions, sessionId);
+}
+
+function randomPin() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function isPinAvailable(pin) {
+  const q = query(sessionsCol(), where('pin', '==', pin), limit(20));
+  const snap = await getDocs(q);
+  return snap.docs.every((d) => {
+    const status = d.data()?.status;
+    return status === QUIZ_SESSION_STATUS.FINISHED;
+  });
+}
+
+async function allocateUniquePin() {
+  for (let i = 0; i < 40; i++) {
+    const pin = randomPin();
+    if (await isPinAvailable(pin)) return pin;
+  }
+  throw new Error('Could not allocate a unique game PIN. Try again.');
+}
+
+export async function writeQuizLog(entry) {
+  try {
+    await addDoc(logsCol(), {
+      ...entry,
+      timestamp: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('quiz log write failed', e);
+  }
+}
+
+// ─── Templates ───────────────────────────────────────────────────────────────
+
+export async function listQuizTemplates(division = null) {
+  const snap = await getDocs(templatesCol());
+  let rows = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((t) => !t.hidden);
+  if (division && QUIZ_DIVISIONS.includes(division)) {
+    rows = rows.filter((t) => t.division === division);
+  }
+  return rows.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+
+export async function saveQuizTemplate(template, actor = 'admin') {
+  const division = QUIZ_DIVISIONS.includes(template.division) ? template.division : 'MX';
+  const payload = {
+    title: String(template.title || '').trim(),
+    titleAr: String(template.titleAr || '').trim(),
+    division,
+    questions: Array.isArray(template.questions) ? template.questions : [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: actor,
+    hidden: false,
+  };
+  if (template.id) {
+    await setDoc(doc(db, QUIZ_COLLECTIONS.templates, template.id), payload, { merge: true });
+    await writeQuizLog({
+      type: 'TEMPLATE',
+      action: 'updated',
+      actor,
+      division,
+      details: { templateId: template.id, title: payload.title },
+    });
+    return template.id;
+  }
+  const ref = await addDoc(templatesCol(), {
+    ...payload,
+    createdAt: new Date().toISOString(),
+    createdBy: actor,
+  });
+  await writeQuizLog({
+    type: 'TEMPLATE',
+    action: 'created',
+    actor,
+    division,
+    details: { templateId: ref.id, title: payload.title },
+  });
+  return ref.id;
+}
+
+export async function archiveQuizTemplate(templateId, actor = 'admin') {
+  await updateDoc(doc(db, QUIZ_COLLECTIONS.templates, templateId), { hidden: true });
+  await writeQuizLog({ type: 'TEMPLATE', action: 'archived', actor, details: { templateId } });
+}
+
+// ─── Live sessions ───────────────────────────────────────────────────────────
+
+export async function listActiveQuizSessions(division = null) {
+  const snap = await getDocs(sessionsCol());
+  let rows = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((s) =>
+      s.status === QUIZ_SESSION_STATUS.LOBBY
+      || s.status === QUIZ_SESSION_STATUS.QUESTION
+      || s.status === QUIZ_SESSION_STATUS.REVEAL
+    );
+  if (division) rows = rows.filter((s) => s.division === division);
+  return rows.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+export async function listFinishedQuizSessions(limitN = 50, division = null) {
+  const snap = await getDocs(sessionsCol());
+  let rows = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((s) => s.status === QUIZ_SESSION_STATUS.FINISHED);
+  if (division) rows = rows.filter((s) => s.division === division);
+  return rows
+    .sort((a, b) => String(b.finishedAt || '').localeCompare(String(a.finishedAt || '')))
+    .slice(0, limitN);
+}
+
+export async function startQuizLiveSession({ templateId, hostUsername }) {
+  const tSnap = await getDoc(doc(db, QUIZ_COLLECTIONS.templates, templateId));
+  if (!tSnap.exists()) throw new Error('Quiz template not found');
+  const template = tSnap.data();
+  if (!template.questions?.length) throw new Error('Quiz has no questions');
+
+  const pin = await allocateUniquePin();
+  const division = QUIZ_DIVISIONS.includes(template.division) ? template.division : 'MX';
+
+  const sessionPayload = {
+    pin,
+    division,
+    templateId,
+    templateTitle: template.title || 'Quiz',
+    templateTitleAr: template.titleAr || '',
+    questions: template.questions,
+    status: QUIZ_SESSION_STATUS.LOBBY,
+    currentQuestionIndex: -1,
+    questionStartedAt: null,
+    hostUsername: hostUsername || 'admin',
+    playerCount: 0,
+    maxPlayers: QUIZ_MAX_PLAYERS,
+    answerCount: 0,
+    createdAt: new Date().toISOString(),
+    finishedAt: null,
+  };
+
+  const ref = await addDoc(sessionsCol(), sessionPayload);
+  await writeQuizLog({
+    type: 'SESSION',
+    action: 'started',
+    actor: hostUsername,
+    sessionId: ref.id,
+    pin,
+    division,
+    details: { templateId, title: template.title },
+  });
+  return { sessionId: ref.id, pin, division };
+}
+
+export async function getQuizSessionByPin(pin) {
+  const normalized = String(pin || '').replace(/\D/g, '').slice(0, QUIZ_PIN_LENGTH);
+  if (normalized.length !== QUIZ_PIN_LENGTH) return null;
+  const q = query(sessionsCol(), where('pin', '==', normalized), limit(10));
+  const snap = await getDocs(q);
+  const active = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((s) => s.status !== QUIZ_SESSION_STATUS.FINISHED);
+  return active[0] || null;
+}
+
+export async function getQuizSession(sessionId) {
+  const snap = await getDoc(sessionRef(sessionId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+export function subscribeQuizSession(sessionId, callback) {
+  return onSnapshot(sessionRef(sessionId), (snap) => {
+    if (!snap.exists()) {
+      callback(null);
+      return;
+    }
+    callback({ id: snap.id, ...snap.data() });
+  });
+}
+
+export function subscribeQuizPlayers(sessionId, callback) {
+  return onSnapshot(playersCol(sessionId), (snap) => {
+    const players = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    players.sort((a, b) => (b.score || 0) - (a.score || 0));
+    callback(players);
+  });
+}
+
+export async function joinQuizSession(sessionId, nickname) {
+  const nick = String(nickname || '').trim().slice(0, 24);
+  if (nick.length < 2) throw new Error('Nickname must be at least 2 characters');
+
+  const sess = await getQuizSession(sessionId);
+  if (!sess) throw new Error('Game not found');
+  if (sess.status === QUIZ_SESSION_STATUS.FINISHED) throw new Error('This game has ended');
+  if ((sess.playerCount || 0) >= (sess.maxPlayers || QUIZ_MAX_PLAYERS)) {
+    throw new Error('Game is full (200 players max)');
+  }
+
+  const playerRef = await addDoc(playersCol(sessionId), {
+    nickname: nick,
+    score: 0,
+    joinedAt: new Date().toISOString(),
+    division: sess.division,
+  });
+
+  await updateDoc(sessionRef(sessionId), { playerCount: increment(1) });
+  await writeQuizLog({
+    type: 'PLAYER',
+    action: 'joined',
+    actor: nick,
+    sessionId,
+    pin: sess.pin,
+    division: sess.division,
+    details: { playerId: playerRef.id },
+  });
+
+  return { playerId: playerRef.id, session: sess };
+}
+
+export async function hostStartQuestion(sessionId, hostUsername) {
+  const sess = await getQuizSession(sessionId);
+  if (!sess) throw new Error('Session not found');
+  const nextIndex = (sess.currentQuestionIndex ?? -1) + 1;
+  if (nextIndex >= (sess.questions?.length || 0)) throw new Error('No more questions');
+
+  await updateDoc(sessionRef(sessionId), {
+    status: QUIZ_SESSION_STATUS.QUESTION,
+    currentQuestionIndex: nextIndex,
+    questionStartedAt: new Date().toISOString(),
+    answerCount: 0,
+  });
+  await writeQuizLog({
+    type: 'HOST',
+    action: 'question_started',
+    actor: hostUsername,
+    sessionId,
+    pin: sess.pin,
+    division: sess.division,
+    details: { questionIndex: nextIndex },
+  });
+}
+
+export async function hostRevealQuestion(sessionId, hostUsername) {
+  const sess = await getQuizSession(sessionId);
+  if (!sess) throw new Error('Session not found');
+  await updateDoc(sessionRef(sessionId), { status: QUIZ_SESSION_STATUS.REVEAL });
+  await writeQuizLog({
+    type: 'HOST',
+    action: 'question_revealed',
+    actor: hostUsername,
+    sessionId,
+    pin: sess.pin,
+    division: sess.division,
+    details: { questionIndex: sess.currentQuestionIndex },
+  });
+}
+
+export async function hostEndQuiz(sessionId, hostUsername) {
+  const sess = await getQuizSession(sessionId);
+  if (!sess) throw new Error('Session not found');
+  await updateDoc(sessionRef(sessionId), {
+    status: QUIZ_SESSION_STATUS.FINISHED,
+    finishedAt: new Date().toISOString(),
+  });
+  await writeQuizLog({
+    type: 'HOST',
+    action: 'game_finished',
+    actor: hostUsername,
+    sessionId,
+    pin: sess.pin,
+    division: sess.division,
+    details: { playerCount: sess.playerCount },
+  });
+}
+
+export async function submitQuizAnswer({
+  sessionId,
+  playerId,
+  nickname,
+  answer,
+}) {
+  const sess = await getQuizSession(sessionId);
+  if (!sess || sess.status !== QUIZ_SESSION_STATUS.QUESTION) {
+    throw new Error('Not accepting answers right now');
+  }
+
+  const qIndex = sess.currentQuestionIndex ?? 0;
+  const question = sess.questions?.[qIndex];
+  if (!question) throw new Error('Invalid question');
+
+  const existingRef = doc(db, QUIZ_COLLECTIONS.sessions, sessionId, 'answers', `${playerId}_q${qIndex}`);
+  const existingSnap = await getDoc(existingRef);
+  if (existingSnap.exists()) throw new Error('Already answered this question');
+
+  const startedAt = sess.questionStartedAt ? new Date(sess.questionStartedAt).getTime() : Date.now();
+  const responseTimeMs = Math.max(0, Date.now() - startedAt);
+  const correct = checkQuizAnswer(question, answer);
+  const points = correct
+    ? computeQuizPoints(question.points || 1000, question.timeLimitSec, responseTimeMs)
+    : 0;
+
+  await setDoc(existingRef, {
+    playerId,
+    nickname: nickname || 'Player',
+    questionIndex: qIndex,
+    questionType: question.type,
+    answer: String(answer),
+    correct,
+    points,
+    responseTimeMs,
+    answeredAt: new Date().toISOString(),
+    division: sess.division,
+  });
+
+  if (points > 0) {
+    await updateDoc(doc(db, QUIZ_COLLECTIONS.sessions, sessionId, 'players', playerId), {
+      score: increment(points),
+      lastAnswerAt: new Date().toISOString(),
+    });
+  }
+
+  await updateDoc(sessionRef(sessionId), { answerCount: increment(1) });
+
+  return { correct, points };
+}
+
+export async function getQuizSessionAnswers(sessionId) {
+  const snap = await getDocs(answersCol(sessionId));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function getQuizSessionPlayers(sessionId) {
+  const snap = await getDocs(playersCol(sessionId));
+  const players = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return players.sort((a, b) => (b.score || 0) - (a.score || 0));
+}
+
+export async function fetchQuizLogs(limitN = 100) {
+  const snap = await getDocs(logsCol());
+  return snap.docs
+    .map((d) => ({
+      id: d.id,
+      ...d.data(),
+      timestamp: d.data().timestamp?.toDate?.() ?? null,
+    }))
+    .sort((a, b) => {
+      const ta = a.timestamp?.getTime?.() || 0;
+      const tb = b.timestamp?.getTime?.() || 0;
+      return tb - ta;
+    })
+    .slice(0, limitN);
+}
+
+export function getQuizJoinUrl(pin) {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/quiz/join${pin ? `?pin=${pin}` : ''}`;
+  }
+  return `/quiz/join${pin ? `?pin=${pin}` : ''}`;
+}
+
+export function getQuizHostPath(sessionId) {
+  return `/quiz/host/${sessionId}`;
+}
+
+export function getQuizResultsPath(sessionId) {
+  return `/quiz/results/${sessionId}`;
+}

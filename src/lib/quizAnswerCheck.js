@@ -1,0 +1,36 @@
+import { QUIZ_QUESTION_TYPES } from '../constants/quiz';
+
+function normalizeText(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+export function checkQuizAnswer(question, rawAnswer) {
+  if (!question) return false;
+  const type = question.type;
+
+  if (type === QUIZ_QUESTION_TYPES.CHOICE) {
+    const idx = parseInt(rawAnswer, 10);
+    return Number.isFinite(idx) && idx === (question.correctIndex ?? 0);
+  }
+
+  if (type === QUIZ_QUESTION_TYPES.TRUE_FALSE) {
+    const expected = question.correctIndex === 1 ? 'true' : 'false';
+    return normalizeText(rawAnswer) === expected;
+  }
+
+  if (type === QUIZ_QUESTION_TYPES.TYPE_ANSWER) {
+    const given = normalizeText(rawAnswer);
+    const accepted = [
+      ...(question.acceptedAnswers || []),
+      ...(question.acceptedAnswersAr || []),
+    ]
+      .map(normalizeText)
+      .filter(Boolean);
+    return accepted.some((a) => a === given);
+  }
+
+  return false;
+}

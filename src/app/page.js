@@ -50,6 +50,7 @@ import {
 
 import SamsungAcademySurveyDashboard from '../components/admin/SamsungAcademySurveyDashboard';
 import ArabicFeedbackDashboard from '../components/admin/ArabicFeedbackDashboard';
+import QuizAdminPanel from '../components/quiz/QuizAdminPanel';
 import AdminAccountsPanel, { EMPTY_ADMIN_FORM } from '../components/admin/AdminAccountsPanel';
 import LogTrafficPanel from '../components/admin/LogTrafficPanel';
 import VisitorEngagementPanel from '../components/admin/VisitorEngagementPanel';
@@ -1514,6 +1515,8 @@ const PageContent = () => {
       setPortalRealm('TCS');
       setView('TCS_DIVISION_SELECTION');
       viewStackRef.current = ['APP_SELECTION', 'TCS_DIVISION_SELECTION'];
+    } else if (host.includes('scora-quiz')) {
+      window.location.replace('/quiz/join');
     }
 
     return () => window.removeEventListener('popstate', handlePopState);
@@ -2105,6 +2108,8 @@ const PageContent = () => {
 
     if (portal === 'admin') {
       setIsAdminPortal(true);
+      const tab = String(params.get('tab') || '').toLowerCase();
+      if (tab === 'quiz') setAdminPanelTab('quiz');
       if (isLogged && (logs === 'external' || logs === '1')) {
         setView('EXTERNAL_LOGS');
         viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'EXTERNAL_LOGS'];
@@ -5990,6 +5995,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   },
                   { key: 'survey', label: 'Survey', show: canAccessModule(currentUser, 'survey') },
                   { key: 'feedback', label: 'Feedback', show: canAccessModule(currentUser, 'feedback') },
+                  { key: 'quiz', label: 'Live Quiz', show: currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' || canAccessModule(currentUser, 'quiz') },
                   ...(currentUser.role === 'SUPER_ADMIN'
                     ? [
                         { key: 'insights', label: 'Insights' },
@@ -6604,6 +6610,16 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {adminPanelTab === 'quiz' && canAccessModule(currentUser, 'quiz') && (
+                <div className="rounded-[2rem] border border-orange-500/15 bg-zinc-900/35 p-6 md:p-8">
+                  <QuizAdminPanel
+                    currentUser={currentUser}
+                    canRead={canReadModule(currentUser, 'quiz')}
+                    canWrite={canWriteModule(currentUser, 'quiz')}
+                  />
                 </div>
               )}
 

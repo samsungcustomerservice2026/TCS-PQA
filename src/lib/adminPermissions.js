@@ -5,7 +5,7 @@ export const PERM = {
   READ_WRITE: 'READ_WRITE',
 };
 
-export const PERM_MODULES = ['tcs', 'pqa', 'survey', 'feedback'];
+export const PERM_MODULES = ['tcs', 'pqa', 'survey', 'feedback', 'quiz'];
 
 export const PERM_OPTIONS = [
   { value: PERM.NONE, label: 'No access' },
@@ -19,6 +19,7 @@ export const MODULE_LABELS = {
   pqa: 'PQA data',
   survey: 'Survey',
   feedback: 'Feedback',
+  quiz: 'Live Quiz',
 };
 
 export const DEFAULT_FORM_PERMISSIONS = {
@@ -26,6 +27,7 @@ export const DEFAULT_FORM_PERMISSIONS = {
   pqa: PERM.NONE,
   survey: PERM.NONE,
   feedback: PERM.NONE,
+  quiz: PERM.READ_WRITE,
 };
 
 export function isSuperAdmin(user) {
@@ -41,7 +43,7 @@ function legacyModulePermission(user, module) {
     if (user?.access === 'PQA_ONLY' || user?.access === 'ALL') return PERM.READ_WRITE;
     return PERM.NONE;
   }
-  if (module === 'survey' || module === 'feedback') return PERM.READ_WRITE;
+  if (module === 'survey' || module === 'feedback' || module === 'quiz') return PERM.READ_WRITE;
   return PERM.NONE;
 }
 
@@ -52,6 +54,7 @@ export function normalizePermissions(user) {
       pqa: PERM.READ_WRITE,
       survey: PERM.READ_WRITE,
       feedback: PERM.READ_WRITE,
+      quiz: PERM.READ_WRITE,
     };
   }
   const stored = user?.permissions;
@@ -107,6 +110,7 @@ export function buildPermissionsForSave(formData, role) {
       pqa: PERM.READ_WRITE,
       survey: PERM.READ_WRITE,
       feedback: PERM.READ_WRITE,
+      quiz: PERM.READ_WRITE,
     };
   }
   const perms = formData.permissions || {};
@@ -116,6 +120,7 @@ export function buildPermissionsForSave(formData, role) {
     pqa: perms.pqa ?? (access === 'PQA_ONLY' || access === 'ALL' ? PERM.READ_WRITE : PERM.NONE),
     survey: perms.survey ?? PERM.NONE,
     feedback: perms.feedback ?? PERM.NONE,
+    quiz: perms.quiz ?? PERM.READ_WRITE,
   };
 }
 
@@ -137,4 +142,11 @@ export function canAccessTcsEnv(user) {
 
 export function canAccessPqaEnv(user) {
   return isSuperAdmin(user) || canAccessModule(user, 'pqa');
+}
+
+/** Live Quiz — admins and super admins (module quiz). */
+export function canAccessQuizEnv(user) {
+  if (!user) return false;
+  if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') return canAccessModule(user, 'quiz');
+  return false;
 }
