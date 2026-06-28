@@ -51,6 +51,7 @@ export default function QuizHostPage() {
   const settings = normalizeQuizSettings(session?.settings);
   const isReveal = session?.status === QUIZ_SESSION_STATUS.REVEAL;
   const isQuestion = session?.status === QUIZ_SESSION_STATUS.QUESTION;
+  const isLobby = session?.status === QUIZ_SESSION_STATUS.LOBBY;
   const highContrast = settings.highContrast;
 
   const joinUrl = useMemo(() => {
@@ -160,21 +161,29 @@ export default function QuizHostPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-h-0 p-4 md:p-8 overflow-y-auto">
-          {session.status === QUIZ_SESSION_STATUS.LOBBY && (
-            <div className="flex-1 flex flex-col lg:flex-row items-start lg:items-center justify-center gap-10 py-4">
-              <div className="flex-1 w-full flex flex-col items-center gap-6">
-                <div className="text-center space-y-2">
+          {isLobby && (
+            <div className="flex-1 flex flex-col lg:flex-row items-start lg:items-center justify-center gap-6 lg:gap-10 py-4 min-h-0">
+              <div className="flex-1 w-full flex flex-col items-center gap-5 min-h-0">
+                <div className="text-center space-y-2 shrink-0">
                   <p className="text-3xl md:text-5xl font-black uppercase">{lang === 'ar' ? 'قاعة الانتظار' : 'Lobby'}</p>
                   <p className="text-zinc-500 text-lg">
                     {players.length} {lang === 'ar' ? 'لاعب متصل' : 'players connected'}
                   </p>
                 </div>
                 <QuizParticipantList players={players} lang={lang} variant="chips" />
+                {/* Mobile: pre-game settings in main column — hidden once quiz starts */}
+                <div className="w-full lg:hidden max-h-[min(42vh,360px)] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950/60 p-4 shrink-0">
+                  <QuizGameSettingsPanel
+                    variant="live"
+                    settings={session.settings}
+                    onChange={updateLiveSettings}
+                  />
+                </div>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => run(() => hostStartQuestion(sessionId, hostUser))}
-                  className="bg-blue-600 px-12 py-5 rounded-2xl font-black uppercase text-lg disabled:opacity-40"
+                  className="bg-blue-600 px-12 py-5 rounded-2xl font-black uppercase text-lg disabled:opacity-40 shrink-0"
                 >
                   {lang === 'ar' ? 'ابدأ' : 'Start first question'}
                 </button>
@@ -225,17 +234,22 @@ export default function QuizHostPage() {
           )}
         </div>
 
-        <aside className="w-full lg:w-[min(100%,400px)] xl:w-[400px] shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-zinc-950/40 flex flex-col min-h-0 overflow-hidden">
+        {/* Sidebar (desktop only): settings in lobby; players + leaderboard during live game */}
+        <aside
+          className={`hidden lg:flex shrink-0 lg:w-[min(100%,400px)] xl:w-[400px] border-l border-white/10 bg-zinc-950/40 flex-col min-h-0 overflow-hidden`}
+        >
           <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-6">
-            <QuizGameSettingsPanel
-              variant="live"
-              settings={session.settings}
-              onChange={updateLiveSettings}
-            />
+            {isLobby && (
+              <QuizGameSettingsPanel
+                variant="live"
+                settings={session.settings}
+                onChange={updateLiveSettings}
+              />
+            )}
             <QuizParticipantList
               players={players}
               lang={lang}
-              maxHeight={session.status === QUIZ_SESSION_STATUS.LOBBY ? '360px' : '200px'}
+              maxHeight={isLobby ? '360px' : '200px'}
             />
             {(isQuestion || isReveal) && (
               <div className="pt-2 border-t border-white/10">

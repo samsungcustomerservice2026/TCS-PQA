@@ -68,7 +68,7 @@ export default function QuizGameSettingsPanel({
   const isLive = variant === 'live';
 
   const subtitle = isLive
-    ? 'Changes apply to this live game immediately'
+    ? 'Configure here before you start — settings hide once the quiz begins'
     : 'Saved with this quiz template';
 
   const footer = isLive
