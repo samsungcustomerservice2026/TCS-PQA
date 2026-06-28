@@ -1334,7 +1334,7 @@ const Header = ({ onHome, onLogoClick, appMode }) => {
   }, [appMode]);
   const slogan = 'Earn Your Tier • Own Your Title';
   return (
-    <header className="sticky top-0 z-[100] px-6 py-4 md:px-12 md:py-6 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700">
+    <header className="sticky top-0 z-[100] px-4 py-4 sm:px-6 md:px-12 md:py-6 bg-black/95 backdrop-blur-3xl border-b border-white/10 animate-in fade-in slide-in-from-top-4 duration-700 mobile-page-shell">
       <div className="max-w-[1400px] mx-auto grid grid-cols-3 items-center gap-3 md:gap-4 min-h-0">
         <div className="flex items-center min-w-0">
           <div className="cursor-pointer group" onClick={onLogoClick || onHome}>
@@ -5383,7 +5383,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col pb-24 selection:bg-blue-600 selection:text-white">
+    <div className="mobile-page-shell min-h-screen bg-black text-white flex flex-col pb-24 selection:bg-blue-600 selection:text-white">
       <Header
         onHome={() => {
           if (isAdminPortal) {
@@ -5406,7 +5406,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         appMode={appMode}
       />
 
-      <main className={`flex-1 w-full mx-auto px-4 py-8 ${view === 'ADMIN_DASHBOARD' && adminPanelTab === 'scora-challenge' ? 'max-w-[min(100%,1680px)]' : 'max-w-4xl'}`}>
+      <main className={`flex-1 w-full min-w-0 mx-auto px-4 py-8 overflow-x-clip ${view === 'ADMIN_DASHBOARD' && adminPanelTab === 'scora-challenge' ? 'max-w-[min(100%,1680px)]' : 'max-w-4xl'}`}>
         {/* Error Notification */}
         {fetchError && (
           <div className="mb-8 p-4 bg-red-600/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-500 animate-in fade-in slide-in-from-top-4 duration-500">

@@ -12,6 +12,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata = {
   title: "TCS — Technical Capability System | Samsung Engineers",
   description: "Track, rank, and reward Samsung field engineers with the Technical Capability System (TCS). Transparent scoring based on KPIs, DRNPS, and exam performance.",
@@ -50,7 +56,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-dvh min-w-0 overflow-x-clip`}
         suppressHydrationWarning
       >
         {children}

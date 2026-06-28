@@ -4,5 +4,9 @@ export const metadata = {
 };
 
 export default function ScoraChallengeLayout({ children }) {
-  return children;
+  return (
+    <div className="mobile-page-shell min-h-dvh bg-black text-white">
+      {children}
+    </div>
+  );
 }

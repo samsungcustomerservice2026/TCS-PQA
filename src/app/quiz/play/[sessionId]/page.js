@@ -81,7 +81,7 @@ function PlayContent() {
   }
   if (session.status === QUIZ_SESSION_STATUS.LOBBY || qIndex < 0) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-6 p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-start sm:justify-center gap-6 p-6 overflow-y-auto" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <QuizChallengeHeader lang={lang} pin={session.pin} division={session.division} />
         <p className="text-zinc-400">{t.lobby}</p>
       </div>
@@ -104,7 +104,7 @@ function PlayContent() {
       <div className="shrink-0 px-4 py-3 border-b border-white/10">
         <QuizChallengeHeader lang={lang} pin={session.pin} division={session.division} />
       </div>
-      <div className="flex-1 flex flex-col min-h-0 p-4 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 p-4 overflow-y-auto overflow-x-clip">
         {!isReveal && !hasAnswered && <div className="shrink-0 mb-4"><QuizLiveStats session={session} question={question} lang={lang} large /></div>}
         {isReveal && (
           <div className="shrink-0 mb-6 space-y-4">
@@ -115,7 +115,7 @@ function PlayContent() {
           </div>
         )}
         {hasAnswered && !isReveal ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center gap-6">
+          <div className="flex flex-col items-center justify-start sm:justify-center text-center gap-6 py-6 shrink-0">
             <div className="rounded-2xl border border-white/10 bg-zinc-950 px-8 py-6 space-y-2">
               <p className="text-emerald-400 font-black text-xl uppercase tracking-wide">{feedback || t.done}</p>
               <p className="text-zinc-500 text-sm">{t.waitingReveal}</p>

@@ -22,7 +22,7 @@ export default function QuizJoinAnotherGame({ lang = 'en', className = '' }) {
   const t = T[lang] || T.en;
 
   return (
-    <div className={`fixed inset-0 bg-black flex flex-col items-center justify-center p-6 ${className}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <div className={`fixed inset-0 bg-black flex flex-col items-center justify-start sm:justify-center p-6 overflow-y-auto ${className}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="w-full max-w-md flex flex-col items-center text-center space-y-8">
         <QuizChallengeHeader lang={lang} />
         <div className="space-y-2">

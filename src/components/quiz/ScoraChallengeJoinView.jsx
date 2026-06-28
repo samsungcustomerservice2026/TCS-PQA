@@ -130,16 +130,16 @@ export default function ScoraChallengeJoinView() {
   const showGenerator = sessionSettings?.nicknameGenerator;
 
   return (
-    <div className="relative min-h-screen flex flex-col" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="relative min-h-dvh flex flex-col mobile-page-shell" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <button
         type="button"
         onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-        className="absolute top-6 right-6 z-20 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white"
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white"
       >
         {t.lang}
       </button>
 
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-10 sm:py-16 overflow-y-auto">
         <div className="text-center mb-10 md:mb-12 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-400">SCORA Challenge</p>
           <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight">
