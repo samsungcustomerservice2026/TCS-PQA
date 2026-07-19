@@ -31,6 +31,8 @@ export function analyzeQuizQuestions(session, answers = []) {
 
 export function questionLabel(question, lang = 'en') {
   if (!question) return '—';
-  const prompt = lang === 'ar' && question.promptAr ? question.promptAr : question.prompt;
+  const en = String(question.prompt || '').trim();
+  const ar = String(question.promptAr || '').trim();
+  const prompt = lang === 'ar' ? (ar || en) : (en || ar);
   return prompt || `Question ${(question.index ?? 0) + 1}`;
 }

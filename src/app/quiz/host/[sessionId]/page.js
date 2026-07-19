@@ -213,7 +213,15 @@ export default function QuizHostPage() {
 
           {(isQuestion || isReveal) && question && (
             <div className="flex-1 flex flex-col min-h-0 gap-6">
-              <QuizQuestionDisplay question={question} lang={lang} qIndex={qIndex} totalQ={totalQ} reveal={isReveal} large />
+              <QuizQuestionDisplay
+                question={question}
+                lang={lang}
+                qIndex={qIndex}
+                totalQ={totalQ}
+                reveal={isReveal}
+                showCorrectAnswer={settings.showCorrectAnswers && !settings.randomizeQuestions}
+                large
+              />
               {isQuestion && (
                 <div className="shrink-0 space-y-5">
                   <QuizLiveStats session={session} question={question} onExpired={onTimerExpired} lang={lang} large />

@@ -36,6 +36,7 @@ export const DEFAULT_QUIZ_SETTINGS = {
   defaultTimeSec: QUIZ_DEFAULT_TIME_SEC,
   revealDelaySec: 5,
   showQuestionsOnDevices: true,
+  showCorrectAnswers: true,
   reactions: true,
   defaultLanguage: 'en',
   highContrast: false,

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getQuizSessionByPin, joinQuizSession } from '../../services/quizService';
 import { QUIZ_PIN_LENGTH } from '../../constants/quiz';
@@ -27,6 +27,7 @@ const T = {
     pinIncomplete: 'Enter the full 6-digit game PIN.',
     noActiveGame: 'No active game with this PIN yet. Ask your host to start, then try again.',
     nickRequired: 'Enter a nickname (at least 2 characters).',
+    nickTaken: 'This nickname is already taken in this game. Pick a different one.',
     generate: 'Random name',
     waiting: 'Enter the PIN from your host when the game starts.',
   },
@@ -40,6 +41,7 @@ const T = {
     pinIncomplete: 'أدخل رمز اللعبة المكون من 6 أرقام.',
     noActiveGame: 'لا توجد لعبة نشطة بهذا الرمز بعد. اطلب من المضيف البدء ثم حاول مرة أخرى.',
     nickRequired: 'أدخل اسماً مستعاراً (حرفان على الأقل).',
+    nickTaken: 'هذا الاسم مستخدم بالفعل في هذه اللعبة. اختر اسماً آخر.',
     generate: 'اسم عشوائي',
     waiting: 'أدخل الرمز من المضيف عند بدء اللعبة.',
   },
@@ -48,7 +50,11 @@ const T = {
 export default function ScoraChallengeJoinView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [lang, setLang] = useState(searchParams.get('lang') === 'ar' ? 'ar' : 'en');
+  const initialLangParam = searchParams.get('lang');
+  const [lang, setLang] = useState(initialLangParam === 'ar' ? 'ar' : 'en');
+  // Tracks whether the player picked a language themselves (URL param or toggle),
+  // so the game's default language only applies when they haven't.
+  const [langTouched, setLangTouched] = useState(initialLangParam === 'ar' || initialLangParam === 'en');
   const [step, setStep] = useState(1);
   const [pin, setPin] = useState('');
   const [nickname, setNickname] = useState('');
@@ -56,6 +62,9 @@ export default function ScoraChallengeJoinView() {
   const [sessionSettings, setSessionSettings] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Synchronous re-entry guard: React state (loading) updates async, so rapid
+  // double clicks/submits could fire joinQuizSession twice and create duplicates.
+  const joiningRef = useRef(false);
   const t = T[lang];
 
   useEffect(() => {
@@ -82,6 +91,9 @@ export default function ScoraChallengeJoinView() {
       setSessionPreview(session);
       setSessionSettings(settings);
       setPin(code);
+      if (!langTouched && (settings.defaultLanguage === 'ar' || settings.defaultLanguage === 'en')) {
+        setLang(settings.defaultLanguage);
+      }
       setStep(2);
       if (settings.nicknameGenerator && !nickname.trim()) {
         setNickname(randomNickname());
@@ -94,23 +106,39 @@ export default function ScoraChallengeJoinView() {
   };
 
   const doJoin = async () => {
-    if (!sessionPreview) return;
+    if (!sessionPreview || joiningRef.current) return;
     const nick = nickname.trim();
     if (nick.length < 2) {
       setError(t.nickRequired);
       return;
     }
+    joiningRef.current = true;
     setLoading(true);
     setError('');
     try {
-      const { playerId } = await joinQuizSession(sessionPreview.id, nick);
-      try { sessionStorage.setItem(`quiz_nick_${sessionPreview.id}`, nick); } catch { /* ignore */ }
+      // If this device already joined this session, reuse the same player
+      // instead of creating a duplicate entry.
+      let existingPlayerId = null;
+      try { existingPlayerId = sessionStorage.getItem(`quiz_player_${sessionPreview.id}`); } catch { /* ignore */ }
+      const joined = await joinQuizSession(sessionPreview.id, nick, { existingPlayerId });
+      const playerId = joined.playerId;
+      try {
+        // On reconnect keep the original nickname so answers match the player record.
+        sessionStorage.setItem(`quiz_nick_${sessionPreview.id}`, joined.reconnected ? joined.nickname : nick);
+        sessionStorage.setItem(`quiz_player_${sessionPreview.id}`, playerId);
+      } catch { /* ignore */ }
+      // The player's own choice (toggle or ?lang= param) always wins; the game's
+      // default language only applies when the player never picked one.
       const settings = normalizeQuizSettings(sessionPreview.settings);
-      const playLang = settings.defaultLanguage === 'ar' ? 'ar' : settings.defaultLanguage === 'en' ? 'en' : lang;
+      const playLang = langTouched
+        ? lang
+        : (settings.defaultLanguage === 'ar' || settings.defaultLanguage === 'en' ? settings.defaultLanguage : lang);
       router.push(`${scoraChallengePlayPath(sessionPreview.id)}?playerId=${playerId}&lang=${playLang}`);
+      // Keep the guard locked after success — navigation is in progress and any
+      // extra click must not create another player.
     } catch (err) {
-      setError(err.message || t.noActiveGame);
-    } finally {
+      joiningRef.current = false;
+      setError(err.code === 'NICKNAME_TAKEN' ? t.nickTaken : (err.message || t.noActiveGame));
       setLoading(false);
     }
   };
@@ -133,7 +161,7 @@ export default function ScoraChallengeJoinView() {
     <div className="relative min-h-dvh flex flex-col mobile-page-shell" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <button
         type="button"
-        onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+        onClick={() => { setLangTouched(true); setLang(lang === 'en' ? 'ar' : 'en'); }}
         className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white"
       >
         {t.lang}

@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { BarChart3, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
 import QuizPodium, { PODIUM_REVEAL_PHASE } from './QuizPodium';
 import { analyzeQuizQuestions } from '../../lib/quizAnswerAnalysis';
+import { getQuestionPrompt } from '../../lib/quizSessionHelpers';
 import { getAdminChallengeReportUrl } from '../../constants/scoraDomains';
 
 const RANK_HIGHLIGHT = {
@@ -25,7 +26,7 @@ function RankRow({ player, rank, lang, className = '' }) {
 function AnalysisCard({ title, stat, lang, variant = 'correct' }) {
   if (!stat) return null;
   const q = stat.question;
-  const prompt = lang === 'ar' && q?.promptAr ? q.promptAr : q?.prompt;
+  const prompt = getQuestionPrompt(q, lang);
   const isCorrect = variant === 'correct';
 
   return (
@@ -34,7 +35,7 @@ function AnalysisCard({ title, stat, lang, variant = 'correct' }) {
         {isCorrect ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <XCircle className="w-5 h-5 text-red-400" />}
         <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{title}</p>
       </div>
-      <p className="text-sm font-bold text-white leading-snug">{prompt || `Q${stat.index + 1}`}</p>
+      <p className="text-sm font-bold text-white leading-snug" dir="auto">{prompt || `Q${stat.index + 1}`}</p>
       <p className="text-[11px] text-zinc-500">
         {lang === 'ar' ? `سؤال ${stat.index + 1}` : `Question ${stat.index + 1}`}
         {' · '}

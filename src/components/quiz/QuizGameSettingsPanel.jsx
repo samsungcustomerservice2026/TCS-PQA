@@ -123,15 +123,22 @@ export default function QuizGameSettingsPanel({
           icon={Shuffle}
           title="Randomize order of questions"
           checked={s.randomizeQuestions}
-          onChange={isLive ? null : (v) => patch('randomizeQuestions', v)}
-          description={isLive ? 'Locked during live game — edit in quiz template.' : undefined}
+          onChange={(v) => patch('randomizeQuestions', v)}
+          description={isLive ? 'Applies in the lobby before you start the first question.' : undefined}
         />
         <SettingRow
           icon={Shuffle}
           title="Randomize order of answers"
           checked={s.randomizeAnswers}
-          onChange={isLive ? null : (v) => patch('randomizeAnswers', v)}
-          description={isLive ? 'Locked during live game — edit in quiz template.' : undefined}
+          onChange={(v) => patch('randomizeAnswers', v)}
+          description={isLive ? 'Applies in the lobby before you start the first question.' : undefined}
+        />
+        <SettingRow
+          icon={Eye}
+          title="Show correct answers"
+          description="Reveal the correct answer after each question. Automatically hidden when questions are randomized."
+          checked={s.showCorrectAnswers && !s.randomizeQuestions}
+          onChange={s.randomizeQuestions ? null : (v) => patch('showCorrectAnswers', v)}
         />
         <SettingRow
           icon={Play}

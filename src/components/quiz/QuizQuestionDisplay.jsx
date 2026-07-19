@@ -3,7 +3,7 @@
 import React from 'react';
 import { QUIZ_QUESTION_TYPES } from '../../constants/quiz';
 import { getOptionStyle } from '../../constants/quizOptionStyles';
-import { getCorrectAnswerLabel } from '../../lib/quizSessionHelpers';
+import { getCorrectAnswerLabel, getQuestionPrompt, getQuestionOptions } from '../../lib/quizSessionHelpers';
 import QuizOptionShape from './QuizOptionShape';
 
 const OPTION_TYPES = [QUIZ_QUESTION_TYPES.CHOICE, QUIZ_QUESTION_TYPES.MULTI_CHOICE, QUIZ_QUESTION_TYPES.POLL];
@@ -16,12 +16,13 @@ export default function QuizQuestionDisplay({
   question, lang = 'en', qIndex = 0, totalQ = 1, reveal = false, large = false,
   onPick, disabled = false, typedValue = '', onTypedChange, onSubmitTyped,
   multiSelected = [], onToggleMulti,
-  hidePrompt = false,
+  hidePrompt = false, showCorrectAnswer = true,
 }) {
   if (!question) return null;
 
-  const prompt = lang === 'ar' && question.promptAr ? question.promptAr : question.prompt;
-  const options = lang === 'ar' && question.optionsAr?.some(Boolean) ? question.optionsAr : question.options;
+  // Text can live in either the EN or AR field; always show whichever is filled.
+  const prompt = getQuestionPrompt(question, lang);
+  const options = getQuestionOptions(question, lang);
   const correctLabel = getCorrectAnswerLabel(question, lang);
   const titleSize = large ? 'text-2xl md:text-5xl' : 'text-xl md:text-3xl';
   const isPoll = question.type === QUIZ_QUESTION_TYPES.POLL;
@@ -35,11 +36,11 @@ export default function QuizQuestionDisplay({
     const isSelected = isMulti && multiSelected.includes(i);
 
     if (reveal && showOptions) {
-      const highlight = !isPoll && (isCorrectSingle || isCorrectMulti);
+      const highlight = showCorrectAnswer && !isPoll && (isCorrectSingle || isCorrectMulti);
       return (
         <div key={i} className={`min-h-[3.5rem] md:min-h-[5rem] py-3 px-4 rounded-2xl font-black text-base md:text-lg border-2 flex items-center gap-3 ${highlight ? `border-white ${style.bg} text-white` : `${style.bg} ${style.border} text-white/90`}`}>
           <QuizOptionShape shape={style.shape} className="w-5 h-5 md:w-6 md:h-6" />
-          <span className="flex-1">{opt}</span>
+          <span className="flex-1" dir="auto">{opt}</span>
         </div>
       );
     }
@@ -48,7 +49,7 @@ export default function QuizQuestionDisplay({
       <button key={i} type="button" disabled={disabled} onClick={() => (isMulti ? onToggleMulti?.(i) : onPick?.(String(i)))}
         className={`${style.bg} ${style.border} border-2 min-h-[4.5rem] md:min-h-[6rem] py-4 px-4 rounded-2xl font-black text-left text-base md:text-xl text-white disabled:opacity-40 flex items-center gap-3 ${isSelected ? 'ring-4 ring-white' : ''}`}>
         <QuizOptionShape shape={style.shape} className="w-5 h-5 md:w-7 md:h-7" />
-        <span className="flex-1">{opt}</span>
+        <span className="flex-1" dir="auto">{opt}</span>
       </button>
     );
   };
@@ -59,8 +60,8 @@ export default function QuizQuestionDisplay({
         <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">
           {lang === 'ar' ? `سؤال ${qIndex + 1} / ${totalQ}` : `Question ${qIndex + 1} / ${totalQ}`}
         </p>
-        <h2 className={`${titleSize} font-black leading-tight`}>{hidePrompt ? (lang === 'ar' ? 'انظر للشاشة الرئيسية' : 'Look at the main screen') : prompt}</h2>
-        {reveal && !isPoll && (
+        <h2 className={`${titleSize} font-black leading-tight`} dir="auto">{hidePrompt ? (lang === 'ar' ? 'انظر للشاشة الرئيسية' : 'Look at the main screen') : prompt}</h2>
+        {reveal && showCorrectAnswer && !isPoll && (
           <p className="text-emerald-400 font-black text-lg md:text-2xl">
             {lang === 'ar' ? 'الإجابة الصحيحة:' : 'Correct answer:'} <span className="text-white">{correctLabel}</span>
           </p>

@@ -129,6 +129,7 @@ function PlayContent() {
             onSubmitTyped={() => (question?.type === QUIZ_QUESTION_TYPES.MULTI_CHOICE ? pickAnswer(multiSelected.join(',')) : pickAnswer(typed))}
             onPick={pickAnswer} multiSelected={multiSelected} onToggleMulti={toggleMulti}
             hidePrompt={hidePrompt}
+            showCorrectAnswer={settings.showCorrectAnswers && !settings.randomizeQuestions}
           />
         )}
       </div>

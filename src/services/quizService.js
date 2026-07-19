@@ -242,15 +242,40 @@ export function subscribeQuizPlayers(sessionId, callback) {
   });
 }
 
-export async function joinQuizSession(sessionId, nickname) {
+export async function joinQuizSession(sessionId, nickname, { existingPlayerId = null } = {}) {
   const nick = String(nickname || '').trim().slice(0, 24);
   if (nick.length < 2) throw new Error('Nickname must be at least 2 characters');
 
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Game not found');
   if (sess.status === QUIZ_SESSION_STATUS.FINISHED) throw new Error('This game has ended');
+
+  // Reconnect: if this device already joined the session, reuse the same player
+  // instead of creating a duplicate.
+  if (existingPlayerId) {
+    const existingSnap = await getDoc(doc(db, QUIZ_COLLECTIONS.sessions, sessionId, 'players', existingPlayerId));
+    if (existingSnap.exists()) {
+      return {
+        playerId: existingPlayerId,
+        session: sess,
+        reconnected: true,
+        nickname: String(existingSnap.data()?.nickname || nick),
+      };
+    }
+  }
+
   if ((sess.playerCount || 0) >= (sess.maxPlayers || QUIZ_MAX_PLAYERS)) {
     throw new Error('Game is full (200 players max)');
+  }
+
+  const playersSnap = await getDocs(playersCol(sessionId));
+  const nickTaken = playersSnap.docs.some(
+    (d) => String(d.data()?.nickname || '').trim().toLowerCase() === nick.toLowerCase()
+  );
+  if (nickTaken) {
+    const err = new Error('This nickname is already taken in this game. Pick a different one.');
+    err.code = 'NICKNAME_TAKEN';
+    throw err;
   }
 
   const playerRef = await addDoc(playersCol(sessionId), {
@@ -307,7 +332,24 @@ export async function updateQuizSessionSettings(sessionId, settingsPatch, actor)
   if (!sess) throw new Error('Session not found');
   if (sess.status === QUIZ_SESSION_STATUS.FINISHED) throw new Error('Game has ended');
   const settings = normalizeQuizSettings({ ...sess.settings, ...settingsPatch });
-  await updateDoc(sessionRef(sessionId), { settings });
+
+  const patch = { settings };
+  const reshuffleKeys = ['randomizeQuestions', 'randomizeAnswers'];
+  const needsReshuffle = reshuffleKeys.some((k) => Object.prototype.hasOwnProperty.call(settingsPatch, k));
+
+  // Re-build the question list from the template while still in lobby so
+  // randomize on/off takes effect before the first question starts.
+  if (needsReshuffle && sess.status === QUIZ_SESSION_STATUS.LOBBY && sess.templateId) {
+    const tSnap = await getDoc(doc(db, QUIZ_COLLECTIONS.templates, sess.templateId));
+    if (tSnap.exists()) {
+      const template = tSnap.data();
+      patch.questions = prepareSessionQuestions(template.questions || [], settings);
+    }
+  } else if (needsReshuffle && sess.status !== QUIZ_SESSION_STATUS.LOBBY) {
+    throw new Error('Question/answer order can only be changed in the lobby before the game starts.');
+  }
+
+  await updateDoc(sessionRef(sessionId), patch);
   await writeQuizLog({
     type: 'HOST',
     action: 'settings_updated',

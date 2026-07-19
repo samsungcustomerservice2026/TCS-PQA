@@ -52,11 +52,13 @@ export default function QuizQuestionEditor({ question, qIndex, onChange, onRemov
 
   const update = (patch) => onChange({ ...q, ...patch });
 
-  const updateOption = (oi, value, lang = 'en') => {
+  // Single input per option: text may be Arabic or English. Writing goes to
+  // `options` and clears the legacy `optionsAr` slot so there is one source of truth.
+  const updateOption = (oi, value) => {
     const nextOpts = [...options];
     const nextOptsAr = [...optionsAr];
-    if (lang === 'ar') nextOptsAr[oi] = value;
-    else nextOpts[oi] = value;
+    nextOpts[oi] = value;
+    nextOptsAr[oi] = '';
     update({ options: nextOpts, optionsAr: nextOptsAr });
   };
 
@@ -102,8 +104,13 @@ export default function QuizQuestionEditor({ question, qIndex, onChange, onRemov
             <button type="button" onClick={onRemove} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></button>
           </div>
 
-          <input placeholder="Question EN" value={q.prompt} onChange={(e) => update({ prompt: e.target.value })} className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white" />
-          <input placeholder="السؤال AR" value={q.promptAr} onChange={(e) => update({ promptAr: e.target.value })} className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white" dir="rtl" />
+          <input
+            placeholder="Question / السؤال"
+            value={q.prompt || q.promptAr || ''}
+            onChange={(e) => update({ prompt: e.target.value, promptAr: '' })}
+            className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white"
+            dir="auto"
+          />
 
           {hasOptions && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -126,8 +133,13 @@ export default function QuizQuestionEditor({ question, qIndex, onChange, onRemov
                         <button type="button" onClick={() => removeOption(oi)} className="text-white/70 hover:text-white p-0.5"><X className="w-3 h-3" /></button>
                       )}
                     </div>
-                    <input placeholder={`Option ${oi + 1} (EN)`} value={opt} onChange={(e) => updateOption(oi, e.target.value, 'en')} className="w-full bg-black/25 border-0 border-b border-black/20 p-2 text-xs text-white placeholder:text-white/50 outline-none" />
-                    <input placeholder={`خيار ${oi + 1} (AR)`} value={optionsAr[oi] || ''} onChange={(e) => updateOption(oi, e.target.value, 'ar')} className="w-full bg-black/15 p-2 text-xs text-white placeholder:text-white/40 outline-none" dir="rtl" />
+                    <input
+                      placeholder={`Option ${oi + 1} / خيار ${oi + 1}`}
+                      value={opt || optionsAr[oi] || ''}
+                      onChange={(e) => updateOption(oi, e.target.value)}
+                      className="w-full bg-black/25 p-2 text-xs text-white placeholder:text-white/50 outline-none"
+                      dir="auto"
+                    />
                   </div>
                 );
               })}
@@ -152,8 +164,16 @@ export default function QuizQuestionEditor({ question, qIndex, onChange, onRemov
 
           {q.type === QUIZ_QUESTION_TYPES.TYPE_ANSWER && (
             <div className="space-y-2">
-              <input placeholder="Accepted answers EN (comma-separated)" value={(q.acceptedAnswers || []).join(', ')} onChange={(e) => update({ acceptedAnswers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white" />
-              <input placeholder="إجابات مقبولة AR" value={(q.acceptedAnswersAr || []).join(', ')} onChange={(e) => update({ acceptedAnswersAr: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white" dir="rtl" />
+              <input
+                placeholder="Accepted answers, comma-separated / إجابات مقبولة"
+                value={[...(q.acceptedAnswers || []), ...(q.acceptedAnswersAr || [])].join(', ')}
+                onChange={(e) => update({
+                  acceptedAnswers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                  acceptedAnswersAr: [],
+                })}
+                className="w-full bg-zinc-950 border border-white/10 rounded-xl p-3 text-sm text-white"
+                dir="auto"
+              />
             </div>
           )}
         </div>
