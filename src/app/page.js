@@ -90,6 +90,35 @@ import {
   TCS_MX_TEMPLATE_SHEET_NAME,
 } from '../lib/tcsExcelImport';
 import {
+  workbookHasEngineerWide,
+  parseUnifiedEngineerWorkbook,
+  downloadUnifiedEngineerTemplate,
+  TCS_MX_UNIFIED_TEMPLATE_FILENAME,
+  TCS_MX_UNIFIED_FORMAT,
+  isUnifiedEngineerRecord,
+  getUnifiedAverageFinalResult,
+  getUnifiedQuarterFinalResult,
+  engineerHasQuarter,
+  flattenQuarterForDisplay,
+  listPresentQuarters,
+  monthNameToQuarter,
+  QUARTER_END_MONTH,
+  getUnifiedQuarterKpiCards,
+  formatUnifiedKpiValue,
+} from '../lib/tcsMxUnifiedExcel';
+import {
+  workbookHasDaAvQuarterlyResults,
+  parseDaAvUnifiedWorkbook,
+  downloadDaAvUnifiedTemplate,
+  TCS_DA_AV_UNIFIED_TEMPLATE_FILENAME,
+  TCS_DA_AV_UNIFIED_FORMAT,
+  resolveDaAvDisplayName,
+  getDaAvQuarterKpiCards,
+  formatDaAvKpiValue,
+  getDaAvQuarterFinal,
+  getDaAvAverageFinal,
+} from '../lib/tcsDaAvUnifiedExcel';
+import {
   calculateReceptionistScore,
   calculateGalaxyConsultantScore,
   resolveMxRoleDashboardScore,
@@ -1068,6 +1097,7 @@ const normalizeEngineerDigits = (value) => String(value || '').replace(/\D/g, ''
 const getTcsEngineerIdentityKey = (entry) =>
   normalizeEngineerCodeKey(entry?.engineerCode) ||
   normalizeEngineerCodeKey(entry?.code) ||
+  normalizeEngineerCodeKey(entry?.gspnId) ||
   normalizeEngineerCodeKey(entry?.sbaId) ||
   normalizeEngineerCodeKey(entry?.id);
 const winnerCodeEqualsStrict = (a, b) => {
@@ -1076,7 +1106,8 @@ const winnerCodeEqualsStrict = (a, b) => {
   return Boolean(na && nb && na === nb);
 };
 const getWinnerCodeCandidates = (entry) => {
-  const candidates = [entry?.engineerCode, entry?.code, entry?.sbaId, entry?.gspnId]
+  // Include name so portal winners saved as display names (e.g. MOHAMEDMAHER) still match roster rows.
+  const candidates = [entry?.engineerCode, entry?.code, entry?.sbaId, entry?.gspnId, entry?.name]
     .map((v) => normalizeEngineerCodeKey(v))
     .filter(Boolean);
   return [...new Set(candidates)];
@@ -2615,11 +2646,14 @@ const PageContent = () => {
   const getLogoStyle = (url) =>
     isSamsungEngineerPhotoUrl(url) ? 'object-cover object-center' : 'object-contain bg-white p-0.5';
 
-  /** TCS: leaderboard shows SBA ID; search uses Engineer Code (`code`). PQA: service center name. */
+  /** TCS: leaderboard/search primary label. DA/AV prefer Engineer Name; MX keeps SBA/code. */
   const tcsDisplayPrimary = (eng) => {
     if (appMode?.startsWith('PQA')) return eng?.name || eng?.code || '—';
     if (appMode === 'TCS_MX' && tcsMxRoleTab === 'receptionists') {
       return String(eng?.name || '').trim() || String(eng?.gspnId || eng?.code || '').trim() || '—';
+    }
+    if (appMode === 'TCS_DA' || appMode === 'TCS_AV' || appMode === 'TCS_VD') {
+      return resolveDaAvDisplayName(eng);
     }
     const sba = String(eng?.sbaId || '').trim();
     if (sba) return sba;
@@ -2634,6 +2668,12 @@ const PageContent = () => {
       const asc = String(eng?.asc || eng?.ascCode || '').trim();
       if (gspn && asc) return `${gspn} · ${asc}`;
       return gspn || asc || '';
+    }
+    if (appMode === 'TCS_DA' || appMode === 'TCS_AV' || appMode === 'TCS_VD') {
+      const code = String(eng?.code || eng?.engineerCode || '').trim();
+      const asc = String(eng?.asc || '').trim();
+      if (code && asc && asc !== 'N/A') return `${code} · ${asc}`;
+      return code || (asc !== 'N/A' ? asc : '') || '';
     }
     const asc = String(eng?.asc || '').trim();
     if (asc && asc !== 'N/A') return asc;
@@ -2924,7 +2964,11 @@ const PageContent = () => {
   }, [appMode, view, colName]);
 
   const sortedEngineers = useMemo(() => {
-    return [...engineers].sort((a, b) => b.tcsScore - a.tcsScore);
+    return [...engineers].sort((a, b) => {
+      const sa = isUnifiedEngineerRecord(a) ? (getUnifiedAverageFinalResult(a) ?? 0) : (parseFloat(a.tcsScore) || 0);
+      const sb = isUnifiedEngineerRecord(b) ? (getUnifiedAverageFinalResult(b) ?? 0) : (parseFloat(b.tcsScore) || 0);
+      return sb - sa;
+    });
   }, [engineers]);
 
   // Deduplicated: TCS = latest month per code. PQA = merge ALL month rows per center (KPIs often split across months) then sort by resolved PQA score.
@@ -2962,7 +3006,11 @@ const PageContent = () => {
         byCode[code] = e;
       }
     });
-    return Object.values(byCode).sort((a, b) => b.tcsScore - a.tcsScore);
+    return Object.values(byCode).sort((a, b) => {
+      const sa = isUnifiedEngineerRecord(a) ? (getUnifiedAverageFinalResult(a) ?? 0) : (parseFloat(a.tcsScore) || 0);
+      const sb = isUnifiedEngineerRecord(b) ? (getUnifiedAverageFinalResult(b) ?? 0) : (parseFloat(b.tcsScore) || 0);
+      return sb - sa;
+    });
   }, [engineers, isPqaMode, appMode]);
 
   /** Admin registry: receptionists/galaxy show every record (no code collapse). */
@@ -3009,14 +3057,25 @@ const PageContent = () => {
   const allMonthPeriods = useMemo(() => {
     const seen = new Set();
     const periods = [];
-    engineers.forEach(e => {
+    engineers.forEach((e) => {
+      if (isUnifiedEngineerRecord(e)) {
+        listPresentQuarters(e).forEach((q) => {
+          const month = QUARTER_END_MONTH[q];
+          const year = e.year || String(new Date().getFullYear());
+          if (!month || !year) return;
+          const key = `${month}-${year}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          periods.push({ key, month, year, quarter: q });
+        });
+        return;
+      }
       const key = `${e.month}-${e.year}`;
       if (!seen.has(key) && e.month && e.year) {
         seen.add(key);
         periods.push({ key, month: e.month, year: e.year });
       }
     });
-    // Sort ascending: oldest year first; within same year Jan→Feb→…→Dec
     return periods.sort((a, b) => {
       const ya = parseInt(a.year), yb = parseInt(b.year);
       if (ya !== yb) return ya - yb;
@@ -3038,18 +3097,36 @@ const PageContent = () => {
       if (tcsMxRoleTab !== 'engineers') {
         return resolveMxRoleDashboardScore(eng, tcsMxRoleTab);
       }
+      if (isUnifiedEngineerRecord(eng)) {
+        const avg = getUnifiedAverageFinalResult(eng);
+        return avg != null ? Number(avg.toFixed(1)) : 0;
+      }
       const evalScore = parseFloat(eng?.engineerEvaluation);
       if (Number.isFinite(evalScore)) return Number(evalScore.toFixed(1));
     }
     const tcs = parseFloat(eng?.tcsScore);
     return Number.isFinite(tcs) ? Number(tcs.toFixed(1)) : 0;
   }, [appMode, tcsMxRoleTab]);
+  /** Period score for Hall of Fame: unified docs use that quarter's Final Result when a month maps to Qn. */
+  const resolveScoreForPeriod = React.useCallback((eng, monthName, quarterKey) => {
+    if (isUnifiedEngineerRecord(eng) && tcsMxRoleTab === 'engineers' && appMode === 'TCS_MX') {
+      const q = quarterKey || monthNameToQuarter(monthName);
+      const qFinal = getUnifiedQuarterFinalResult(eng, q);
+      if (qFinal != null) return Number(qFinal.toFixed(1));
+      return getUnifiedAverageFinalResult(eng) ?? 0;
+    }
+    return resolveTcsDashboardScore(eng);
+  }, [appMode, tcsMxRoleTab, resolveTcsDashboardScore]);
   const hofTop10 = useMemo(() => {
     if (!effectiveHofMonth) return [];
     const [m, y] = effectiveHofMonth.split('-');
     const targetMonthIdx = getMonthIndex(m);
+    const targetQuarter = monthNameToQuarter(m);
     const filtered = engineers.filter((e) => {
       if (!sameCalendarYear(e.year, y)) return false;
+      if (isUnifiedEngineerRecord(e) && appMode === 'TCS_MX' && tcsMxRoleTab === 'engineers') {
+        return targetQuarter ? engineerHasQuarter(e, targetQuarter) : false;
+      }
       const eMonthIdx = getMonthIndex(e.month);
       if (targetMonthIdx >= 0 && eMonthIdx >= 0) return eMonthIdx === targetMonthIdx;
       return e.month?.toLowerCase() === m?.toLowerCase();
@@ -3149,7 +3226,7 @@ const PageContent = () => {
           ? asNum((asNum(byCode[code].tcsScore) > 0 ? byCode[code].tcsScore : (byCode[code].centerMonthlyScore ?? byCode[code].monthlyScore ?? byCode[code].evalMonthlyScore ?? 0)))
           : -1;
         if (!byCode[code] || score > prevScore) byCode[code] = e;
-      } else if (!byCode[code] || resolveTcsDashboardScore(e) > resolveTcsDashboardScore(byCode[code])) {
+      } else if (!byCode[code] || resolveScoreForPeriod(e, m) > resolveScoreForPeriod(byCode[code], m)) {
         byCode[code] = e;
       }
     });
@@ -3170,7 +3247,7 @@ const PageContent = () => {
           return { ...e, tcsScore: ceScore };
         }
         if (appMode === 'TCS_MX') {
-          return { ...e, tcsScore: resolveTcsDashboardScore(e) };
+          return { ...e, tcsScore: resolveScoreForPeriod(e, m) };
         }
         return e;
       })
@@ -3196,28 +3273,35 @@ const PageContent = () => {
       }
       return { ...e, displayRank: currentRank };
     });
-  }, [engineers, effectiveHofMonth, appMode, pqaMxGroupBy, resolveTcsDashboardScore]);
+  }, [engineers, effectiveHofMonth, appMode, pqaMxGroupBy, tcsMxRoleTab, resolveTcsDashboardScore, resolveScoreForPeriod]);
   const tcsMonthlyWinnersSource = useMemo(() => {
     if (!isTcsMode || !effectiveHofMonth) return [];
     const [month, year] = String(effectiveHofMonth || '').split('-');
+    const targetQuarter = monthNameToQuarter(month);
     const byEngineer = {};
     engineers
-      .filter((e) => e.month?.toLowerCase() === String(month || '').toLowerCase() && sameCalendarYear(e.year, year))
+      .filter((e) => {
+        if (!sameCalendarYear(e.year, year)) return false;
+        if (isUnifiedEngineerRecord(e) && appMode === 'TCS_MX' && tcsMxRoleTab === 'engineers') {
+          return targetQuarter ? engineerHasQuarter(e, targetQuarter) : false;
+        }
+        return e.month?.toLowerCase() === String(month || '').toLowerCase();
+      })
       .forEach((e) => {
         const engineerKey = getTcsEngineerIdentityKey(e);
         if (!engineerKey) return;
-        const score = resolveTcsDashboardScore(e);
-        if (!byEngineer[engineerKey] || score > resolveTcsDashboardScore(byEngineer[engineerKey])) byEngineer[engineerKey] = e;
+        const score = resolveScoreForPeriod(e, month);
+        if (!byEngineer[engineerKey] || score > resolveScoreForPeriod(byEngineer[engineerKey], month)) byEngineer[engineerKey] = e;
       });
-    const sorted = Object.values(byEngineer).sort((a, b) => resolveTcsDashboardScore(b) - resolveTcsDashboardScore(a));
+    const sorted = Object.values(byEngineer).sort((a, b) => resolveScoreForPeriod(b, month) - resolveScoreForPeriod(a, month));
     let denseRank = 1;
     return sorted.map((e, i) => {
-      const cur = resolveTcsDashboardScore(e);
-      const prev = i > 0 ? resolveTcsDashboardScore(sorted[i - 1]) : null;
+      const cur = resolveScoreForPeriod(e, month);
+      const prev = i > 0 ? resolveScoreForPeriod(sorted[i - 1], month) : null;
       if (i > 0 && cur < prev) denseRank = i + 1;
-      return { ...e, displayRank: denseRank };
+      return { ...e, displayRank: denseRank, tcsScore: cur };
     });
-  }, [isTcsMode, effectiveHofMonth, engineers, resolveTcsDashboardScore]);
+  }, [isTcsMode, effectiveHofMonth, engineers, appMode, tcsMxRoleTab, resolveScoreForPeriod]);
 
   // ─── Quarterly: all unique quarter keys, sorted latest-first ─────────────────
   const allQuarterKeys = useMemo(() => {
@@ -3232,7 +3316,31 @@ const PageContent = () => {
       let qf = String(e.quarter || '').toUpperCase().replace(/\s/g, '');
       if (/^[1-4]$/.test(qf)) qf = `Q${qf}`;
       if (/^Q[1-4]$/.test(qf)) seen.add(`${qf}-${yk}`);
+      // Unified engineer docs (and any role row with quarters{})
+      Object.keys(e.quarters || {}).forEach((qk) => {
+        const q = String(qk || '').toUpperCase();
+        if (/^Q[1-4]$/.test(q) && e.quarters?.[qk]?.present !== false) {
+          seen.add(`${q}-${yk}`);
+        }
+      });
     });
+    // Manual dashboard winners often exist for a quarter before roster rows are uploaded.
+    // Include those quarters so Receptionists / Galaxy Consultants can navigate to the saved period.
+    if (isTcsMode) {
+      const product = resolveTcsDashboardProduct(appMode) || '';
+      const mxRole = appMode === 'TCS_MX' ? tcsMxRoleTab : 'engineers';
+      tcsWinnersConfigs.forEach((cfg) => {
+        if (!product || String(cfg?.product || '').toUpperCase() !== product) return;
+        if (appMode === 'TCS_MX') {
+          const cfgRole = String(cfg?.mxRole || 'engineers');
+          if (cfgRole !== mxRole) return;
+        }
+        const qk = String(cfg?.quarterKey || '').toUpperCase();
+        if (/^Q[1-4]-\d{4}$/.test(qk) && Array.isArray(cfg?.winners) && cfg.winners.length > 0) {
+          seen.add(qk);
+        }
+      });
+    }
     return [...seen]
       .filter((k) => /^Q[1-4]-\d{4}$/.test(k))
       .sort((a, b) => {
@@ -3241,7 +3349,7 @@ const PageContent = () => {
         if (parseInt(yb, 10) !== parseInt(ya, 10)) return parseInt(yb, 10) - parseInt(ya, 10);
         return parseInt(qb.replace('Q', ''), 10) - parseInt(qa.replace('Q', ''), 10);
       });
-  }, [engineers]);
+  }, [engineers, isTcsMode, appMode, tcsMxRoleTab, tcsWinnersConfigs]);
 
   const effectiveQuarterKey = selectedQuarterKey || allQuarterKeys[0] || null;
   const effectiveHomeQuarterKey = useMemo(() => {
@@ -3342,6 +3450,21 @@ const PageContent = () => {
         const key = pick?.id || `${pick?.code}-${pick?.month}-${pick?.year}`;
         usedIds.add(key);
         ranked.push({ ...pick, displayRank: idx + 1 });
+      } else {
+        // Still show configured winners even when no roster row matches (common for
+        // receptionists / galaxy consultants when only codes/names were set in Admin).
+        ranked.push({
+          id: `configured-winner-${winnerCode}-${idx + 1}`,
+          code: winnerCode,
+          engineerCode: winnerCode,
+          gspnId: winnerCode,
+          name: winnerCode,
+          tcsScore: 0,
+          avgScore: 0,
+          displayRank: idx + 1,
+          photoUrl: DEFAULT_ENGINEER_PHOTO_URL,
+          isConfiguredWinnerPlaceholder: true,
+        });
       }
     });
     ranked.sort((a, b) => (a.displayRank || 999) - (b.displayRank || 999));
@@ -3360,13 +3483,16 @@ const PageContent = () => {
       const monthQ = e.month ? getQuarter(e.month) : '';
       let qField = String(e.quarter || '').toUpperCase().replace(/\s/g, '');
       if (/^[1-4]$/.test(qField)) qField = `Q${qField}`;
-      if (monthQ !== q && qField !== q) return;
+      const hasUnifiedQ = Boolean(e.quarters?.[q]?.present);
+      if (monthQ !== q && qField !== q && !hasUnifiedQ) return;
       const p = String(e.product || '').trim().toUpperCase();
       if (p) prods.add(p);
     });
     if (prods.size === 1) return `${q} · ${[...prods][0]}`;
+    const dashProduct = resolveTcsDashboardProduct(appMode);
+    if (dashProduct) return `${q} · ${dashProduct}`;
     return `${q} · ${y}`;
-  }, [effectiveQuarterKey, engineers]);
+  }, [effectiveQuarterKey, engineers, appMode]);
 
   useEffect(() => {
     if (!allQuarterKeys.length) return;
@@ -3488,11 +3614,15 @@ const PageContent = () => {
     engineers.forEach(e => {
       const yNorm = normalizeYearKey(e.year);
       if (!yNorm || yNorm !== y) return;
-      const monthQ = e.month ? getQuarter(e.month) : '';
-      let qField = String(e.quarter || '').toUpperCase().replace(/\s/g, '');
-      if (/^[1-4]$/.test(qField)) qField = `Q${qField}`;
-      const inQuarter = monthQ === q || qField === q;
-      if (!inQuarter) return;
+      if (isUnifiedEngineerRecord(e) && appMode === 'TCS_MX') {
+        if (!engineerHasQuarter(e, q)) return;
+      } else {
+        const monthQ = e.month ? getQuarter(e.month) : '';
+        let qField = String(e.quarter || '').toUpperCase().replace(/\s/g, '');
+        if (/^[1-4]$/.test(qField)) qField = `Q${qField}`;
+        const inQuarter = monthQ === q || qField === q;
+        if (!inQuarter) return;
+      }
       const engineerKey = getTcsEngineerIdentityKey(e);
       if (!engineerKey) return;
       if (!bucket[engineerKey]) bucket[engineerKey] = [];
@@ -3507,10 +3637,13 @@ const PageContent = () => {
           return getMonthIndex(b.month) - getMonthIndex(a.month);
         });
         const pick = sorted[0];
-        const ts = resolveTcsDashboardScore(pick);
+        const periodScore = isUnifiedEngineerRecord(pick)
+          ? (getUnifiedQuarterFinalResult(pick, q) ?? resolveTcsDashboardScore(pick))
+          : resolveTcsDashboardScore(pick);
         return {
           ...pick,
-          avgScore: Number.isFinite(ts) ? Number(ts.toFixed(1)) : 0,
+          tcsScore: periodScore,
+          avgScore: Number.isFinite(periodScore) ? Number(periodScore.toFixed(1)) : 0,
           monthCount: rows.length,
           displayRank: 0,
         };
@@ -3979,6 +4112,9 @@ const PageContent = () => {
       await loadTcsWinnersConfigs();
       setSelectedQuarterKey(quarterKey);
       setHomeViewMode('QUARTERLY');
+      if (winnerHubProduct === 'MX' && mxRole !== tcsMxRoleTab && appMode === 'TCS_MX') {
+        setTcsMxRoleTab(mxRole);
+      }
       setWinnerHubYear(year);
       if (winnersToSave.length === 0) {
         message.success(`Cleared dashboard winners for ${winnerHubProduct} (${quarterKey}).`);
@@ -4640,44 +4776,46 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
     const short =
       division === 'TCS_MX' ? 'MX' : division === 'TCS_DA' ? 'DA' : division === 'TCS_AV' || division === 'TCS_VD' ? 'AV' : 'MX';
     const isDaAvTemplate = division === 'TCS_DA' || division === 'TCS_AV' || division === 'TCS_VD';
+
+    // MX engineers use the redesigned unified workbook (Engineer_Wide + Summary + KPI_Detail).
+    if (division === 'TCS_MX') {
+      const excelBuffer = downloadUnifiedEngineerTemplate();
+      const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = TCS_MX_UNIFIED_TEMPLATE_FILENAME;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      return;
+    }
+
+    // DA / AV engineers use Quarterly Results master (Q1–Q4 wide columns).
+    if (isDaAvTemplate) {
+      const excelBuffer = downloadDaAvUnifiedTemplate();
+      const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = TCS_DA_AV_UNIFIED_TEMPLATE_FILENAME.replace('.xlsx', `_${short}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
-    const tcsHeaders =
-      isDaAvTemplate
-        ? [[
-          "Quarter",
-          "Rank",
-          "Country key",
-          "ASC CODE",
-          "ASC Name",
-          "ENGINEER code",
-          "SBA ID",
-          "SSR (20%)",
-          "REDO (10%)",
-          "Chatbot (20%)",
-          "HASS (10%)",
-          "Acc Core Parts (VD) (10%)",
-          "Training Attendance (10%)",
-          "Linkage ratio (10%)",
-          "Final Score",
-          "OFS (5%)",
-          "R-CXE (5%)",
-          "NPS DR (5%)",
-          "NPS (5%)",
-          "Appointments (5%)",
-          "Audit (-5)",
-          "PR (-5)"
-        ]]
-        : [TCS_MX_TEMPLATE_HEADERS];
-    const ws = XLSX.utils.aoa_to_sheet(tcsHeaders);
-    XLSX.utils.book_append_sheet(wb, ws, isDaAvTemplate ? 'TCS_DA_AV_UNIFIED_V4' : TCS_MX_TEMPLATE_SHEET_NAME);
+    const ws = XLSX.utils.aoa_to_sheet([TCS_MX_TEMPLATE_HEADERS]);
+    XLSX.utils.book_append_sheet(wb, ws, TCS_MX_TEMPLATE_SHEET_NAME);
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
     const url = window.URL.createObjectURL(data);
     const link = document.createElement("a");
     link.href = url;
-    link.download = isDaAvTemplate
-      ? `TCS_DA_AV_UNIFIED_V4_QUARTER_FIRST_${short}_${Date.now()}.xlsx`
-      : `TCS_MX_Score_Template_${short}_2026.xlsx`;
+    link.download = `TCS_MX_Score_Template_${short}_2026.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -5257,6 +5395,63 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
            uploadedRecords.push(pqaRecord);
         }
 
+      } else if (uploadMode === 'TCS_MX' && uploadMxRole === 'engineers' && workbookHasEngineerWide(workbook)) {
+        const { records, headerRow, sheetName, quartersFound } = parseUnifiedEngineerWorkbook(workbook, {
+          year: String(new Date().getFullYear()),
+        });
+        if (headerRow < 0) {
+          message.warning('No Engineer_Wide header row found. Expected columns: Engineer Code, Q1 - …, Q2 - …, Notes.');
+          return;
+        }
+        if (sheetName) {
+          console.info(`TCS unified import: sheet "${sheetName}" (${records.length} engineers, quarters: ${quartersFound.join(', ') || 'none'})`);
+        }
+        uploadedRecords = records.map((eng) => ({
+          ...eng,
+          tier: getMxEvaluationTier(eng.engineerEvaluation ?? eng.tcsScore),
+        }));
+      } else if (uploadMode === 'TCS_DA' || uploadMode === 'TCS_AV' || uploadMode === 'TCS_VD') {
+        // Always use the DA/AV wide KPI parser for these divisions — never the MX IQC Skip path.
+        const expectedProduct = uploadMode === 'TCS_DA' ? 'DA' : 'AV';
+        let { records, headerRow, sheetName, quartersFound } = parseDaAvUnifiedWorkbook(workbook, {
+          year: String(new Date().getFullYear()),
+          expectedProduct,
+        });
+        // If product filter emptied the set (e.g. sheet has no Product column tagged wrong),
+        // retry without product filter and keep rows in the active division collection.
+        if (headerRow >= 0 && records.length === 0) {
+          const retry = parseDaAvUnifiedWorkbook(workbook, {
+            year: String(new Date().getFullYear()),
+            expectedProduct: '',
+          });
+          records = (retry.records || []).map((eng) => ({
+            ...eng,
+            product: expectedProduct,
+          }));
+          headerRow = retry.headerRow;
+          sheetName = retry.sheetName;
+          quartersFound = retry.quartersFound;
+        }
+        if (headerRow < 0) {
+          message.warning(
+            'No DA/AV KPI header row found. Expected columns: Engineer Code, Partner, ASC, Service Type, Q1 Final, Q2 Final (and Q1/Q2 KPI columns).',
+          );
+          return;
+        }
+        if (records.length === 0) {
+          message.warning('DA/AV sheet found but no engineer rows with Engineer Code. Check that data rows are filled.');
+          return;
+        }
+        if (sheetName) {
+          console.info(
+            `TCS DA/AV KPI import: sheet "${sheetName}" (${records.length} engineers, quarters: ${quartersFound.join(', ') || 'none'}, product: ${expectedProduct})`,
+          );
+        }
+        uploadedRecords = records.map((eng) => ({
+          ...eng,
+          product: eng.product || expectedProduct,
+          tier: getTier(eng.engineerEvaluation ?? eng.tcsScore),
+        }));
       } else if (uploadMode === 'TCS_MX' && uploadMxRole === 'receptionists') {
         const { records, headerRow, sheetName } = parseReceptionistWorkbook(workbook);
         if (headerRow < 0) {
@@ -5307,6 +5502,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         const product = String(rec?.product || '').toUpperCase().trim();
         if (product === 'DA') return resolveFirestoreCollection('TCS_DA');
         if (product === 'AV' || product === 'VD') return resolveFirestoreCollection('TCS_AV');
+        // Dual-product engineers stay in the division being uploaded (DA or AV tab).
+        if (product === 'AV+DA' || product === 'AV+HA') return uploadCol;
         if (product === 'MX') return resolveFirestoreCollection('TCS_MX', tcsMxRoleTab);
         return uploadCol;
       };
@@ -5314,14 +5511,30 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       for (const rec of uploadedRecords) {
         const targetCol = resolveCollectionForRecord(rec);
         const existingRows = await getExistingForCollection(targetCol);
-        const existing = existingRows.find(
-          (e) =>
-            e.code?.toUpperCase() === rec.code?.toUpperCase() &&
+        const isDaAvUnified = rec.format === TCS_DA_AV_UNIFIED_FORMAT;
+        const isUnified = isDaAvUnified || rec.format === TCS_MX_UNIFIED_FORMAT || isUnifiedEngineerRecord(rec);
+        const existing = existingRows.find((e) => {
+          if (!engineerCodeEquals(e.code, rec.code) && !engineerCodeEquals(e.engineerCode, rec.code)) return false;
+          // Unified engineers: one Firestore doc per code (quarters live on the doc).
+          if (isUnified) return true;
+          return (
             e.month?.toLowerCase() === rec.month?.toLowerCase() &&
             String(e.year) === String(rec.year)
-        );
+          );
+        });
         const finalRec = existing
-          ? { ...existing, ...rec, id: existing.id, photoUrl: resolveEngineerPhotoForImport(rec, existing) }
+          ? {
+              ...existing,
+              ...rec,
+              id: existing.id,
+              photoUrl: resolveEngineerPhotoForImport(rec, existing),
+              ...(isUnified
+                ? {
+                    quarters: { ...(existing.quarters || {}), ...(rec.quarters || {}) },
+                    format: isDaAvUnified ? TCS_DA_AV_UNIFIED_FORMAT : TCS_MX_UNIFIED_FORMAT,
+                  }
+                : {}),
+            }
           : { ...rec, photoUrl: resolveEngineerPhotoForImport(rec, null) };
         if (!groupedUploadSet[targetCol]) groupedUploadSet[targetCol] = [];
         groupedUploadSet[targetCol].push(finalRec);
@@ -6245,7 +6458,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <p className="text-[9px] font-black uppercase tracking-[0.35em] text-blue-400 mb-1">TCS bulk data — {cur.short}{mxRoleLabel ? ` · ${mxRoleLabel}` : ''}</p>
                       <h3 className="text-lg font-black text-white uppercase tracking-tight">{cur.label}{mxRoleLabel ? ` — ${mxRoleLabel}` : ''}</h3>
                       <p className="text-[10px] text-zinc-500 font-medium max-w-2xl">
-                        Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">{tcsMxRoleTab === 'receptionists' ? 'GSPN ID' : `${getTcsMxRolePersonLabel(tcsMxRoleTab)} Code`}</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.
+                        {activeTcs === 'TCS_MX' && tcsMxRoleTab === 'engineers'
+                          ? <>Download <strong className="text-zinc-300">Engineer_Performance_Unified_Format.xlsx</strong>, fill the <strong className="text-zinc-300">Engineer_Wide</strong> sheet, then upload. One document per engineer (quarters live on the doc). <strong className="text-zinc-300">Engineer Code</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.</>
+                          : activeTcs === 'TCS_DA' || activeTcs === 'TCS_AV'
+                            ? <>Download the single-sheet <strong className="text-zinc-300">TCS_DA_AV_KPI_Template</strong> (Engineer Name first, then Code, Partner, ASC, Service Type, Q1/Q2 KPIs), fill rows, then upload. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.</>
+                            : <>Download the template, upload Excel, then manage records in the registry below. <strong className="text-zinc-300">{tcsMxRoleTab === 'receptionists' ? 'GSPN ID' : `${getTcsMxRolePersonLabel(tcsMxRoleTab)} Code`}</strong> is the search ID. Collection: <span className="text-zinc-400 font-mono text-[9px]">{cur.collection}</span>.</>}
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/30 p-5 flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:items-center sm:justify-between">
@@ -7133,6 +7350,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     <strong className="text-white">Technical Capability System (TCS)</strong> scores engineers on KPIs, DRNPS, and exam performance. Tiers (Bronze → Masters) follow your composite TCS score.
                   </p>
                   <ul className="list-disc pl-5 space-y-2 text-xs">
+                    <li>MX engineers: upload <strong className="text-zinc-200">Engineer_Performance_Unified_Format.xlsx</strong> (sheet <strong className="text-zinc-200">Engineer_Wide</strong>). One Firestore document per engineer with Q1/Q2… blocks; Final Result average drives the tier.</li>
+                    <li>DA / AV engineers: upload the single-sheet <strong className="text-zinc-200">TCS_DA_AV_KPI_Template</strong> (Q1 Final / Q2 Final + KPIs). One row per engineer.</li>
                     <li>Use the Excel template column <strong className="text-zinc-200">Engineer Code</strong> as the unique ID engineers type in search.</li>
                     <li>Quarterly views aggregate months within the same calendar quarter; set Quarter / Year / Product (MX, DA, or AV) in the sheet.</li>
                     <li>Leaderboard order uses your uploaded TCS Score (or calculated fallbacks from column data).</li>
@@ -7460,7 +7679,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                       <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">
                         {isPqaMode
                           ? (profileOpenedByExactCode && pqaAccumulatedScore > 0 ? 'Accumulated PQA Score' : 'Aggregate PQA Score')
-                          : 'Aggregate Capability Index'}
+                          : 'TCS Rank'}
                       </span>
                     </div>
                     <button
@@ -7555,7 +7774,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 : isGalaxyProfile
                                   ? 'Galaxy Consultant KPI: number of Galaxy Consultant tickets.'
                                   : isDaAvExactProfile
-                                    ? 'DA/AV criteria from uploaded sheet: SSR, REDO, Chatbot, HASS, Acc Core Parts (VD), Training Attendance, Linkage ratio. Ranking score uses Final Score.'
+                                    ? (eng?.quarters
+                                      ? 'Choose Q1 or Q2 to view that quarter’s DA/AV KPIs. TCS Rank above is the average of available Final Scores.'
+                                      : 'DA/AV criteria from uploaded sheet: SSR, REDO, Chatbot, HASS, Acc Core Parts (VD), Training Attendance, Linkage ratio. Ranking score uses Final Score.')
+                                  : isUnifiedEngineerRecord(eng)
+                                    ? 'Choose a quarter to view Engineer_Wide KPIs. Q1 uses SSR / RRR90 / IQC Skip / Core Parts… — Q2 uses LCD-OCTA / PBA / Multi Parts / RRR30 / Maintenance / OQC… Percent cells show 0–100 (e.g. 21.9%). TCS Rank above is the average of available Final Results.'
                                     : 'Metrics match the TCS MX template: IQC Skip % (column M), Repair cases (L), Engineer evaluation, DRNPS, Exam, TCS Score. Download the updated template from Admin if needed.'}
                           </p>
                         </div>
@@ -7612,6 +7835,88 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                 <MetricBar label="Galaxy consultant tickets" value={parseFloat(eng.galaxyConsultantTickets || 0)} max={60} suffix="" target={40} />
                               </div>
                             ) : isDaAvExactProfile ? (
+                              eng?.quarters ? (
+                              (() => {
+                                const presentQs = Object.keys(eng.quarters || {}).filter((q) => eng.quarters[q]?.present).sort();
+                                const allQs = Object.keys(eng.quarters || {}).sort();
+                                const qKeys = allQs.length ? allQs : ['Q1', 'Q2'];
+                                const activeQ =
+                                  (selectedProfileQuarter && qKeys.includes(String(selectedProfileQuarter).split('-')[0].toUpperCase())
+                                    ? String(selectedProfileQuarter).split('-')[0].toUpperCase()
+                                    : null)
+                                  || presentQs[presentQs.length - 1]
+                                  || qKeys[0];
+                                const qBlock = eng.quarters?.[activeQ];
+                                const qPresent = Boolean(qBlock?.present);
+                                const qFinal = getDaAvQuarterFinal(eng, activeQ);
+                                const avgFinal = getDaAvAverageFinal(eng);
+                                const kpiCards = getDaAvQuarterKpiCards(activeQ, qBlock?.metrics || {});
+                                return (
+                                  <div className="space-y-6">
+                                    <div>
+                                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3">Choose quarter</p>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        {qKeys.map((q) => {
+                                          const has = Boolean(eng.quarters?.[q]?.present);
+                                          const key = `${q}-${eng.year || new Date().getFullYear()}`;
+                                          return (
+                                            <button
+                                              key={q}
+                                              type="button"
+                                              onClick={() => setSelectedProfileQuarter(key)}
+                                              className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                                q === activeQ
+                                                  ? 'bg-amber-600/20 border-amber-500/50 text-amber-300'
+                                                  : has
+                                                    ? 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                                                    : 'bg-zinc-950 border-white/5 text-zinc-600'
+                                              }`}
+                                            >
+                                              {q}{has ? '' : ' · N/A'}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
+                                      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
+                                        <div>
+                                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.35em]">{activeQ} DA / AV criteria</p>
+                                          <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">
+                                            {activeQ === 'Q1'
+                                              ? 'SSR · REDO · Chatbot · HASS · Acc Core Parts · Training · Linkage'
+                                              : 'RNPS · REDO · Training · ST Con · MJ % · Complete Repair · Kahoot · HASS · Repair Volume'}
+                                          </p>
+                                        </div>
+                                        <div className="text-left sm:text-right">
+                                          <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">
+                                            {qFinal != null ? qFinal.toFixed(1) : 'N/A'}
+                                          </span>
+                                          <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">{activeQ} Final</p>
+                                          <p className="text-[9px] text-zinc-500 mt-1">TCS Rank (avg): {avgFinal != null ? avgFinal.toFixed(1) : 'N/A'}</p>
+                                        </div>
+                                      </div>
+
+                                      {!qPresent ? (
+                                        <p className="text-amber-400/90 text-sm font-bold">
+                                          {qBlock?.notes || eng.notes || `No ${activeQ} record for this engineer.`}
+                                        </p>
+                                      ) : (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                          {kpiCards.map((card) => (
+                                            <div key={card.label} className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                                              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{card.label}</p>
+                                              <p className="text-lg font-black text-white mt-1 tabular-nums">{formatDaAvKpiValue(card)}</p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()
+                              ) : (
                               <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
                                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
                                   <div>
@@ -7632,6 +7937,89 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                                   <MetricBar label="Linkage ratio" value={dispIqc} max={100} suffix="%" target={0} inverse={false} />
                                 </div>
                               </div>
+                              )
+                            ) : isUnifiedEngineerRecord(eng) ? (
+                              (() => {
+                                const presentQs = listPresentQuarters(eng);
+                                const allQs = Object.keys(eng.quarters || {}).sort();
+                                const qKeys = allQs.length ? allQs : ['Q1', 'Q2'];
+                                const activeQ =
+                                  (selectedProfileQuarter && qKeys.includes(String(selectedProfileQuarter).split('-')[0].toUpperCase())
+                                    ? String(selectedProfileQuarter).split('-')[0].toUpperCase()
+                                    : null)
+                                  || presentQs[presentQs.length - 1]
+                                  || qKeys[0];
+                                const qBlock = eng.quarters?.[activeQ];
+                                const qPresent = Boolean(qBlock?.present);
+                                const flat = qPresent ? flattenQuarterForDisplay(qBlock) : null;
+                                const qFinal = qPresent ? getUnifiedQuarterFinalResult(eng, activeQ) : null;
+                                const avgFinal = getUnifiedAverageFinalResult(eng);
+                                const kpiCards = getUnifiedQuarterKpiCards(activeQ, flat);
+                                return (
+                                  <div className="space-y-6">
+                                    <div>
+                                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3">Choose quarter</p>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        {qKeys.map((q) => {
+                                          const has = engineerHasQuarter(eng, q);
+                                          const key = `${q}-${eng.year || new Date().getFullYear()}`;
+                                          return (
+                                            <button
+                                              key={q}
+                                              type="button"
+                                              onClick={() => setSelectedProfileQuarter(key)}
+                                              className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                                q === activeQ
+                                                  ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                                                  : has
+                                                    ? 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                                                    : 'bg-zinc-950 border-white/5 text-zinc-600'
+                                              }`}
+                                            >
+                                              {q}{has ? '' : ' · N/A'}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
+                                      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 border-b border-white/5 pb-5">
+                                        <div>
+                                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.35em]">{activeQ} evaluation criteria</p>
+                                          <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest">
+                                            {activeQ === 'Q1'
+                                              ? 'SSR % · RRR90 % · IQC Skip % · Core Parts · MPU % · DRNPS % · Exam'
+                                              : 'LCD/OCTA % · PBA % · Multi Parts % · IQC Skip % · RRR30 % · Training · DRNPS % · Maintenance % · OQC Fail %'}
+                                          </p>
+                                        </div>
+                                        <div className="text-left sm:text-right">
+                                          <span className="text-3xl md:text-4xl font-black text-white italic tabular-nums">
+                                            {qFinal != null ? qFinal.toFixed(1) : 'N/A'}
+                                          </span>
+                                          <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">{activeQ} Final Result</p>
+                                          <p className="text-[9px] text-zinc-500 mt-1">TCS Rank (avg): {avgFinal != null ? avgFinal.toFixed(1) : 'N/A'}</p>
+                                        </div>
+                                      </div>
+
+                                      {!qPresent ? (
+                                        <p className="text-amber-400/90 text-sm font-bold">
+                                          {qBlock?.notes || eng.notes || `No ${activeQ} record for this engineer.`}
+                                        </p>
+                                      ) : (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                          {kpiCards.map((card) => (
+                                            <div key={card.label} className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                                              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{card.label}</p>
+                                              <p className="text-lg font-black text-white mt-1 tabular-nums">{formatUnifiedKpiValue(card)}</p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()
                             ) : (
                               <>
                                 <div className="rounded-2xl border border-emerald-500/25 bg-zinc-950/70 p-6 md:p-8 space-y-6">
@@ -7712,6 +8100,183 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                             </div>
                           </div>
                         )}
+                      </div>
+                    );
+                  }
+                  // ── Unified MX engineer (one doc + quarters{}) ─────────────────────────────
+                  if (!isPqaMode && appMode === 'TCS_MX' && tcsMxRoleTab === 'engineers' && isUnifiedEngineerRecord(selectedEngineer)) {
+                    const uEng = selectedEngineer;
+                    const presentQs = listPresentQuarters(uEng);
+                    const allQs = Object.keys(uEng.quarters || {}).sort();
+                    const qKeys = allQs.length ? allQs : ['Q1', 'Q2'];
+                    const avgFinal = getUnifiedAverageFinalResult(uEng);
+                    const activeQ =
+                      (selectedProfileQuarter && qKeys.includes(String(selectedProfileQuarter).split('-')[0].toUpperCase())
+                        ? String(selectedProfileQuarter).split('-')[0].toUpperCase()
+                        : null)
+                      || presentQs[presentQs.length - 1]
+                      || qKeys[0];
+                    const qBlock = uEng.quarters?.[activeQ];
+                    const qPresent = Boolean(qBlock?.present);
+                    const flat = qPresent ? flattenQuarterForDisplay(qBlock) : null;
+                    const qFinal = qPresent ? getUnifiedQuarterFinalResult(uEng, activeQ) : null;
+                    const kpiCards = getUnifiedQuarterKpiCards(activeQ, flat);
+
+                    return (
+                      <div className="space-y-8">
+                        <div className="flex flex-col items-center gap-4">
+                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Choose quarter</p>
+                          <div className="flex items-center gap-3 flex-wrap justify-center">
+                            {qKeys.map((q) => {
+                              const has = engineerHasQuarter(uEng, q);
+                              const key = `${q}-${uEng.year || new Date().getFullYear()}`;
+                              return (
+                                <button
+                                  key={q}
+                                  type="button"
+                                  onClick={() => setSelectedProfileQuarter(key)}
+                                  className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                    q === activeQ
+                                      ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
+                                      : has
+                                        ? 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                                        : 'bg-zinc-950 border-white/5 text-zinc-600'
+                                  }`}
+                                >
+                                  {q}{has ? '' : ' · N/A'}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="glass-card rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center gap-8 border-blue-500/10">
+                          <div className="flex flex-col items-center md:border-r border-white/5 md:pr-8 flex-shrink-0">
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                              {activeQ} Final Result
+                            </span>
+                            <TierLogo tier={getMxEvaluationTier(qFinal ?? avgFinal)} size="xl" />
+                            <span className="text-4xl font-black text-white mt-3 tabular-nums">
+                              {qFinal != null ? qFinal.toFixed(1) : 'N/A'}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 mt-2">
+                              TCS Rank (avg): {avgFinal != null ? avgFinal.toFixed(1) : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex-1 w-full space-y-3">
+                            {!qPresent ? (
+                              <p className="text-amber-400/90 text-sm font-bold text-center md:text-left">
+                                {qBlock?.notes || uEng.notes || `No ${activeQ} record for this engineer.`}
+                              </p>
+                            ) : qFinal == null ? (
+                              <p className="text-amber-400/90 text-sm font-bold text-center md:text-left">
+                                {uEng.notes || `${activeQ} metrics present, but Final Result was not computable (e.g. missing Q1 baseline).`}
+                              </p>
+                            ) : (
+                              <p className="text-zinc-400 text-xs text-center md:text-left">
+                                {activeQ === 'Q1'
+                                  ? 'Q1 criteria: SSR, RRR90, IQC Skip, Core Parts, MPU, Training, Bonus, DRNPS, Exam.'
+                                  : 'Q2 criteria: LCD/OCTA, PBA, Multi Parts, IQC Skip, RRR30, Training, DRNPS, Maintenance Mode, OQC.'}
+                              </p>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {kpiCards.map((card) => (
+                                <div key={card.label} className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{card.label}</p>
+                                  <p className="text-lg font-black text-white mt-1 tabular-nums">{qPresent ? formatUnifiedKpiValue(card) : 'N/A'}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  // ── Unified DA/AV engineer (quarters{} — do not alter MX block above) ─────
+                  if (
+                    !isPqaMode &&
+                    (appMode === 'TCS_DA' || appMode === 'TCS_AV' || appMode === 'TCS_VD') &&
+                    selectedEngineer?.quarters
+                  ) {
+                    const uEng = selectedEngineer;
+                    const presentQs = Object.keys(uEng.quarters || {}).filter((q) => uEng.quarters[q]?.present).sort();
+                    const allQs = Object.keys(uEng.quarters || {}).sort();
+                    const qKeys = allQs.length ? allQs : ['Q1', 'Q2'];
+                    const avgFinal = getDaAvAverageFinal(uEng);
+                    const activeQ =
+                      (selectedProfileQuarter && qKeys.includes(String(selectedProfileQuarter).split('-')[0].toUpperCase())
+                        ? String(selectedProfileQuarter).split('-')[0].toUpperCase()
+                        : null)
+                      || presentQs[presentQs.length - 1]
+                      || qKeys[0];
+                    const qBlock = uEng.quarters?.[activeQ];
+                    const qPresent = Boolean(qBlock?.present);
+                    const qFinal = getDaAvQuarterFinal(uEng, activeQ);
+                    const kpiCards = getDaAvQuarterKpiCards(activeQ, qBlock?.metrics || {});
+
+                    return (
+                      <div className="space-y-8">
+                        <div className="flex flex-col items-center gap-4">
+                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Choose quarter</p>
+                          <div className="flex items-center gap-3 flex-wrap justify-center">
+                            {qKeys.map((q) => {
+                              const has = Boolean(uEng.quarters?.[q]?.present);
+                              const key = `${q}-${uEng.year || new Date().getFullYear()}`;
+                              return (
+                                <button
+                                  key={q}
+                                  type="button"
+                                  onClick={() => setSelectedProfileQuarter(key)}
+                                  className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                    q === activeQ
+                                      ? 'bg-amber-600/20 border-amber-500/50 text-amber-300'
+                                      : has
+                                        ? 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                                        : 'bg-zinc-950 border-white/5 text-zinc-600'
+                                  }`}
+                                >
+                                  {q}{has ? '' : ' · N/A'}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="glass-card rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center gap-8 border-amber-500/10">
+                          <div className="flex flex-col items-center md:border-r border-white/5 md:pr-8 flex-shrink-0">
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                              {activeQ} Final
+                            </span>
+                            <TierLogo tier={getTier(qFinal ?? avgFinal)} size="xl" />
+                            <span className="text-4xl font-black text-white mt-3 tabular-nums">
+                              {qFinal != null ? qFinal.toFixed(1) : 'N/A'}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 mt-2">
+                              TCS Rank (avg): {avgFinal != null ? avgFinal.toFixed(1) : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex-1 w-full space-y-3">
+                            {!qPresent ? (
+                              <p className="text-amber-400/90 text-sm font-bold text-center md:text-left">
+                                {qBlock?.notes || uEng.notes || `No ${activeQ} record for this engineer.`}
+                              </p>
+                            ) : (
+                              <p className="text-zinc-400 text-xs text-center md:text-left">
+                                {activeQ === 'Q1'
+                                  ? 'Q1 criteria: SSR, REDO, Chatbot, HASS, Acc Core Parts, Training Attendance, Linkage Ratio.'
+                                  : 'Q2 criteria: RNPS, REDO, Training Attendance, ST Con, MJ %, Complete Repair, Kahoot, HASS, Repair Volume.'}
+                              </p>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {kpiCards.map((card) => (
+                                <div key={card.label} className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{card.label}</p>
+                                  <p className="text-lg font-black text-white mt-1 tabular-nums">{qPresent ? formatDaAvKpiValue(card) : 'N/A'}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   }

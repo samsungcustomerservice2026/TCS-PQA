@@ -112,7 +112,12 @@ export function lookupTcsWinnersConfig(map, quarterKey, product, mxRole = 'engin
   const p = String(product).toUpperCase();
   const role = p === 'MX' ? String(mxRole || 'engineers') : 'engineers';
   const docId = resolveTcsWinnersDocId(q, p, role);
-  return map.get(docId) || map.get(`${q}-${p}`) || null;
+  const hit = map.get(docId);
+  if (hit) return hit;
+  // Legacy engineer docs are stored as Qn-YYYY-MX (no role suffix). Never fall back to
+  // that key for receptionists / galaxy consultants — that leaked engineer winners into those tabs.
+  if (p === 'MX' && role !== 'engineers') return null;
+  return map.get(`${q}-${p}`) || null;
 }
 
 /** Resolve winners config from map + raw rows (engineer MX legacy docs included). */

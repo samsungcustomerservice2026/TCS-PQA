@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "antd": "^6.3.0",
+    "exceljs": "^4.4.0",
     "firebase": "^12.9.0",
     "lucide-react": "^0.564.0",
     "next": "16.1.6",
