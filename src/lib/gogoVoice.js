@@ -1,9 +1,15 @@
 /**
  * Browser Web Speech helpers for GoGo (STT + TTS).
  * Chrome / Edge recommended. Graceful no-ops when unsupported.
+ *
+ * English voice target: adult male ~30, native American English (en-US).
+ * Arabic voice target: adult male Arabic when available.
  */
 
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
+
+/** Incremented on every stop/cancel so in-flight speak loops abort. */
+let speechGeneration = 0;
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false;
@@ -75,13 +81,11 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
 
   recognition.onerror = (ev) => {
     const code = ev?.error || 'speech_error';
-    // Ignore benign abort/no-speech if we already have text
     if (code === 'aborted') return;
     onError?.(code);
   };
 
   recognition.onend = () => {
-    // Chrome often ends without isFinal — use last interim
     if (!gotFinal && lastInterim) {
       onResult?.({ interim: '', final: lastInterim });
     }
@@ -115,7 +119,6 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
         if (started) {
           try { recognition.stop(); } catch { /* ignore */ }
         }
-        // Tiny delay helps after stop/cancel TTS
         setTimeout(() => {
           try {
             recognition.start();
@@ -140,60 +143,82 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
   };
 }
 
+/** Hard-stop speech and invalidate any in-flight speak loops (fixes EN↔AR bugs). */
 export function stopGoGoSpeech() {
+  speechGeneration += 1;
   if (!isSpeechSynthesisSupported()) return;
   try {
     window.speechSynthesis.cancel();
+    // Chrome can get stuck in a paused state after cancel during language switches
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.cancel();
+    }
   } catch { /* ignore */ }
 }
 
-function scoreVoice(voice, lang) {
+function scoreMaleVoice(voice, lang) {
   const name = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
   const vLang = (voice.lang || '').toLowerCase();
   const want = lang === 'ar' ? 'ar' : 'en';
-  if (!vLang.startsWith(want)) return -100;
+  if (!vLang.startsWith(want)) return -1000;
 
-  let score = 10;
-  // Prefer natural neural / online Google / Microsoft natural voices
-  if (/natural|neural|premium|enhanced|online/.test(name)) score += 40;
-  if (/google/.test(name)) score += 35;
-  if (/microsoft/.test(name) && /aria|jenny|guy|ryan|sonia|sara|salma|naayf/.test(name)) score += 32;
-  if (/samantha|karen|moira|daniel|aaron|fred|tessa|fiona/.test(name)) score += 28;
-  if (lang === 'ar' && /egypt|arabic/.test(name)) score += 20;
-  if (vLang === speechLocaleForLang(lang).toLowerCase()) score += 15;
-  if (/compact|espeak|robot|novelty/.test(name)) score -= 50;
-  // Slight preference for warmer-sounding names
-  if (/female|aria|jenny|samantha|sonia|sara/.test(name)) score += 6;
+  let score = 0;
+
+  // Strongly prefer adult male names / roles
+  const maleHints =
+    /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|hamed|naayf|maged|farid/;
+  const femaleHints =
+    /female|woman|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine/;
+
+  if (maleHints.test(name)) score += 80;
+  if (femaleHints.test(name)) score -= 90;
+
+  if (lang === 'en') {
+    // Native American English (en-US)
+    if (vLang === 'en-us') score += 40;
+    else if (vLang.startsWith('en')) score += 10;
+    if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
+    if (/natural|neural|online|premium/.test(name)) score += 25;
+  } else {
+    // Arabic adult male
+    if (vLang.includes('eg') || /egypt/.test(name)) score += 25;
+    if (/hamed|naayf|maged|farid|male/.test(name)) score += 35;
+    if (/natural|neural|online|premium/.test(name)) score += 20;
+  }
+
+  if (/compact|espeak|robot|novelty|whisper|child|kids/.test(name)) score -= 60;
   return score;
 }
 
-function pickFriendlyVoice(lang) {
+function pickAdultMaleVoice(lang) {
   try {
     const voices = window.speechSynthesis.getVoices?.() || [];
     if (!voices.length) return null;
     let best = null;
-    let bestScore = -999;
+    let bestScore = -9999;
     voices.forEach((v) => {
-      const s = scoreVoice(v, lang);
+      const s = scoreMaleVoice(v, lang);
       if (s > bestScore) {
         bestScore = s;
         best = v;
       }
     });
-    return bestScore > 0 ? best : null;
+    // Require at least a language match
+    return bestScore > -500 ? best : null;
   } catch {
     return null;
   }
 }
 
-/** Clean reply text for spoken delivery (friendly, not literal UI copy). */
+/** Clean reply text for spoken delivery. */
 export function textForSpeech(text, lang = 'en') {
   let s = String(text || '');
   s = s
     .replace(/[👋👇💭👉✨🎯📌✅❌•·]/gu, ' ')
     .replace(/\*\*|__/g, '')
     .replace(/`+/g, '')
-    .replace(/\([^)]{0,40}\)/g, ' ') // drop short parentheticals like (required)
+    .replace(/\([^)]{0,40}\)/g, ' ')
     .replace(/\[[^\]]{0,40}\]/g, ' ')
     .replace(/[←→➡︎⟶]/g, ', ')
     .replace(/\n+/g, '. ')
@@ -202,7 +227,6 @@ export function textForSpeech(text, lang = 'en') {
     .replace(/([.!?])\1+/g, '$1')
     .trim();
 
-  // Keep spoken replies short and conversational
   if (s.length > 320) {
     const cut = s.slice(0, 320);
     const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('؟'));
@@ -214,7 +238,7 @@ export function textForSpeech(text, lang = 'en') {
   return s;
 }
 
-function waitForVoices(timeoutMs = 800) {
+function waitForVoices(timeoutMs = 1000) {
   return new Promise((resolve) => {
     if (!isSpeechSynthesisSupported()) {
       resolve([]);
@@ -234,8 +258,47 @@ function waitForVoices(timeoutMs = 800) {
   });
 }
 
+function speakChunk(text, { lang, voice, rate, pitch, generation }) {
+  return new Promise((resolve) => {
+    if (generation !== speechGeneration) {
+      resolve(false);
+      return;
+    }
+    const utter = new window.SpeechSynthesisUtterance(text);
+    utter.lang = speechLocaleForLang(lang);
+    utter.rate = rate;
+    utter.pitch = pitch;
+    utter.volume = 1;
+    if (voice) {
+      // Keep voice language consistent with utterance language
+      const vLang = (voice.lang || '').toLowerCase();
+      const want = lang === 'ar' ? 'ar' : 'en';
+      if (vLang.startsWith(want)) utter.voice = voice;
+    }
+
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+
+    utter.onend = () => finish(generation === speechGeneration);
+    utter.onerror = () => finish(false);
+
+    try {
+      // Ensure synth is not stuck paused (Chrome language-switch bug)
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utter);
+    } catch {
+      finish(false);
+    }
+  });
+}
+
 /**
- * Speak GoGo reply with a warmer pacing / preferred natural voice.
+ * Speak GoGo reply with adult-male pacing.
+ * Safe across EN↔AR switches via speechGeneration token.
  * @returns {Promise<void>}
  */
 export async function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
@@ -244,59 +307,57 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
     return;
   }
 
-  const clean = textForSpeech(text, lang);
+  const L = lang === 'ar' ? 'ar' : 'en';
+  const clean = textForSpeech(text, L);
   if (!clean) {
     onEnd?.();
     return;
   }
 
-  await waitForVoices();
+  // New speak session — invalidate previous loops first
   stopGoGoSpeech();
+  const generation = speechGeneration;
+  // Tiny delay lets cancel flush the browser queue before new lang starts
+  await new Promise((r) => setTimeout(r, 60));
+  if (generation !== speechGeneration) {
+    onEnd?.();
+    return;
+  }
 
-  // Split into short chunks so speech sounds more natural
+  await waitForVoices();
+  if (generation !== speechGeneration) {
+    onEnd?.();
+    return;
+  }
+
+  const voice = pickAdultMaleVoice(L);
+  // Adult male ~30: slightly lower pitch, steady rate
+  const rate = L === 'ar' ? 0.93 : 0.96;
+  const pitch = L === 'ar' ? 0.92 : 0.9;
+
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
     .filter(Boolean)
     .slice(0, 6);
-
   const chunks = parts.length ? parts : [clean];
-  const voice = pickFriendlyVoice(lang);
+
   let started = false;
-
   for (let i = 0; i < chunks.length; i += 1) {
+    if (generation !== speechGeneration) break;
+    if (!started) {
+      started = true;
+      onStart?.();
+    }
     // eslint-disable-next-line no-await-in-loop
-    await new Promise((resolve) => {
-      const utter = new window.SpeechSynthesisUtterance(chunks[i]);
-      utter.lang = speechLocaleForLang(lang);
-      // Slightly slower + warmer than default robot voice
-      utter.rate = lang === 'ar' ? 0.92 : 0.94;
-      utter.pitch = 1.05;
-      utter.volume = 1;
-      if (voice) utter.voice = voice;
-
-      utter.onstart = () => {
-        if (!started) {
-          started = true;
-          onStart?.();
-        }
-      };
-      utter.onend = () => resolve();
-      utter.onerror = () => resolve();
-
-      try {
-        window.speechSynthesis.speak(utter);
-      } catch {
-        resolve();
-      }
-    });
-
-    // Tiny pause between sentences
+    const ok = await speakChunk(chunks[i], { lang: L, voice, rate, pitch, generation });
+    if (!ok || generation !== speechGeneration) break;
     if (i < chunks.length - 1) {
       // eslint-disable-next-line no-await-in-loop
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, 90));
     }
   }
 
-  onEnd?.();
+  if (generation === speechGeneration) onEnd?.();
+  else onEnd?.();
 }
