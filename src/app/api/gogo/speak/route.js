@@ -176,7 +176,8 @@ export async function POST(request) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: 'GEMINI_API_KEY missing', fallback: true }, { status: 503 });
+    console.warn('GoGo speak unavailable: missing server API configuration');
+    return NextResponse.json({ error: 'Voice temporarily unavailable', fallback: true }, { status: 503 });
   }
 
   const voice = voiceForLang(lang, body?.voice);

@@ -163,12 +163,10 @@ export async function POST(request) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    // Log server-side only — never expose keys, env paths, or setup steps to visitors
+    console.warn('GoGo chat unavailable: missing server API configuration');
     return NextResponse.json(
-      {
-        error: 'GEMINI_API_KEY missing in .env.local — add your key and restart npm run dev',
-        code: 'missing_key',
-        fallback: true,
-      },
+      { error: 'Assistant temporarily unavailable', code: 'unavailable', fallback: true },
       { status: 503 },
     );
   }
@@ -196,8 +194,8 @@ export async function POST(request) {
     console.warn('GoGo Gemini chat failed:', err?.message || err);
     return NextResponse.json(
       {
-        error: String(err?.message || 'Gemini unavailable'),
-        code: err?.code || 'gemini_error',
+        error: 'Assistant temporarily unavailable',
+        code: err?.code === 'quota' ? 'busy' : 'unavailable',
         fallback: true,
       },
       { status: 503 },

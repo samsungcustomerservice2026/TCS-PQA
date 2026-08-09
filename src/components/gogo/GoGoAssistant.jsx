@@ -13,7 +13,7 @@ import {
   matchFreeTextToFlow,
   getFlowNode,
 } from '../../lib/gogoGuideFlow';
-import { isGoGoDeniedMessage } from '../../lib/gogoKnowledge';
+import { isGoGoDeniedMessage, resolveGoGoReply } from '../../lib/gogoKnowledge';
 import { GOGO_SMART_CHIPS } from '../../lib/gogoGeminiContext';
 import {
   createGoGoRecognizer,
@@ -442,8 +442,9 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       setPose('idle');
       if (fromVoice) voiceAskRef.current = true;
       void speakReply(data.spoken || reply, { force: fromVoice });
-    } catch (err) {
-      // Guided fallback without duplicating the user bubble already appended
+    } catch {
+      // Never surface API keys, env paths, or internal errors in the visitor chat.
+      // Use guided/knowledge answers only — friendly copy, no secrets.
       const matchedNode = matchFreeTextToFlow(text, lang);
       if (matchedNode) {
         const result = resolveFlowReply(matchedNode, lang, nameRef.current);
@@ -456,35 +457,31 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         void speakReply(result.reply, { force: fromVoice });
         if (result.action) runGuidedAction(result.action);
       } else {
+        const knowledge = resolveGoGoReply(text, lang);
+        const reply = String(knowledge?.reply || '').trim();
         const menu = resolveFlowReply('main_menu', lang, nameRef.current);
-        const code = err?.data?.code || err?.code || '';
-        let tip =
-          lang === 'ar'
-            ? 'الشات الذكي غير متاح الآن — استخدم الأزرار أو أعد المحاولة.'
-            : 'Smart chat is offline right now — use the buttons or try again.';
-        if (code === 'missing_key') {
-          tip =
+        if (reply && knowledge?.topicId !== 'welcome') {
+          setMessages((prev) => {
+            const next = [...prev, stamp('gogo', reply)];
+            persistChat(next, lang, nameRef.current);
+            return next;
+          });
+          setChips(knowledge.chips || menu.chips || GOGO_SMART_CHIPS);
+          void speakReply(reply, { force: fromVoice });
+          if (knowledge.action) runGuidedAction(knowledge.action);
+        } else {
+          const tip =
             lang === 'ar'
-              ? 'الشات الذكي يحتاج GEMINI_API_KEY في ملف .env.local ثم أعد تشغيل npm run dev.'
-              : 'Smart chat needs GEMINI_API_KEY in .env.local — then restart npm run dev.';
-        } else if (code === 'quota') {
-          tip =
-            lang === 'ar'
-              ? 'تم تجاوز حد Gemini مؤقتاً — جرّب بعد قليل أو غيّر GEMINI_MODEL إلى gemini-flash-latest.'
-              : 'Gemini quota hit — wait a bit, or set GEMINI_MODEL=gemini-flash-latest and restart.';
-        } else if (code === 'invalid_key') {
-          tip =
-            lang === 'ar'
-              ? 'مفتاح Gemini غير صالح — حدّث GEMINI_API_KEY في .env.local وأعد التشغيل.'
-              : 'Gemini API key looks invalid — update GEMINI_API_KEY in .env.local and restart.';
+              ? 'خلّينا نكمل بالأزرار دي — اختار موضوع وأنا أرشدك.'
+              : 'Let’s use the buttons below — pick a topic and I’ll guide you.';
+          setMessages((prev) => {
+            const next = [...prev, stamp('gogo', tip), stamp('gogo', menu.reply)];
+            persistChat(next, lang, nameRef.current);
+            return next;
+          });
+          setChips(menu.chips);
+          void speakReply(tip, { force: fromVoice });
         }
-        setMessages((prev) => {
-          const next = [...prev, stamp('gogo', tip), stamp('gogo', menu.reply)];
-          persistChat(next, lang, nameRef.current);
-          return next;
-        });
-        setChips(menu.chips);
-        void speakReply(tip, { force: fromVoice });
       }
       setPose('idle');
     } finally {

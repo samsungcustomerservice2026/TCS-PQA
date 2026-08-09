@@ -32,6 +32,15 @@ const TOPICS = [
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'],
   },
   {
+    id: 'what_samsung',
+    match: [/who\s*is\s*samsung|what\s*is\s*samsung|about\s*samsung|سامسونج\s*(ايه|إيه|من)|مين\s*سامسونج/i],
+    replies: {
+      en: 'Samsung is our company — and this portal is SCORA, Samsung Egypt’s service performance hub for TCS, PQA, Search, Feedback, and Academy tools.',
+      ar: 'سامسونج هي شركتنا — والبوابة دي SCORA، مركز أداء خدمة سامسونج مصر لـ TCS وPQA والبحث والملاحظات وأدوات الأكاديمية.',
+    },
+    chips: ['what_scora', 'what_tcs', 'what_pqa'],
+  },
+  {
     id: 'what_scora',
     match: [/scora|what\s*(is\s*)?(this\s*)?app|عن\s*التطبيق|ما\s*هو\s*scora|ايه\s*التطبيق|سكورا/i],
     replies: {

@@ -430,10 +430,14 @@ export function resolveFlowReply(nodeId, lang = 'en', name = '') {
 
 export function isValidGoGoName(text) {
   const s = String(text || '').trim();
-  if (s.length < 2 || s.length > 40) return false;
-  if (/https?:|www\.|@|<|>/i.test(s)) return false;
-  if (/password|admin|select\s|drop\s/i.test(s)) return false;
-  return /[\p{L}\p{M}]/u.test(s);
+  if (s.length < 2 || s.length > 24) return false;
+  if (s.split(/\s+/).length > 3) return false;
+  if (/[?؟!0-9@<>/\\]|https?:|www\./i.test(s)) return false;
+  if (/password|admin|select\s|drop\s|api\s*key|\.env/i.test(s)) return false;
+  // Reject questions / junk words that speech-to-text sometimes captures as a "name"
+  if (/^(who|what|where|when|why|how|is|are|the|a|an|samsung|scora|tcs|pqa)\b/i.test(s)) return false;
+  if (/trousers|pants|asdf|xxx|test123|qwerty/i.test(s)) return false;
+  return /^[\p{L}\p{M}][\p{L}\p{M}\s'.-]{0,23}$/u.test(s);
 }
 
 export function normalizeGoGoName(text) {
@@ -461,6 +465,7 @@ export function matchFreeTextToFlow(text, lang = 'en') {
   const raw = String(text || '').trim();
   const lower = raw.toLowerCase();
   if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|fawzy|فوزي/i.test(raw)) return 'who_built';
+  if (/who\s*is\s*samsung|what\s*is\s*samsung|samsung\s*egypt|سامسونج/i.test(raw)) return 'what_scora';
   if (/scora|سكورا|التطبيق/i.test(raw)) return 'what_scora';
   if (/\bpqa\b|partner\s*quality|جائزة|شريك|مراكز/i.test(raw)) {
     if (/kpi|مؤشر|calc|حسب|تحسب|درجة|score/i.test(raw)) return /calc|حسب|تحسب|score|درجة/i.test(raw) ? 'pqa_calc' : 'pqa_kpis';
