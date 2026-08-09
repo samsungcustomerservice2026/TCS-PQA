@@ -83,23 +83,11 @@ export const GOGO_FLOW = {
   what_scora: {
     replies: {
       en:
-        'SCORA is Samsung Egypt’s service performance hub.\n\n' +
-        'Inside SCORA you can:\n' +
-        '• TCS — engineer capability rankings (MX / DA / AV)\n' +
-        '• PQA — partner / service-center quality rankings\n' +
-        '• Search dossiers by code\n' +
-        '• Arabic Feedback & Academy Survey\n' +
-        '• Scora Challenge live quizzes\n\n' +
-        'Goal: make excellence visible and fair.',
+        'SCORA is Samsung Egypt’s home for service performance.\n\n' +
+        'You’ll find TCS for engineers, PQA for partners and centers, Search, Feedback, the Academy survey, and Scora Challenge quizzes.',
       ar:
-        'SCORA هو مركز أداء خدمة سامسونج مصر.\n\n' +
-        'داخله تقدر تستخدم:\n' +
-        '• TCS — ترتيب قدرات المهندسين (MX / DA / AV)\n' +
-        '• PQA — ترتيب جودة الشركاء ومراكز الخدمة\n' +
-        '• البحث بالكود\n' +
-        '• الملاحظات واستبيان الأكاديمية\n' +
-        '• اختبارات Scora Challenge\n\n' +
-        'الهدف: إن التميز يكون واضح وعادل.',
+        'SCORA هو بيت أداء خدمة سامسونج مصر.\n\n' +
+        'فيه TCS للمهندسين، وPQA للشركاء والمراكز، والبحث، والملاحظات، واستبيان الأكاديمية، واختبارات Scora Challenge.',
     },
     chips: ['what_tcs', 'what_pqa', 'scora_more', 'main_menu'],
   },

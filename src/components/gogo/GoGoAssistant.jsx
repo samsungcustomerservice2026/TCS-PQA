@@ -375,7 +375,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       persistChat(next, L, name);
       return next;
     });
-    setChips(result.chips || []);
+    setChips((result.chips || []).filter((id) => id !== 'lang_toggle'));
     setPose('think');
     schedule(() => setPose('idle'), 700);
     void speakReply(result.reply);
@@ -711,19 +711,19 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const placeholder =
     phase === 'ask_name' || !visitorName
       ? rtl
-        ? 'اكتب اسمك هنا…'
-        : 'Type your name…'
+        ? 'اسمك…'
+        : 'Your name…'
       : listening
         ? rtl
           ? 'بسمعك…'
           : 'Listening…'
         : busy
           ? rtl
-            ? 'GoGo بيفكر…'
-            : 'GoGo is thinking…'
+            ? 'لحظة…'
+            : 'One moment…'
           : rtl
-            ? 'اسأل GoGo أو استخدم الميكروفون…'
-            : 'Ask GoGo or use the mic…';
+            ? 'اكتب أو كلّم GoGo…'
+            : 'Type or talk to GoGo…';
 
   return (
     <>
