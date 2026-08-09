@@ -403,7 +403,11 @@ function playBase64Audio(audioBase64, mimeType, generation) {
       return;
     }
 
-    const audio = new Audio(objectUrl);
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = objectUrl;
+    audio.playbackRate = 1;
+    audio.volume = 1;
     currentAudio = audio;
     let settled = false;
     const finish = (ok) => {
@@ -421,7 +425,17 @@ function playBase64Audio(audioBase64, mimeType, generation) {
     };
     audio.onended = () => finish(true);
     audio.onerror = () => finish(false);
-    audio.play().catch(() => finish(false));
+    const start = () => {
+      audio.play().catch(() => finish(false));
+    };
+    if (audio.readyState >= 2) start();
+    else {
+      audio.oncanplaythrough = start;
+      // Safety if canplay never fires
+      setTimeout(() => {
+        if (!settled) start();
+      }, 400);
+    }
   });
 }
 
@@ -438,9 +452,9 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
   // Do not speak with the browser default if it would be female/unknown
   if (!voice) return false;
 
-  // Adult male pacing; slightly lower pitch reads more masculine
-  const rate = lang === 'ar' ? 0.98 : 0.96;
-  const pitch = lang === 'ar' ? 0.88 : 0.85;
+  // Natural pacing — do not pitch-shift (sounds unnatural)
+  const rate = 1;
+  const pitch = 1;
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
@@ -506,7 +520,7 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
   };
 
   try {
-    // Gemini first (EN Charon / AR Achird), then browser male fallback.
+    // Gemini first (EN Charon / AR Orus), then natural browser male fallback.
     try {
       const ok = await speakWithGemini(clean, L, generation, markStart);
       if (ok) return;

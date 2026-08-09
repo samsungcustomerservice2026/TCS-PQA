@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const MAX_TEXT = 500;
 
-/** Adult male Gemini voices only (~30). Charon = informative male for both languages. */
+/** Adult male Gemini voices only. */
 const MALE_VOICES = new Set([
   'Charon',
   'Orus',
@@ -28,21 +28,23 @@ const MALE_VOICES = new Set([
 
 const DEFAULT_MALE_VOICE = 'Charon';
 const DEFAULT_VOICE_EN = sanitizeMaleVoice(
-  process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || DEFAULT_MALE_VOICE,
+  process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || 'Charon',
 );
 const DEFAULT_VOICE_AR = sanitizeMaleVoice(
-  process.env.GEMINI_TTS_VOICE_AR || process.env.GEMINI_TTS_VOICE || DEFAULT_MALE_VOICE,
+  process.env.GEMINI_TTS_VOICE_AR || process.env.GEMINI_TTS_VOICE || 'Orus',
 );
+
+/** Prefer newer/higher-quality TTS first. */
 const DEFAULT_TTS_MODELS = [
   process.env.GEMINI_TTS_MODEL,
-  'gemini-2.5-flash-preview-tts',
   'gemini-3.1-flash-tts-preview',
+  'gemini-2.5-flash-preview-tts',
+  'gemini-2.5-pro-preview-tts',
 ].filter(Boolean);
 
 function sanitizeMaleVoice(name) {
   const voice = String(name || '').trim();
   if (MALE_VOICES.has(voice)) return voice;
-  // Never allow female presets (Kore, Aoede, Zephyr, etc.)
   return DEFAULT_MALE_VOICE;
 }
 
@@ -51,11 +53,16 @@ function unique(list) {
 }
 
 function pcm16ToWavBuffer(pcmBuffer, sampleRate = 24000) {
+  // PCM16 needs even byte length — odd length causes crackling / trash audio
+  let pcm = pcmBuffer;
+  if (pcm.length % 2 === 1) {
+    pcm = Buffer.concat([pcm, Buffer.from([0])]);
+  }
   const numChannels = 1;
   const bitsPerSample = 16;
   const blockAlign = (numChannels * bitsPerSample) / 8;
   const byteRate = sampleRate * blockAlign;
-  const dataSize = pcmBuffer.length;
+  const dataSize = pcm.length;
   const header = Buffer.alloc(44);
   header.write('RIFF', 0);
   header.writeUInt32LE(36 + dataSize, 4);
@@ -70,12 +77,13 @@ function pcm16ToWavBuffer(pcmBuffer, sampleRate = 24000) {
   header.writeUInt16LE(bitsPerSample, 34);
   header.write('data', 36);
   header.writeUInt32LE(dataSize, 40);
-  return Buffer.concat([header, pcmBuffer]);
+  return Buffer.concat([header, pcm]);
 }
 
 function parseSampleRate(mime = '') {
   const m = String(mime).match(/rate=(\d+)/i);
-  return m ? Number(m[1]) : 24000;
+  const rate = m ? Number(m[1]) : 24000;
+  return rate > 0 ? rate : 24000;
 }
 
 function voiceForLang(lang, override) {
@@ -83,12 +91,12 @@ function voiceForLang(lang, override) {
   return lang === 'ar' ? DEFAULT_VOICE_AR : DEFAULT_VOICE_EN;
 }
 
-/** Short male-only style cue — keep prompts short so notes are not spoken. */
+/** Clean quality cue — no creepy casting notes. */
 function buildSpeakPrompt(text, lang) {
   if (lang === 'ar') {
-    return `Speak as an adult male (man, not woman), about 30 years old, in natural Egyptian Arabic. Say exactly: ${text}`;
+    return `Speak naturally in clear Egyptian Arabic with a warm adult male voice. Say: ${text}`;
   }
-  return `Speak as an adult male (man, not woman), about 30 years old, in natural American English. Say exactly: ${text}`;
+  return `Speak naturally in clear American English with a warm adult male voice. Say: ${text}`;
 }
 
 async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
@@ -127,7 +135,7 @@ async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
 
   const mime = inline.mimeType || inline.mime_type || 'audio/L16;codec=pcm;rate=24000';
   const pcm = Buffer.from(inline.data, 'base64');
-  if (pcm.length < 1000) {
+  if (pcm.length < 2000) {
     throw new Error('Gemini TTS audio too short');
   }
   const sampleRate = parseSampleRate(mime);
