@@ -630,9 +630,26 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           void sendSmartMessage(final, { fromVoice: true });
         }
       },
-      onError: () => {
+      onError: (err) => {
         setListening(false);
         setPose('idle');
+        // Normal, non-actionable outcomes: user was silent or stopped manually.
+        if (err === 'no-speech' || err === 'aborted') return;
+        const L = langRef.current;
+        const permissionIssue = err === 'not-allowed' || err === 'service-not-allowed';
+        const msg = permissionIssue
+          ? (L === 'ar'
+              ? 'محتاج إذن الميكروفون. فعّل الإذن من المتصفح وجرّب تاني، أو اكتب سؤالك.'
+              : 'I need microphone permission. Allow mic access in your browser and try again, or type your question.')
+          : (L === 'ar'
+              ? 'مش قادر أوصل لميكروفون. اتأكد إن فيه مايك متوصّل، أو اكتب سؤالك.'
+              : "I couldn't reach a microphone. Check that a mic is connected, or type your question instead.");
+        setMessages((prev) => {
+          const next = [...prev, stamp('gogo', msg)];
+          persistChat(next, L, nameRef.current);
+          return next;
+        });
+        void speakReply(msg);
       },
       onEnd: () => {
         setListening(false);
