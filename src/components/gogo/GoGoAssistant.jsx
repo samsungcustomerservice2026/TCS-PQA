@@ -153,11 +153,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     }, 450);
   }, [visitorId]);
 
-  const speakReply = useCallback(async (text, { force = false } = {}) => {
+  const speakReply = useCallback(async (text, { force = false, lang: langOverride } = {}) => {
     if (!force && voiceMuted && !voiceAskRef.current) return;
     const muted = force ? false : voiceMuted && !voiceAskRef.current;
+    const speakLang = langOverride || langRef.current;
     await speakGoGoText(text, {
-      lang: langRef.current,
+      lang: speakLang,
       muted,
       onStart: () => {
         setSpeaking(true);
@@ -539,8 +540,16 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
   const switchLanguage = () => {
     const nextLang = lang === 'en' ? 'ar' : 'en';
-    persistLang(nextLang);
+    // Stop mic + speech BEFORE switching so EN/AR queues don't overlap
+    recognizerRef.current?.abort?.();
+    setListening(false);
+    setMicHint('');
     stopGoGoSpeech();
+    setSpeaking(false);
+
+    // Update lang ref immediately (React setState is async — was causing Arabic with English voice)
+    langRef.current = nextLang;
+    persistLang(nextLang);
 
     // Name gate: swap the welcome message — don't stack EN + AR
     if (phase === 'ask_name' || !nameRef.current) {
@@ -549,7 +558,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       setMessages(next);
       setChips([]);
       persistChat(next, nextLang, '');
-      void speakReply(ask.reply);
+      void speakReply(ask.reply, { lang: nextLang });
       return;
     }
 
@@ -560,7 +569,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       return next;
     });
     setChips((menu.chips || []).filter((id) => id !== 'lang_toggle'));
-    void speakReply(menu.reply);
+    void speakReply(menu.reply, { lang: nextLang });
   };
 
   const handleChip = (id) => {
