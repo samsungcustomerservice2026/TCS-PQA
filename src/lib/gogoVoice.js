@@ -428,9 +428,9 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
 
   const voice = pickAdultMaleVoice(lang);
 
-  // Slightly brighter Arabic pitch if we must fall back to browser TTS
-  const rate = lang === 'ar' ? 1.02 : 0.96;
-  const pitch = lang === 'ar' ? 1.08 : 0.9;
+  // Brighter Arabic browser fallback so classic voices feel less elderly
+  const rate = lang === 'ar' ? 1.05 : 0.96;
+  const pitch = lang === 'ar' ? 1.12 : 0.92;
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
