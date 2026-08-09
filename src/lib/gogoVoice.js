@@ -1,15 +1,14 @@
 /**
- * Browser Web Speech helpers for GoGo (STT + TTS).
+ * GoGo STT + TTS helpers.
+ * TTS prefers Gemini Charon (adult male ~30), then browser adult-male voices.
  * Chrome / Edge recommended. Graceful no-ops when unsupported.
- *
- * English voice target: adult male ~30, native American English (en-US).
- * Arabic voice target: adult male Arabic when available.
  */
 
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
 
 /** Incremented on every stop/cancel so in-flight speak loops abort. */
 let speechGeneration = 0;
+let currentAudio = null;
 
 export function isSpeechRecognitionSupported() {
   if (typeof window === 'undefined') return false;
@@ -18,7 +17,11 @@ export function isSpeechRecognitionSupported() {
 
 export function isSpeechSynthesisSupported() {
   if (typeof window === 'undefined') return false;
-  return typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined';
+  return (
+    typeof Audio !== 'undefined' ||
+    (typeof window.speechSynthesis !== 'undefined' &&
+      typeof window.SpeechSynthesisUtterance !== 'undefined')
+  );
 }
 
 export function getGoGoVoiceMuted() {
@@ -34,7 +37,9 @@ export function setGoGoVoiceMuted(muted) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(VOICE_MUTE_KEY, muted ? '1' : '0');
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function speechLocaleForLang(lang) {
@@ -117,7 +122,11 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
       try {
         recognition.lang = speechLocaleForLang(lang);
         if (started) {
-          try { recognition.stop(); } catch { /* ignore */ }
+          try {
+            recognition.stop();
+          } catch {
+            /* ignore */
+          }
         }
         setTimeout(() => {
           try {
@@ -133,28 +142,49 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
     stop() {
       try {
         recognition.stop();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     },
     abort() {
       try {
         recognition.abort();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     },
   };
+}
+
+function stopCurrentAudio() {
+  if (!currentAudio) return;
+  try {
+    currentAudio.pause();
+    currentAudio.src = '';
+  } catch {
+    /* ignore */
+  }
+  currentAudio = null;
+}
+
+function stopBrowserSpeech() {
+  if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') return;
+  try {
+    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.cancel();
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Hard-stop speech and invalidate any in-flight speak loops (fixes EN↔AR bugs). */
 export function stopGoGoSpeech() {
   speechGeneration += 1;
-  if (!isSpeechSynthesisSupported()) return;
-  try {
-    window.speechSynthesis.cancel();
-    // Chrome can get stuck in a paused state after cancel during language switches
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-      window.speechSynthesis.cancel();
-    }
-  } catch { /* ignore */ }
+  stopCurrentAudio();
+  stopBrowserSpeech();
 }
 
 function scoreMaleVoice(voice, lang) {
@@ -164,8 +194,6 @@ function scoreMaleVoice(voice, lang) {
   if (!vLang.startsWith(want)) return -1000;
 
   let score = 0;
-
-  // Strongly prefer adult male names / roles
   const maleHints =
     /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|hamed|naayf|maged|farid/;
   const femaleHints =
@@ -175,13 +203,11 @@ function scoreMaleVoice(voice, lang) {
   if (femaleHints.test(name)) score -= 90;
 
   if (lang === 'en') {
-    // Native American English (en-US)
     if (vLang === 'en-us') score += 40;
     else if (vLang.startsWith('en')) score += 10;
     if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 25;
   } else {
-    // Arabic adult male
     if (vLang.includes('eg') || /egypt/.test(name)) score += 25;
     if (/hamed|naayf|maged|farid|male/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 20;
@@ -204,14 +230,13 @@ function pickAdultMaleVoice(lang) {
         best = v;
       }
     });
-    // Require at least a language match
     return bestScore > -500 ? best : null;
   } catch {
     return null;
   }
 }
 
-/** Clean reply text for spoken delivery. */
+/** Clean reply text for spoken delivery (safe on server + client). */
 export function textForSpeech(text, lang = 'en') {
   let s = String(text || '');
   s = s
@@ -240,7 +265,7 @@ export function textForSpeech(text, lang = 'en') {
 
 function waitForVoices(timeoutMs = 1000) {
   return new Promise((resolve) => {
-    if (!isSpeechSynthesisSupported()) {
+    if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
       resolve([]);
       return;
     }
@@ -270,7 +295,6 @@ function speakChunk(text, { lang, voice, rate, pitch, generation }) {
     utter.pitch = pitch;
     utter.volume = 1;
     if (voice) {
-      // Keep voice language consistent with utterance language
       const vLang = (voice.lang || '').toLowerCase();
       const want = lang === 'ar' ? 'ar' : 'en';
       if (vLang.startsWith(want)) utter.voice = voice;
@@ -287,7 +311,6 @@ function speakChunk(text, { lang, voice, rate, pitch, generation }) {
     utter.onerror = () => finish(false);
 
     try {
-      // Ensure synth is not stuck paused (Chrome language-switch bug)
       if (window.speechSynthesis.paused) window.speechSynthesis.resume();
       window.speechSynthesis.speak(utter);
     } catch {
@@ -296,45 +319,55 @@ function speakChunk(text, { lang, voice, rate, pitch, generation }) {
   });
 }
 
-/**
- * Speak GoGo reply with adult-male pacing.
- * Safe across EN↔AR switches via speechGeneration token.
- * @returns {Promise<void>}
- */
-export async function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
-  if (muted || !isSpeechSynthesisSupported()) {
-    onEnd?.();
-    return;
+async function fetchGeminiSpeech(text, lang) {
+  const response = await fetch('/api/gogo/speak', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, lang }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.audioBase64) {
+    const err = new Error(data?.error || 'Gemini TTS unavailable');
+    err.code = data?.code || 'tts_failed';
+    throw err;
   }
+  return data;
+}
 
-  const L = lang === 'ar' ? 'ar' : 'en';
-  const clean = textForSpeech(text, L);
-  if (!clean) {
-    onEnd?.();
-    return;
-  }
+function playBase64Audio(audioBase64, mimeType, generation) {
+  return new Promise((resolve) => {
+    if (generation !== speechGeneration || typeof Audio === 'undefined') {
+      resolve(false);
+      return;
+    }
+    stopCurrentAudio();
+    const audio = new Audio(`data:${mimeType || 'audio/wav'};base64,${audioBase64}`);
+    currentAudio = audio;
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      if (currentAudio === audio) currentAudio = null;
+      resolve(Boolean(ok) && generation === speechGeneration);
+    };
+    audio.onended = () => finish(true);
+    audio.onerror = () => finish(false);
+    audio.play().catch(() => finish(false));
+  });
+}
 
-  // New speak session — invalidate previous loops first
-  stopGoGoSpeech();
-  const generation = speechGeneration;
-  // Tiny delay lets cancel flush the browser queue before new lang starts
-  await new Promise((r) => setTimeout(r, 60));
-  if (generation !== speechGeneration) {
-    onEnd?.();
-    return;
+async function speakWithBrowser(clean, lang, generation, onStart) {
+  if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
+    return false;
   }
+  if (generation !== speechGeneration) return false;
 
   await waitForVoices();
-  if (generation !== speechGeneration) {
-    onEnd?.();
-    return;
-  }
+  if (generation !== speechGeneration) return false;
 
-  const voice = pickAdultMaleVoice(L);
-  // Adult male ~30: slightly lower pitch, steady rate
-  const rate = L === 'ar' ? 0.93 : 0.96;
-  const pitch = L === 'ar' ? 0.92 : 0.9;
-
+  const voice = pickAdultMaleVoice(lang);
+  const rate = lang === 'ar' ? 0.93 : 0.96;
+  const pitch = lang === 'ar' ? 0.92 : 0.9;
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
@@ -344,20 +377,80 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
 
   let started = false;
   for (let i = 0; i < chunks.length; i += 1) {
-    if (generation !== speechGeneration) break;
+    if (generation !== speechGeneration) return false;
     if (!started) {
       started = true;
       onStart?.();
     }
     // eslint-disable-next-line no-await-in-loop
-    const ok = await speakChunk(chunks[i], { lang: L, voice, rate, pitch, generation });
-    if (!ok || generation !== speechGeneration) break;
+    const ok = await speakChunk(chunks[i], { lang, voice, rate, pitch, generation });
+    if (!ok || generation !== speechGeneration) return false;
     if (i < chunks.length - 1) {
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 90));
     }
   }
+  return generation === speechGeneration;
+}
 
-  if (generation === speechGeneration) onEnd?.();
-  else onEnd?.();
+/**
+ * Speak GoGo reply: Gemini Charon (adult male) first, browser male fallback.
+ * Safe across EN↔AR switches via speechGeneration token.
+ */
+export async function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
+  if (muted) {
+    onEnd?.();
+    return;
+  }
+
+  const L = lang === 'ar' ? 'ar' : 'en';
+  const clean = textForSpeech(text, L);
+  if (!clean || typeof window === 'undefined') {
+    onEnd?.();
+    return;
+  }
+
+  stopGoGoSpeech();
+  const generation = speechGeneration;
+  await new Promise((r) => setTimeout(r, 60));
+  if (generation !== speechGeneration) {
+    onEnd?.();
+    return;
+  }
+
+  let started = false;
+  const markStart = () => {
+    if (started) return;
+    started = true;
+    onStart?.();
+  };
+
+  try {
+    const data = await fetchGeminiSpeech(clean, L);
+    if (generation !== speechGeneration) {
+      onEnd?.();
+      return;
+    }
+    markStart();
+    const played = await playBase64Audio(data.audioBase64, data.mimeType, generation);
+    if (played) {
+      onEnd?.();
+      return;
+    }
+  } catch {
+    // fall through to browser TTS
+  }
+
+  if (generation !== speechGeneration) {
+    onEnd?.();
+    return;
+  }
+
+  if (typeof window.speechSynthesis === 'undefined') {
+    onEnd?.();
+    return;
+  }
+
+  await speakWithBrowser(clean, L, generation, markStart);
+  onEnd?.();
 }
