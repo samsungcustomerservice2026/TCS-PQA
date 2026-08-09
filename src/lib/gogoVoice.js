@@ -359,7 +359,7 @@ function speakChunk(text, { lang, voice, rate, pitch, generation }) {
 
 async function fetchGeminiSpeech(text, lang) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 25000) : null;
   try {
     const response = await fetch('/api/gogo/speak', {
       method: 'POST',

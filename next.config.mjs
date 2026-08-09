@@ -6,6 +6,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactCompiler: true,
+  // Keep Edge TTS / ws outside the webpack bundle (fixes bufferUtil.mask errors)
+  serverExternalPackages: ['node-edge-tts', 'ws', 'bufferutil', 'utf-8-validate'],
   turbopack: {
     root: __dirname,
   },

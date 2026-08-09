@@ -1,51 +1,36 @@
 import { NextResponse } from 'next/server';
 import { textForSpeech } from '../../../../lib/gogoSpeechText';
+import { synthesizeWithEdgeTts } from '../../../../lib/gogoEdgeTts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 const MAX_TEXT = 500;
 
-/** Adult male Gemini voices only. */
+/** Optional Gemini male voices (only used if Gemini TTS actually works). */
 const MALE_VOICES = new Set([
   'Charon',
   'Orus',
   'Fenrir',
   'Puck',
-  'Enceladus',
-  'Iapetus',
-  'Umbriel',
-  'Algieba',
-  'Algenib',
   'Alnilam',
-  'Rasalgethi',
   'Schedar',
   'Achird',
-  'Zubenelgenubi',
-  'Sadachbia',
   'Sadaltager',
 ]);
 
-const DEFAULT_MALE_VOICE = 'Charon';
-const DEFAULT_VOICE_EN = sanitizeMaleVoice(
-  process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || 'Charon',
-);
-const DEFAULT_VOICE_AR = sanitizeMaleVoice(
-  process.env.GEMINI_TTS_VOICE_AR || process.env.GEMINI_TTS_VOICE || 'Orus',
-);
-
-/** Prefer newer/higher-quality TTS first. */
-const DEFAULT_TTS_MODELS = [
+const DEFAULT_VOICE_EN = sanitizeMaleVoice(process.env.GEMINI_TTS_VOICE_EN || 'Charon');
+const DEFAULT_VOICE_AR = sanitizeMaleVoice(process.env.GEMINI_TTS_VOICE_AR || 'Orus');
+const GEMINI_TTS_MODELS = [
   process.env.GEMINI_TTS_MODEL,
-  'gemini-3.1-flash-tts-preview',
   'gemini-2.5-flash-preview-tts',
-  'gemini-2.5-pro-preview-tts',
+  'gemini-3.1-flash-tts-preview',
 ].filter(Boolean);
 
 function sanitizeMaleVoice(name) {
   const voice = String(name || '').trim();
-  if (MALE_VOICES.has(voice)) return voice;
-  return DEFAULT_MALE_VOICE;
+  return MALE_VOICES.has(voice) ? voice : 'Charon';
 }
 
 function unique(list) {
@@ -53,11 +38,8 @@ function unique(list) {
 }
 
 function pcm16ToWavBuffer(pcmBuffer, sampleRate = 24000) {
-  // PCM16 needs even byte length — odd length causes crackling / trash audio
   let pcm = pcmBuffer;
-  if (pcm.length % 2 === 1) {
-    pcm = Buffer.concat([pcm, Buffer.from([0])]);
-  }
+  if (pcm.length % 2 === 1) pcm = Buffer.concat([pcm, Buffer.from([0])]);
   const numChannels = 1;
   const bitsPerSample = 16;
   const blockAlign = (numChannels * bitsPerSample) / 8;
@@ -86,12 +68,10 @@ function parseSampleRate(mime = '') {
   return rate > 0 ? rate : 24000;
 }
 
-function voiceForLang(lang, override) {
-  if (override) return sanitizeMaleVoice(override);
+function voiceForLang(lang) {
   return lang === 'ar' ? DEFAULT_VOICE_AR : DEFAULT_VOICE_EN;
 }
 
-/** Clean quality cue — no creepy casting notes. */
 function buildSpeakPrompt(text, lang) {
   if (lang === 'ar') {
     return `Speak naturally in clear Egyptian Arabic with a warm adult male voice. Say: ${text}`;
@@ -99,69 +79,56 @@ function buildSpeakPrompt(text, lang) {
   return `Speak naturally in clear American English with a warm adult male voice. Say: ${text}`;
 }
 
-async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: buildSpeakPrompt(text, lang) }] }],
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voice,
-            },
-          },
-        },
-      },
-    }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data?.error?.message || `Gemini TTS HTTP ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  const audioPart = parts.find((p) => p?.inlineData?.data || p?.inline_data?.data);
-  const inline = audioPart?.inlineData || audioPart?.inline_data;
-  if (!inline?.data) {
-    throw new Error('Empty Gemini TTS audio');
-  }
-
-  const mime = inline.mimeType || inline.mime_type || 'audio/L16;codec=pcm;rate=24000';
-  const pcm = Buffer.from(inline.data, 'base64');
-  if (pcm.length < 2000) {
-    throw new Error('Gemini TTS audio too short');
-  }
-  const sampleRate = parseSampleRate(mime);
-  const wav = pcm16ToWavBuffer(pcm, sampleRate);
-  return {
-    audioBase64: wav.toString('base64'),
-    mimeType: 'audio/wav',
-    voice,
-    model,
-  };
-}
-
 async function synthesizeWithGemini({ text, lang, apiKey, voice }) {
-  const models = unique(DEFAULT_TTS_MODELS);
+  const models = unique(GEMINI_TTS_MODELS);
   let lastErr = null;
   for (const model of models) {
     try {
-      return await synthesizeOnce({ text, lang, apiKey, model, voice });
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: buildSpeakPrompt(text, lang) }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: voice },
+              },
+            },
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(data?.error?.message || `Gemini TTS HTTP ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const audioPart = parts.find((p) => p?.inlineData?.data || p?.inline_data?.data);
+      const inline = audioPart?.inlineData || audioPart?.inline_data;
+      if (!inline?.data) throw new Error('Empty Gemini TTS audio');
+      const mime = inline.mimeType || inline.mime_type || 'audio/L16;codec=pcm;rate=24000';
+      const pcm = Buffer.from(inline.data, 'base64');
+      if (pcm.length < 2000) throw new Error('Gemini TTS audio too short');
+      const wav = pcm16ToWavBuffer(pcm, parseSampleRate(mime));
+      return {
+        audioBase64: wav.toString('base64'),
+        mimeType: 'audio/wav',
+        voice,
+        model,
+        source: 'gemini-tts',
+        gender: 'male',
+      };
     } catch (err) {
       lastErr = err;
       const retryable =
         err?.status === 429 ||
         err?.status === 404 ||
         /quota|not found|unavailable|too short|empty/i.test(err?.message || '');
-      if (!retryable) throw err;
-      console.warn(`GoGo TTS model ${model} failed:`, err.message);
+      if (!retryable) break;
     }
   }
   throw lastErr || new Error('Gemini TTS unavailable');
@@ -182,28 +149,40 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Empty text' }, { status: 400 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn('GoGo speak unavailable: missing server API configuration');
-    return NextResponse.json({ error: 'Voice temporarily unavailable', fallback: true }, { status: 503 });
-  }
-
-  const voice = voiceForLang(lang, body?.voice);
-
+  // Primary: Microsoft neural male voices (EN Andrew / AR Shakir) — works without Gemini quota.
   try {
-    const audio = await synthesizeWithGemini({ text, lang, apiKey, voice });
+    const audio = await synthesizeWithEdgeTts(text, lang);
     return NextResponse.json({
       ...audio,
-      source: 'gemini-tts',
       lang,
       text,
-      gender: 'male',
     });
-  } catch (err) {
-    console.warn('GoGo Gemini TTS failed:', err?.message || err);
-    return NextResponse.json(
-      { error: 'Voice temporarily unavailable', fallback: true, code: 'tts_failed' },
-      { status: 503 },
-    );
+  } catch (edgeErr) {
+    console.warn('GoGo Edge TTS failed:', edgeErr?.message || edgeErr);
   }
+
+  // Secondary: Gemini TTS only if key exists and quota allows
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const audio = await synthesizeWithGemini({
+        text,
+        lang,
+        apiKey,
+        voice: voiceForLang(lang),
+      });
+      return NextResponse.json({
+        ...audio,
+        lang,
+        text,
+      });
+    } catch (err) {
+      console.warn('GoGo Gemini TTS failed:', err?.message || err);
+    }
+  }
+
+  return NextResponse.json(
+    { error: 'Voice temporarily unavailable', fallback: true, code: 'tts_failed' },
+    { status: 503 },
+  );
 }
