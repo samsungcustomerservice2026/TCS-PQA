@@ -9,6 +9,14 @@ const MAX_HISTORY = 10;
 const MAX_MESSAGE = 800;
 const MAX_REPLY = 1200;
 
+/** Prefer env model, then free-tier-friendly Flash aliases. */
+const MODEL_FALLBACKS = [
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
+];
+
 function deniedReply(lang) {
   return lang === 'ar'
     ? 'أقدر أساعد في SCORA وTCS وPQA بس. تحب نبدأ من هناك؟'
@@ -32,7 +40,21 @@ function sanitizeHistory(history) {
     .filter((m) => m.text.trim());
 }
 
-async function callGemini({ system, history, message, model, apiKey }) {
+function classifyGeminiError(message = '', status = 0) {
+  const msg = String(message || '').toLowerCase();
+  if (status === 429 || /quota|rate limit|resource_exhausted/.test(msg)) return 'quota';
+  if (status === 404 || /not found|no longer available/.test(msg)) return 'model_unavailable';
+  if (status === 400 && /api key|invalid/.test(msg)) return 'invalid_key';
+  if (status === 403 || /permission|api key/.test(msg)) return 'invalid_key';
+  return 'gemini_error';
+}
+
+function modelCandidates(preferred) {
+  const list = [preferred, ...MODEL_FALLBACKS].filter(Boolean);
+  return [...new Set(list)];
+}
+
+async function callGeminiOnce({ system, history, message, model, apiKey }) {
   const contents = [];
   for (const turn of history) {
     contents.push({
@@ -70,6 +92,8 @@ async function callGemini({ system, history, message, model, apiKey }) {
     const errMsg = data?.error?.message || `Gemini HTTP ${res.status}`;
     const err = new Error(errMsg);
     err.status = res.status;
+    err.code = classifyGeminiError(errMsg, res.status);
+    err.model = model;
     throw err;
   }
 
@@ -80,9 +104,28 @@ async function callGemini({ system, history, message, model, apiKey }) {
       .trim() || '';
 
   if (!text) {
-    throw new Error('Empty Gemini response');
+    const err = new Error('Empty Gemini response');
+    err.code = 'empty_response';
+    err.model = model;
+    throw err;
   }
-  return text.slice(0, MAX_REPLY);
+  return { text: text.slice(0, MAX_REPLY), model };
+}
+
+async function callGemini({ system, history, message, model, apiKey }) {
+  const models = modelCandidates(model);
+  let lastErr = null;
+  for (const candidate of models) {
+    try {
+      return await callGeminiOnce({ system, history, message, model: candidate, apiKey });
+    } catch (err) {
+      lastErr = err;
+      const retryable = err?.code === 'quota' || err?.code === 'model_unavailable' || err?.code === 'empty_response';
+      if (!retryable) throw err;
+      console.warn(`GoGo Gemini model ${candidate} failed (${err.code}):`, err.message);
+    }
+  }
+  throw lastErr || new Error('Gemini unavailable');
 }
 
 export async function POST(request) {
@@ -121,7 +164,11 @@ export async function POST(request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'GEMINI_API_KEY missing', fallback: true },
+      {
+        error: 'GEMINI_API_KEY missing in .env.local — add your key and restart npm run dev',
+        code: 'missing_key',
+        fallback: true,
+      },
       { status: 503 },
     );
   }
@@ -130,7 +177,7 @@ export async function POST(request) {
   const system = buildGoGoSystemPrompt({ lang, visitorName });
 
   try {
-    const reply = await callGemini({
+    const { text: reply, model: usedModel } = await callGemini({
       system,
       history,
       message,
@@ -142,6 +189,7 @@ export async function POST(request) {
       chips: GOGO_SMART_CHIPS,
       denied: false,
       source: 'gemini',
+      model: usedModel,
       spoken: reply,
     });
   } catch (err) {
@@ -149,6 +197,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         error: String(err?.message || 'Gemini unavailable'),
+        code: err?.code || 'gemini_error',
         fallback: true,
       },
       { status: 503 },

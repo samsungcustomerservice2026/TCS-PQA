@@ -442,7 +442,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       setPose('idle');
       if (fromVoice) voiceAskRef.current = true;
       void speakReply(data.spoken || reply, { force: fromVoice });
-    } catch {
+    } catch (err) {
       // Guided fallback without duplicating the user bubble already appended
       const matchedNode = matchFreeTextToFlow(text, lang);
       if (matchedNode) {
@@ -457,10 +457,27 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         if (result.action) runGuidedAction(result.action);
       } else {
         const menu = resolveFlowReply('main_menu', lang, nameRef.current);
-        const tip =
+        const code = err?.data?.code || err?.code || '';
+        let tip =
           lang === 'ar'
             ? 'الشات الذكي غير متاح الآن — استخدم الأزرار أو أعد المحاولة.'
             : 'Smart chat is offline right now — use the buttons or try again.';
+        if (code === 'missing_key') {
+          tip =
+            lang === 'ar'
+              ? 'الشات الذكي يحتاج GEMINI_API_KEY في ملف .env.local ثم أعد تشغيل npm run dev.'
+              : 'Smart chat needs GEMINI_API_KEY in .env.local — then restart npm run dev.';
+        } else if (code === 'quota') {
+          tip =
+            lang === 'ar'
+              ? 'تم تجاوز حد Gemini مؤقتاً — جرّب بعد قليل أو غيّر GEMINI_MODEL إلى gemini-flash-latest.'
+              : 'Gemini quota hit — wait a bit, or set GEMINI_MODEL=gemini-flash-latest and restart.';
+        } else if (code === 'invalid_key') {
+          tip =
+            lang === 'ar'
+              ? 'مفتاح Gemini غير صالح — حدّث GEMINI_API_KEY في .env.local وأعد التشغيل.'
+              : 'Gemini API key looks invalid — update GEMINI_API_KEY in .env.local and restart.';
+        }
         setMessages((prev) => {
           const next = [...prev, stamp('gogo', tip), stamp('gogo', menu.reply)];
           persistChat(next, lang, nameRef.current);
