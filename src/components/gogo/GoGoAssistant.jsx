@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Minus, Send, X } from 'lucide-react';
+import { Loader2, MessageCircle, Mic, MicOff, Minus, Send, Volume2, VolumeX, X } from 'lucide-react';
 import {
   GOGO_BUBBLE,
   GOGO_CHIP_LABELS,
@@ -14,6 +14,15 @@ import {
   getFlowNode,
 } from '../../lib/gogoGuideFlow';
 import { isGoGoDeniedMessage } from '../../lib/gogoKnowledge';
+import { GOGO_SMART_CHIPS } from '../../lib/gogoGeminiContext';
+import {
+  createGoGoRecognizer,
+  getGoGoVoiceMuted,
+  isSpeechRecognitionSupported,
+  setGoGoVoiceMuted,
+  speakGoGoText,
+  stopGoGoSpeech,
+} from '../../lib/gogoVoice';
 import {
   getOrCreateGoGoVisitorId,
   loadGoGoChatLocal,
@@ -50,8 +59,37 @@ function stamp(role, text, extra = {}) {
   return { role, text, at: new Date().toISOString(), ...extra };
 }
 
+async function askGoGoGemini({ message, lang, visitorName, history, visitorId }) {
+  const res = await fetch('/api/gogo/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      lang,
+      visitorName,
+      visitorId,
+      history: history
+        .filter((m) => m.role === 'user' || m.role === 'gogo')
+        .slice(-10)
+        .map((m) => ({
+          role: m.role === 'user' ? 'user' : 'gogo',
+          text: m.text,
+        })),
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || 'Gemini unavailable');
+    err.fallback = !!data?.fallback || res.status === 503;
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
 /**
- * Click-to-chat guided assistant: greeting bubble → name → fixed menu tree.
+ * Click-to-chat guided + Gemini smart chat with voice I/O.
  */
 export default function GoGoAssistant({ onNavigate, currentView = '', hidden = false }) {
   const [lang, setLang] = useState('en');
@@ -69,10 +107,17 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const [spotlight, setSpotlight] = useState(null);
   const [visitorId, setVisitorId] = useState('');
   const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [micSupported, setMicSupported] = useState(false);
   const listRef = useRef(null);
   const guideTimersRef = useRef([]);
   const pendingGuideRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const recognizerRef = useRef(null);
+  const voiceAskRef = useRef(false);
   const messagesRef = useRef(messages);
   const langRef = useRef(lang);
   const nameRef = useRef('');
@@ -105,12 +150,32 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     }, 450);
   }, [visitorId]);
 
+  const speakReply = useCallback(async (text, { force = false } = {}) => {
+    if (!force && voiceMuted && !voiceAskRef.current) return;
+    const muted = force ? false : voiceMuted && !voiceAskRef.current;
+    await speakGoGoText(text, {
+      lang: langRef.current,
+      muted,
+      onStart: () => {
+        setSpeaking(true);
+        setPose('wave');
+      },
+      onEnd: () => {
+        setSpeaking(false);
+        setPose('idle');
+        voiceAskRef.current = false;
+      },
+    });
+  }, [voiceMuted]);
+
   useEffect(() => {
     if (hidden) return undefined;
     let cancelled = false;
     const id = getOrCreateGoGoVisitorId();
     if (cancelled) return undefined;
     setVisitorId(id);
+    setMicSupported(isSpeechRecognitionSupported());
+    setVoiceMuted(getGoGoVoiceMuted());
 
     try {
       const savedLang = sessionStorage.getItem(STORAGE_LANG);
@@ -150,7 +215,6 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     };
   }, [hidden]);
 
-  // Entrance: wave + greeting bubble only — do NOT open chat
   useEffect(() => {
     if (hidden || !ready) return undefined;
     const t1 = setTimeout(() => setEntered(true), 80);
@@ -169,11 +233,13 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, open]);
+  }, [messages, open, busy]);
 
   useEffect(() => () => {
     clearGuideTimers();
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    recognizerRef.current?.abort?.();
+    stopGoGoSpeech();
   }, []);
 
   const placeSpotlightOnTarget = useCallback((targetKey, pointText) => {
@@ -237,13 +303,14 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
   const poseClass = useMemo(() => {
     if (!entered) return 'gogo-pose-offstage';
+    if (listening) return 'gogo-pose-think';
     if (pose === 'walk') return 'gogo-pose-walk-in';
     if (pose === 'walkto') return 'gogo-pose-walk-to';
     if (pose === 'wave') return 'gogo-pose-wave';
     if (pose === 'point') return 'gogo-pose-point';
     if (pose === 'think') return 'gogo-pose-think';
     return 'gogo-pose-idle';
-  }, [entered, pose]);
+  }, [entered, pose, listening]);
 
   const persistLang = (next) => {
     setLang(next);
@@ -288,8 +355,9 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         return next;
       });
       setPose('point');
+      void speakReply(lines.point);
     }, 1600);
-  }, [onNavigate, persistChat]);
+  }, [onNavigate, persistChat, speakReply]);
 
   const appendFlow = (nodeId, userLabel) => {
     const L = langRef.current;
@@ -307,7 +375,100 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     setChips(result.chips || []);
     setPose('think');
     schedule(() => setPose('idle'), 700);
+    void speakReply(result.reply);
     if (result.action) runGuidedAction(result.action);
+  };
+
+  const sendSmartMessage = async (text, { fromVoice = false } = {}) => {
+    if (!text || busy) return;
+    if (phase === 'ask_name' || !nameRef.current) {
+      acceptName(text);
+      return;
+    }
+
+    if (isGoGoDeniedMessage(text)) {
+      const denied = resolveFlowReply('denied', lang);
+      setMessages((prev) => {
+        const next = [...prev, stamp('user', text), stamp('gogo', denied.reply, { denied: true })];
+        persistChat(next, lang, nameRef.current);
+        return next;
+      });
+      setChips(denied.chips);
+      void speakReply(denied.reply, { force: fromVoice });
+      return;
+    }
+
+    // Structured chip keywords still use guided tree first
+    const matched = matchFreeTextToFlow(text, lang);
+    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_)/.test(matched)) {
+      // Prefer guided path for clear menu topics; Gemini for open questions
+      const looksOpen =
+        text.split(/\s+/).length > 8 ||
+        /why|how come|explain|compare|difference|ليه|ازاي|اشرح|فرق/i.test(text);
+      if (!looksOpen) {
+        appendFlow(matched, text);
+        return;
+      }
+    }
+
+    setBusy(true);
+    setPose('think');
+    const historySnapshot = messagesRef.current;
+    setMessages((prev) => {
+      const next = [...prev, stamp('user', text)];
+      persistChat(next, lang, nameRef.current);
+      return next;
+    });
+
+    try {
+      const data = await askGoGoGemini({
+        message: text,
+        lang,
+        visitorName: nameRef.current,
+        history: historySnapshot,
+        visitorId,
+      });
+      const reply = String(data.reply || '').trim();
+      setMessages((prev) => {
+        const next = [...prev, stamp('gogo', reply, { denied: !!data.denied, source: data.source })];
+        persistChat(next, lang, nameRef.current);
+        return next;
+      });
+      setChips(Array.isArray(data.chips) && data.chips.length ? data.chips : GOGO_SMART_CHIPS);
+      setPose('idle');
+      if (fromVoice) voiceAskRef.current = true;
+      void speakReply(data.spoken || reply, { force: fromVoice });
+    } catch {
+      // Guided fallback without duplicating the user bubble already appended
+      const matchedNode = matchFreeTextToFlow(text, lang);
+      if (matchedNode) {
+        const result = resolveFlowReply(matchedNode, lang, nameRef.current);
+        setMessages((prev) => {
+          const next = [...prev, stamp('gogo', result.reply)];
+          persistChat(next, lang, nameRef.current);
+          return next;
+        });
+        setChips(result.chips || GOGO_SMART_CHIPS);
+        void speakReply(result.reply, { force: fromVoice });
+        if (result.action) runGuidedAction(result.action);
+      } else {
+        const menu = resolveFlowReply('main_menu', lang, nameRef.current);
+        const tip =
+          lang === 'ar'
+            ? 'الشات الذكي غير متاح الآن — استخدم الأزرار أو أعد المحاولة.'
+            : 'Smart chat is offline right now — use the buttons or try again.';
+        setMessages((prev) => {
+          const next = [...prev, stamp('gogo', tip), stamp('gogo', menu.reply)];
+          persistChat(next, lang, nameRef.current);
+          return next;
+        });
+        setChips(menu.chips);
+        void speakReply(tip, { force: fromVoice });
+      }
+      setPose('idle');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const startChatSession = () => {
@@ -327,6 +488,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         setMessages(next);
         setChips(menu.chips);
         persistChat(next, langRef.current, name);
+        void speakReply(menu.reply);
       } else {
         const menu = resolveFlowReply('main_menu', langRef.current, name);
         setChips(menu.chips);
@@ -340,6 +502,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     setMessages(next);
     setChips(ask.chips);
     persistChat(next, langRef.current, '');
+    void speakReply(ask.reply);
   };
 
   const acceptName = (rawName) => {
@@ -351,6 +514,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         return next;
       });
       setChips(bad.chips);
+      void speakReply(bad.reply);
       return;
     }
     const name = normalizeGoGoName(rawName);
@@ -367,9 +531,11 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     setChips(menu.chips);
     setPose('wave');
     schedule(() => setPose('idle'), 1200);
+    void speakReply(menu.reply);
   };
 
   const handleChip = (id) => {
+    if (busy) return;
     if (id === 'lang_toggle') {
       const nextLang = lang === 'en' ? 'ar' : 'en';
       persistLang(nextLang);
@@ -381,6 +547,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           return next;
         });
         setChips(ask.chips);
+        void speakReply(ask.reply);
         return;
       }
       const menu = resolveFlowReply('main_menu', nextLang, nameRef.current);
@@ -394,6 +561,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         return next;
       });
       setChips(menu.chips);
+      void speakReply(menu.reply);
       return;
     }
 
@@ -405,6 +573,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         return next;
       });
       setChips(need.chips);
+      void speakReply(need.reply);
       return;
     }
 
@@ -415,54 +584,63 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
     if (getFlowNode(id)) {
       appendFlow(id, labels[id] || id);
-      return;
     }
   };
 
   const handleSend = (e) => {
     e?.preventDefault?.();
     const text = input.trim();
-    if (!text) return;
+    if (!text || busy) return;
     setInput('');
+    void sendSmartMessage(text);
+  };
 
-    if (phase === 'ask_name' || !nameRef.current) {
-      acceptName(text);
+  const toggleMute = () => {
+    const next = !voiceMuted;
+    setVoiceMuted(next);
+    setGoGoVoiceMuted(next);
+    if (next) stopGoGoSpeech();
+  };
+
+  const toggleMic = () => {
+    if (!micSupported || busy) return;
+    if (listening) {
+      recognizerRef.current?.stop?.();
+      setListening(false);
       return;
     }
 
-    if (isGoGoDeniedMessage(text)) {
-      const denied = resolveFlowReply('denied', lang);
-      setMessages((prev) => {
-        const next = [...prev, stamp('user', text), stamp('gogo', denied.reply, { denied: true })];
-        persistChat(next, lang, nameRef.current);
-        return next;
-      });
-      setChips(denied.chips);
-      return;
-    }
+    stopGoGoSpeech();
+    setSpeaking(false);
+    voiceAskRef.current = true;
 
-    const matched = matchFreeTextToFlow(text, lang);
-    if (!matched) {
-      const menu = resolveFlowReply('main_menu', lang, nameRef.current);
-      setMessages((prev) => {
-        const next = [
-          ...prev,
-          stamp('user', text),
-          stamp(
-            'gogo',
-            lang === 'ar'
-              ? `تمام يا ${nameRef.current}. اختَر من الأزرار عشان نشرح بترتيب واضح 👇`
-              : `Got it, ${nameRef.current}. Pick a button below for a clear step-by-step answer 👇`,
-          ),
-          stamp('gogo', menu.reply),
-        ];
-        persistChat(next, lang, nameRef.current);
-        return next;
-      });
-      setChips(menu.chips);
-      return;
-    }
-    appendFlow(matched, text);
+    const rec = createGoGoRecognizer({
+      lang,
+      onStart: () => {
+        setListening(true);
+        setPose('think');
+      },
+      onResult: ({ interim, final }) => {
+        if (interim) setInput(interim);
+        if (final) {
+          setInput(final);
+          setListening(false);
+          recognizerRef.current?.stop?.();
+          setInput('');
+          void sendSmartMessage(final, { fromVoice: true });
+        }
+      },
+      onError: () => {
+        setListening(false);
+        setPose('idle');
+      },
+      onEnd: () => {
+        setListening(false);
+        setPose((p) => (p === 'think' ? 'idle' : p));
+      },
+    });
+    recognizerRef.current = rec;
+    rec?.start?.();
   };
 
   if (hidden) return null;
@@ -472,9 +650,17 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       ? rtl
         ? 'اكتب اسمك هنا…'
         : 'Type your name…'
-      : rtl
-        ? 'أو اكتب سؤالك…'
-        : 'Or type a question…';
+      : listening
+        ? rtl
+          ? 'بسمعك…'
+          : 'Listening…'
+        : busy
+          ? rtl
+            ? 'GoGo بيفكر…'
+            : 'GoGo is thinking…'
+          : rtl
+            ? 'اسأل GoGo أو استخدم الميكروفون…'
+            : 'Ask GoGo or use the mic…';
 
   return (
     <>
@@ -516,20 +702,41 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-widest text-white truncate">GoGo</p>
                 <p className="text-[9px] text-zinc-500 font-bold truncate">
-                  {phase === 'ask_name'
+                  {listening
                     ? rtl
-                      ? 'اكتب اسمك للبدء'
-                      : 'Enter your name to start'
-                    : visitorName
+                      ? 'بيسمعك…'
+                      : 'Listening…'
+                    : speaking
                       ? rtl
-                        ? `مرحباً ${visitorName}`
-                        : `Hi, ${visitorName}`
-                      : rtl
-                        ? 'مرشد SCORA'
-                        : 'SCORA guide'}
+                        ? 'بيتكلم…'
+                        : 'Speaking…'
+                      : busy
+                        ? rtl
+                          ? 'بيفكر…'
+                          : 'Thinking…'
+                        : phase === 'ask_name'
+                          ? rtl
+                            ? 'اكتب اسمك للبدء'
+                            : 'Enter your name to start'
+                          : visitorName
+                            ? rtl
+                              ? `مرحباً ${visitorName}`
+                              : `Hi, ${visitorName}`
+                            : rtl
+                              ? 'مرشد SCORA'
+                              : 'SCORA guide'}
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5"
+                  aria-label={voiceMuted ? 'Unmute voice' : 'Mute voice'}
+                  title={voiceMuted ? 'Unmute' : 'Mute'}
+                >
+                  {voiceMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => handleChip('lang_toggle')}
@@ -541,6 +748,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   type="button"
                   onClick={() => {
                     dismissGuide();
+                    recognizerRef.current?.abort?.();
+                    stopGoGoSpeech();
                     setOpen(false);
                     setShowBubble(true);
                   }}
@@ -553,6 +762,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   type="button"
                   onClick={() => {
                     dismissGuide();
+                    recognizerRef.current?.abort?.();
+                    stopGoGoSpeech();
                     setOpen(false);
                     setShowBubble(true);
                   }}
@@ -581,6 +792,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   {m.text}
                 </div>
               ))}
+              {busy && (
+                <div className="flex items-center gap-2 text-[11px] text-zinc-500 mr-4 px-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  {rtl ? 'GoGo بيفكر…' : 'GoGo is thinking…'}
+                </div>
+              )}
             </div>
 
             {chips.length > 0 && (
@@ -589,8 +806,9 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   <button
                     key={id}
                     type="button"
+                    disabled={busy}
                     onClick={() => handleChip(id)}
-                    className={`px-2.5 py-1.5 rounded-full text-[9px] font-black tracking-wide border transition-all ${
+                    className={`px-2.5 py-1.5 rounded-full text-[9px] font-black tracking-wide border transition-all disabled:opacity-50 ${
                       id === 'main_menu'
                         ? 'border-white/20 bg-zinc-800 text-zinc-200'
                         : 'border-blue-500/25 bg-blue-600/15 text-blue-100 hover:border-blue-400/50 hover:bg-blue-600/25'
@@ -603,16 +821,34 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             )}
 
             <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 border-t border-white/5">
+              {micSupported && (
+                <button
+                  type="button"
+                  onClick={toggleMic}
+                  disabled={busy && !listening}
+                  className={`p-2 rounded-xl border transition-all ${
+                    listening
+                      ? 'bg-red-500/25 border-red-400/40 text-red-200 gogo-mic-pulse'
+                      : 'bg-zinc-900 border-white/10 text-zinc-300 hover:border-blue-500/40 hover:text-blue-200'
+                  }`}
+                  aria-label={listening ? 'Stop listening' : 'Start voice'}
+                  title={listening ? 'Stop' : 'Voice'}
+                >
+                  {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+              )}
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={placeholder}
-                className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-white outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+                disabled={busy}
+                className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-white outline-none focus:border-blue-500/50 placeholder:text-zinc-600 disabled:opacity-60"
                 autoFocus={open}
               />
               <button
                 type="submit"
-                className="p-2 rounded-xl bg-blue-600/30 border border-blue-500/30 text-blue-200 hover:bg-blue-600/45 transition-all"
+                disabled={busy || !input.trim()}
+                className="p-2 rounded-xl bg-blue-600/30 border border-blue-500/30 text-blue-200 hover:bg-blue-600/45 transition-all disabled:opacity-50"
                 aria-label="Send"
               >
                 <Send className="w-4 h-4" />
@@ -636,6 +872,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             type="button"
             onClick={() => {
               if (open) {
+                recognizerRef.current?.abort?.();
+                stopGoGoSpeech();
                 setOpen(false);
                 setShowBubble(true);
               } else {
@@ -645,7 +883,13 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             className="relative group focus:outline-none"
             aria-label="Open GoGo chat"
           >
-            <span className="absolute -inset-2 rounded-full bg-blue-500/20 blur-xl opacity-60 group-hover:opacity-90 transition-opacity" />
+            <span
+              className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
+                listening || speaking
+                  ? 'bg-blue-400/40 opacity-100 gogo-mic-pulse'
+                  : 'bg-blue-500/20 opacity-60 group-hover:opacity-90'
+              }`}
+            />
             <img
               src={SPRITE}
               alt="GoGo"
@@ -655,6 +899,11 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             {!open && (
               <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 border border-blue-300/40 text-white shadow-lg">
                 <MessageCircle className="w-3.5 h-3.5" />
+              </span>
+            )}
+            {listening && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-red-500 text-[8px] font-black text-white uppercase tracking-wider">
+                Mic
               </span>
             )}
           </button>
