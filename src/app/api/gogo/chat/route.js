@@ -126,7 +126,7 @@ export async function POST(request) {
     );
   }
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
   const system = buildGoGoSystemPrompt({ lang, visitorName });
 
   try {
