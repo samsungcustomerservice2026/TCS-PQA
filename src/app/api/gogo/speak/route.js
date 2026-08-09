@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic';
 
 const MAX_TEXT = 500;
 
-/** Stable adult-male Gemini voices (EN default Charon). */
+/** Stable adult-male Gemini voices (~30). Achird = friendly younger male for Arabic. */
 const DEFAULT_VOICE_EN = process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || 'Charon';
-const DEFAULT_VOICE_AR = process.env.GEMINI_TTS_VOICE_AR || process.env.GEMINI_TTS_VOICE || 'Orus';
+const DEFAULT_VOICE_AR = process.env.GEMINI_TTS_VOICE_AR || 'Achird';
 const DEFAULT_TTS_MODELS = [
   process.env.GEMINI_TTS_MODEL,
   'gemini-2.5-flash-preview-tts',
@@ -63,11 +63,12 @@ function buildSpeakPrompt(text, lang) {
       'Do not read the director notes out loud.',
       '',
       '# DIRECTOR NOTES',
-      'Character: GoGo — friendly adult Egyptian Arabic male guide, about 30 years old.',
-      'Language: Natural Egyptian Arabic (عامية مصرية), clear and warm.',
-      'Style: Calm, confident, helpful Samsung SCORA visitor guide.',
-      'Pacing: Natural conversational pace — not robotic, not rushed.',
-      'Tone: Warm smile in the voice, professional but friendly.',
+      'Character: GoGo — young adult Egyptian man, exactly 28–32 years old (NOT elderly, NOT 50+, NOT deep old-man gravel).',
+      'Language: Natural modern Egyptian Arabic (عامية مصرية شبابية), clear Cairo-style.',
+      'Voice quality: Fresh, friendly young-adult male — medium pitch, smooth, energetic but calm.',
+      'Avoid: old uncle/grandpa tone, heavy throaty bass, slow elderly pacing, robotic flatness.',
+      'Style: Helpful Samsung SCORA visitor guide — warm smile, confident, approachable.',
+      'Pacing: Natural conversational young-adult pace.',
       '',
       '# TRANSCRIPT',
       text,

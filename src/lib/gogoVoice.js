@@ -1,9 +1,10 @@
 /**
  * GoGo STT + TTS helpers.
  *
- * Stable adult-male casting:
+ * Stable adult-male casting (~30):
  * - English → Gemini Charon (native US male), browser male fallback
- * - Arabic → native browser Arabic male first (Hamed / Neural), Gemini fallback
+ * - Arabic → Gemini Achird (friendly young adult male), browser fallback
+ *   (Windows “Hamed” is intentionally avoided — sounds elderly)
  *
  * Chosen browser voices are pinned in localStorage so the same “guy” stays stable.
  * Chrome / Edge recommended. Graceful no-ops when unsupported.
@@ -11,8 +12,8 @@
 
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
 const PINNED_VOICE_KEY = {
-  en: 'gogo_pinned_voice_en',
-  ar: 'gogo_pinned_voice_ar',
+  en: 'gogo_pinned_voice_en_v2',
+  ar: 'gogo_pinned_voice_ar_v2',
 };
 
 /** Incremented on every stop/cancel so in-flight speak loops abort. */
@@ -228,9 +229,11 @@ function scoreMaleVoice(voice, lang) {
 
   let score = 0;
   const maleHints =
-    /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|hamed|naayf|maged|farid/;
+    /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|maged|farid/;
   const femaleHints =
     /female|woman|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine|hoda|laila/;
+  // Windows Hamed / Naayf often read as elderly — hard-pass for GoGo's ~30 cast
+  const elderlyArabicHints = /hamed|naayf|naayef|نصيف|حامد/;
 
   if (maleHints.test(name)) score += 80;
   if (femaleHints.test(name)) score -= 90;
@@ -241,17 +244,15 @@ function scoreMaleVoice(voice, lang) {
     if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 25;
   } else {
-    // Prefer the natural Arabic male voices Windows/Edge usually ships
-    if (/microsoft.*(hamed|naayf)|google.*(arabic|مصر|egypt).*male|hamed|naayf|maged|farid/.test(name)) {
-      score += 70;
-    }
+    if (elderlyArabicHints.test(name)) score -= 120;
+    if (/google.*(arabic|مصر|egypt).*male|maged|farid/.test(name)) score += 55;
     if (vLang.includes('eg') || /egypt|مصر/.test(name)) score += 35;
-    else if (vLang.includes('sa') || vLang.includes('xa')) score += 15;
-    if (/natural|neural|online|premium/.test(name)) score += 30;
-    if (/male/.test(name)) score += 20;
+    else if (vLang.includes('sa') || vLang.includes('xa')) score += 10;
+    if (/natural|neural|online|premium/.test(name)) score += 40;
+    if (/male/.test(name) && !elderlyArabicHints.test(name)) score += 20;
   }
 
-  if (/compact|espeak|robot|novelty|whisper|child|kids/.test(name)) score -= 60;
+  if (/compact|espeak|robot|novelty|whisper|child|kids|senior|old/.test(name)) score -= 60;
   return score;
 }
 
@@ -432,8 +433,9 @@ async function speakWithBrowser(clean, lang, generation, onStart, { requireGoodA
   const voice = pickAdultMaleVoice(lang, { requireGoodArabic });
   if (requireGoodArabic && !voice) return false;
 
-  const rate = lang === 'ar' ? 0.95 : 0.96;
-  const pitch = lang === 'ar' ? 0.95 : 0.9;
+  // Slightly brighter Arabic pitch if we must fall back to browser TTS
+  const rate = lang === 'ar' ? 1.02 : 0.96;
+  const pitch = lang === 'ar' ? 1.08 : 0.9;
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
@@ -498,35 +500,8 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
     onStart?.();
   };
 
-  // Arabic: restore the natural local Arabic male first (was better than Gemini).
-  // English: keep Gemini Charon as the stable US male guide.
-  if (L === 'ar') {
-    await waitForVoices();
-    if (generation !== speechGeneration) {
-      onEnd?.();
-      return;
-    }
-    if (hasGoodArabicBrowserVoice()) {
-      const ok = await speakWithBrowser(clean, L, generation, markStart, { requireGoodArabic: true });
-      if (ok) {
-        onEnd?.();
-        return;
-      }
-    }
-    try {
-      const ok = await speakWithGemini(clean, L, generation, markStart);
-      if (ok) {
-        onEnd?.();
-        return;
-      }
-    } catch {
-      // fall through
-    }
-    await speakWithBrowser(clean, L, generation, markStart);
-    onEnd?.();
-    return;
-  }
-
+  // Both languages: Gemini young-adult male first (EN Charon, AR Achird).
+  // Browser is fallback only — and Arabic avoids elderly Windows Hamed.
   try {
     const ok = await speakWithGemini(clean, L, generation, markStart);
     if (ok) {
