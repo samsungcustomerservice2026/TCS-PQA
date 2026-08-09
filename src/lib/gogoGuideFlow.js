@@ -62,22 +62,21 @@ export const GOGO_CHIP_LABELS = {
   },
 };
 
-const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'];
+const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
 
 /** @type {Record<string, { replies: Record<GoGoLang, string>, chips: string[], action?: string }>} */
 export const GOGO_FLOW = {
   ask_name: {
     replies: {
-      en: "Welcome! I'm GoGo, your SCORA guide.\n\nPlease type your name to start (required).",
-      ar: 'أهلاً! أنا GoGo مرشدك في SCORA.\n\nمن فضلك اكتب اسمك للبدء (مطلوب).',
+      en: "Hi! I'm GoGo, your SCORA guide.\n\nWhat's your name?",
+      ar: 'أهلاً! أنا GoGo مرشدك في SCORA.\n\nاسمك إيه؟',
     },
-    chips: ['lang_toggle'],
+    chips: [],
   },
   main_menu: {
     replies: {
-      en: (name) =>
-        `Nice to meet you, ${name}! 👋\n\nHow can I help you today? Pick a topic:`,
-      ar: (name) => `تشرفنا يا ${name}! 👋\n\nأقدر أساعدك إزاي النهاردة؟ اختَر موضوع:`,
+      en: (name) => `Nice to meet you, ${name}!\n\nWhat would you like to know?`,
+      ar: (name) => `تشرفنا يا ${name}!\n\nتحب تعرف عن إيه؟`,
     },
     chips: MAIN_CHIPS,
   },
@@ -402,24 +401,24 @@ export const GOGO_FLOW = {
   },
   denied: {
     replies: {
-      en: "I can't help with that. Please use the topic buttons — SCORA, TCS, or PQA.",
-      ar: 'ما أقدر أساعد في هذا. استخدم أزرار المواضيع — SCORA أو TCS أو PQA.',
+      en: "I can only help with SCORA, TCS, and PQA. Try one of the topics below.",
+      ar: 'أقدر أساعد في SCORA وTCS وPQA بس. جرّب موضوع من اللي تحت.',
     },
     chips: MAIN_CHIPS,
   },
   need_name: {
     replies: {
-      en: 'Please type your name first (required) so I can personalize the guide.',
-      ar: 'من فضلك اكتب اسمك أولاً (مطلوب) عشان أخصص الدليل ليك.',
+      en: 'Tell me your name first, then we can start.',
+      ar: 'قولّي اسمك الأول وبعدين نبدأ.',
     },
-    chips: ['lang_toggle'],
+    chips: [],
   },
   name_invalid: {
     replies: {
-      en: 'Please enter a real name (2–40 letters).',
-      ar: 'من فضلك اكتب اسماً صحيحاً (من حرفين إلى 40).',
+      en: 'Hmm, that doesn’t look like a name. Try again?',
+      ar: 'مش باين إنه اسم. تحب تجربه تاني؟',
     },
-    chips: ['lang_toggle'],
+    chips: [],
   },
 };
 

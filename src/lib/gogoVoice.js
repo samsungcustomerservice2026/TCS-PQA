@@ -35,8 +35,23 @@ export function speechLocaleForLang(lang) {
   return lang === 'ar' ? 'ar-EG' : 'en-US';
 }
 
+/** Unlock microphone permission (needed before SpeechRecognition on many browsers). */
+export async function ensureMicrophonePermission() {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return { ok: isSpeechRecognitionSupported(), error: null };
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    return { ok: true, error: null };
+  } catch (err) {
+    const name = err?.name || 'MicError';
+    return { ok: false, error: name };
+  }
+}
+
 /**
- * @returns {{ start: () => void, stop: () => void, supported: boolean } | null}
+ * @returns {{ start: () => void, stop: () => void, abort: () => void, supported: boolean } | null}
  */
 export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, onStart } = {}) {
   if (!isSpeechRecognitionSupported()) return null;
@@ -47,9 +62,33 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
   recognition.continuous = false;
   recognition.maxAlternatives = 1;
 
-  recognition.onstart = () => onStart?.();
-  recognition.onerror = (ev) => onError?.(ev?.error || 'speech_error');
-  recognition.onend = () => onEnd?.();
+  let lastInterim = '';
+  let gotFinal = false;
+  let started = false;
+
+  recognition.onstart = () => {
+    started = true;
+    gotFinal = false;
+    lastInterim = '';
+    onStart?.();
+  };
+
+  recognition.onerror = (ev) => {
+    const code = ev?.error || 'speech_error';
+    // Ignore benign abort/no-speech if we already have text
+    if (code === 'aborted') return;
+    onError?.(code);
+  };
+
+  recognition.onend = () => {
+    // Chrome often ends without isFinal — use last interim
+    if (!gotFinal && lastInterim) {
+      onResult?.({ interim: '', final: lastInterim });
+    }
+    onEnd?.({ gotFinal, lastInterim });
+    started = false;
+  };
+
   recognition.onresult = (event) => {
     let interim = '';
     let finalText = '';
@@ -58,10 +97,14 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
       if (event.results[i].isFinal) finalText += piece;
       else interim += piece;
     }
-    onResult?.({
-      interim: interim.trim(),
-      final: finalText.trim(),
-    });
+    if (interim.trim()) lastInterim = interim.trim();
+    if (finalText.trim()) {
+      gotFinal = true;
+      lastInterim = finalText.trim();
+      onResult?.({ interim: '', final: finalText.trim() });
+    } else if (interim.trim()) {
+      onResult?.({ interim: interim.trim(), final: '' });
+    }
   };
 
   return {
@@ -69,7 +112,17 @@ export function createGoGoRecognizer({ lang = 'en', onResult, onError, onEnd, on
     start() {
       try {
         recognition.lang = speechLocaleForLang(lang);
-        recognition.start();
+        if (started) {
+          try { recognition.stop(); } catch { /* ignore */ }
+        }
+        // Tiny delay helps after stop/cancel TTS
+        setTimeout(() => {
+          try {
+            recognition.start();
+          } catch (err) {
+            onError?.(err?.message || 'start_failed');
+          }
+        }, 80);
       } catch (err) {
         onError?.(err?.message || 'start_failed');
       }
@@ -94,56 +147,156 @@ export function stopGoGoSpeech() {
   } catch { /* ignore */ }
 }
 
+function scoreVoice(voice, lang) {
+  const name = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
+  const vLang = (voice.lang || '').toLowerCase();
+  const want = lang === 'ar' ? 'ar' : 'en';
+  if (!vLang.startsWith(want)) return -100;
+
+  let score = 10;
+  // Prefer natural neural / online Google / Microsoft natural voices
+  if (/natural|neural|premium|enhanced|online/.test(name)) score += 40;
+  if (/google/.test(name)) score += 35;
+  if (/microsoft/.test(name) && /aria|jenny|guy|ryan|sonia|sara|salma|naayf/.test(name)) score += 32;
+  if (/samantha|karen|moira|daniel|aaron|fred|tessa|fiona/.test(name)) score += 28;
+  if (lang === 'ar' && /egypt|arabic/.test(name)) score += 20;
+  if (vLang === speechLocaleForLang(lang).toLowerCase()) score += 15;
+  if (/compact|espeak|robot|novelty/.test(name)) score -= 50;
+  // Slight preference for warmer-sounding names
+  if (/female|aria|jenny|samantha|sonia|sara/.test(name)) score += 6;
+  return score;
+}
+
+function pickFriendlyVoice(lang) {
+  try {
+    const voices = window.speechSynthesis.getVoices?.() || [];
+    if (!voices.length) return null;
+    let best = null;
+    let bestScore = -999;
+    voices.forEach((v) => {
+      const s = scoreVoice(v, lang);
+      if (s > bestScore) {
+        bestScore = s;
+        best = v;
+      }
+    });
+    return bestScore > 0 ? best : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Clean reply text for spoken delivery (friendly, not literal UI copy). */
+export function textForSpeech(text, lang = 'en') {
+  let s = String(text || '');
+  s = s
+    .replace(/[👋👇💭👉✨🎯📌✅❌•·]/gu, ' ')
+    .replace(/\*\*|__/g, '')
+    .replace(/`+/g, '')
+    .replace(/\([^)]{0,40}\)/g, ' ') // drop short parentheticals like (required)
+    .replace(/\[[^\]]{0,40}\]/g, ' ')
+    .replace(/[←→➡︎⟶]/g, ', ')
+    .replace(/\n+/g, '. ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .replace(/([.!?])\1+/g, '$1')
+    .trim();
+
+  // Keep spoken replies short and conversational
+  if (s.length > 320) {
+    const cut = s.slice(0, 320);
+    const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('؟'));
+    s = (lastStop > 80 ? cut.slice(0, lastStop + 1) : cut).trim();
+  }
+
+  if (!s && lang === 'ar') s = 'تمام';
+  if (!s) s = 'Okay';
+  return s;
+}
+
+function waitForVoices(timeoutMs = 800) {
+  return new Promise((resolve) => {
+    if (!isSpeechSynthesisSupported()) {
+      resolve([]);
+      return;
+    }
+    const existing = window.speechSynthesis.getVoices?.() || [];
+    if (existing.length) {
+      resolve(existing);
+      return;
+    }
+    const done = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      resolve(window.speechSynthesis.getVoices?.() || []);
+    };
+    window.speechSynthesis.onvoiceschanged = done;
+    setTimeout(done, timeoutMs);
+  });
+}
+
 /**
- * Speak GoGo reply. Picks a matching voice when available.
+ * Speak GoGo reply with a warmer pacing / preferred natural voice.
  * @returns {Promise<void>}
  */
-export function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
-  return new Promise((resolve) => {
-    if (muted || !isSpeechSynthesisSupported()) {
-      resolve();
-      return;
+export async function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
+  if (muted || !isSpeechSynthesisSupported()) {
+    onEnd?.();
+    return;
+  }
+
+  const clean = textForSpeech(text, lang);
+  if (!clean) {
+    onEnd?.();
+    return;
+  }
+
+  await waitForVoices();
+  stopGoGoSpeech();
+
+  // Split into short chunks so speech sounds more natural
+  const parts = clean
+    .split(/(?<=[.!?؟])\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const chunks = parts.length ? parts : [clean];
+  const voice = pickFriendlyVoice(lang);
+  let started = false;
+
+  for (let i = 0; i < chunks.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => {
+      const utter = new window.SpeechSynthesisUtterance(chunks[i]);
+      utter.lang = speechLocaleForLang(lang);
+      // Slightly slower + warmer than default robot voice
+      utter.rate = lang === 'ar' ? 0.92 : 0.94;
+      utter.pitch = 1.05;
+      utter.volume = 1;
+      if (voice) utter.voice = voice;
+
+      utter.onstart = () => {
+        if (!started) {
+          started = true;
+          onStart?.();
+        }
+      };
+      utter.onend = () => resolve();
+      utter.onerror = () => resolve();
+
+      try {
+        window.speechSynthesis.speak(utter);
+      } catch {
+        resolve();
+      }
+    });
+
+    // Tiny pause between sentences
+    if (i < chunks.length - 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 120));
     }
-    const clean = String(text || '')
-      .replace(/[👋👇💭👉]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 500);
-    if (!clean) {
-      resolve();
-      return;
-    }
+  }
 
-    stopGoGoSpeech();
-    const utter = new window.SpeechSynthesisUtterance(clean);
-    utter.lang = speechLocaleForLang(lang);
-    utter.rate = lang === 'ar' ? 0.95 : 1;
-    utter.pitch = 1;
-
-    try {
-      const voices = window.speechSynthesis.getVoices?.() || [];
-      const locale = speechLocaleForLang(lang).toLowerCase();
-      const match =
-        voices.find((v) => (v.lang || '').toLowerCase() === locale) ||
-        voices.find((v) => (v.lang || '').toLowerCase().startsWith(lang === 'ar' ? 'ar' : 'en'));
-      if (match) utter.voice = match;
-    } catch { /* ignore */ }
-
-    utter.onstart = () => onStart?.();
-    utter.onend = () => {
-      onEnd?.();
-      resolve();
-    };
-    utter.onerror = () => {
-      onEnd?.();
-      resolve();
-    };
-
-    // Chrome sometimes needs getVoices warm-up
-    try {
-      window.speechSynthesis.getVoices();
-    } catch { /* ignore */ }
-
-    window.speechSynthesis.speak(utter);
-  });
+  onEnd?.();
 }

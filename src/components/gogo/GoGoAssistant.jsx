@@ -17,6 +17,7 @@ import { isGoGoDeniedMessage } from '../../lib/gogoKnowledge';
 import { GOGO_SMART_CHIPS } from '../../lib/gogoGeminiContext';
 import {
   createGoGoRecognizer,
+  ensureMicrophonePermission,
   getGoGoVoiceMuted,
   isSpeechRecognitionSupported,
   setGoGoVoiceMuted,
@@ -112,7 +113,9 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const [speaking, setSpeaking] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [micSupported, setMicSupported] = useState(false);
+  const [micHint, setMicHint] = useState('');
   const listRef = useRef(null);
+  const micFinalSentRef = useRef(false);
   const guideTimersRef = useRef([]);
   const pendingGuideRef = useRef(null);
   const saveTimerRef = useRef(null);
@@ -534,36 +537,34 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     void speakReply(menu.reply);
   };
 
-  const handleChip = (id) => {
-    if (busy) return;
-    if (id === 'lang_toggle') {
-      const nextLang = lang === 'en' ? 'ar' : 'en';
-      persistLang(nextLang);
-      if (phase === 'ask_name' || !nameRef.current) {
-        const ask = resolveFlowReply('ask_name', nextLang);
-        setMessages((prev) => {
-          const next = [...prev, stamp('gogo', ask.reply)];
-          persistChat(next, nextLang, '');
-          return next;
-        });
-        setChips(ask.chips);
-        void speakReply(ask.reply);
-        return;
-      }
-      const menu = resolveFlowReply('main_menu', nextLang, nameRef.current);
-      setMessages((prev) => {
-        const next = [
-          ...prev,
-          stamp('user', lang === 'en' ? 'Arabic please' : 'English please'),
-          stamp('gogo', menu.reply),
-        ];
-        persistChat(next, nextLang, nameRef.current);
-        return next;
-      });
-      setChips(menu.chips);
-      void speakReply(menu.reply);
+  const switchLanguage = () => {
+    const nextLang = lang === 'en' ? 'ar' : 'en';
+    persistLang(nextLang);
+    stopGoGoSpeech();
+
+    // Name gate: swap the welcome message — don't stack EN + AR
+    if (phase === 'ask_name' || !nameRef.current) {
+      const ask = resolveFlowReply('ask_name', nextLang);
+      const next = [stamp('gogo', ask.reply)];
+      setMessages(next);
+      setChips([]);
+      persistChat(next, nextLang, '');
+      void speakReply(ask.reply);
       return;
     }
+
+    const menu = resolveFlowReply('main_menu', nextLang, nameRef.current);
+    setMessages((prev) => {
+      const next = [...prev, stamp('gogo', menu.reply)];
+      persistChat(next, nextLang, nameRef.current);
+      return next;
+    });
+    setChips((menu.chips || []).filter((id) => id !== 'lang_toggle'));
+    void speakReply(menu.reply);
+  };
+
+  const handleChip = (id) => {
+    if (busy || id === 'lang_toggle') return;
 
     if (phase === 'ask_name' || !nameRef.current) {
       const need = resolveFlowReply('need_name', lang);
@@ -572,7 +573,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         persistChat(next, lang, '');
         return next;
       });
-      setChips(need.chips);
+      setChips([]);
       void speakReply(need.reply);
       return;
     }
@@ -602,48 +603,83 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     if (next) stopGoGoSpeech();
   };
 
-  const toggleMic = () => {
-    if (!micSupported || busy) return;
+  const toggleMic = async () => {
+    if (busy) return;
+
     if (listening) {
       recognizerRef.current?.stop?.();
       setListening(false);
       return;
     }
 
+    if (!isSpeechRecognitionSupported()) {
+      setMicHint(
+        lang === 'ar'
+          ? 'الميكروفون متاح على Chrome أو Edge.'
+          : 'Voice works best in Chrome or Edge.',
+      );
+      return;
+    }
+
+    setMicHint('');
     stopGoGoSpeech();
     setSpeaking(false);
     voiceAskRef.current = true;
+    micFinalSentRef.current = false;
+
+    const perm = await ensureMicrophonePermission();
+    if (!perm.ok) {
+      setMicHint(
+        lang === 'ar'
+          ? 'اسمح باستخدام الميكروفون من إعدادات المتصفح.'
+          : 'Please allow microphone access in your browser.',
+      );
+      voiceAskRef.current = false;
+      return;
+    }
+
+    setMicSupported(true);
+    recognizerRef.current?.abort?.();
 
     const rec = createGoGoRecognizer({
-      lang,
+      lang: langRef.current,
       onStart: () => {
         setListening(true);
         setPose('think');
+        setMicHint(langRef.current === 'ar' ? 'بسمعك… تكلم دلوقتي' : 'Listening… go ahead');
       },
       onResult: ({ interim, final }) => {
         if (interim) setInput(interim);
-        if (final) {
-          setInput(final);
-          setListening(false);
-          recognizerRef.current?.stop?.();
+        if (final && !micFinalSentRef.current) {
+          micFinalSentRef.current = true;
           setInput('');
+          setListening(false);
+          setMicHint('');
+          recognizerRef.current?.stop?.();
           void sendSmartMessage(final, { fromVoice: true });
         }
       },
-      onError: (err) => {
+      onError: (code) => {
         setListening(false);
         setPose('idle');
-        // Normal, non-actionable outcomes: user was silent or stopped manually.
-        if (err === 'no-speech' || err === 'aborted') return;
+        voiceAskRef.current = false;
+        if (code === 'aborted') return;
+        if (code === 'no-speech') {
+          setMicHint(
+            langRef.current === 'ar' ? 'ما سمعتش حاجة — جرّب تاني.' : "Didn't catch that — try again.",
+          );
+          return;
+        }
         const L = langRef.current;
-        const permissionIssue = err === 'not-allowed' || err === 'service-not-allowed';
+        const permissionIssue = code === 'not-allowed' || code === 'service-not-allowed';
         const msg = permissionIssue
           ? (L === 'ar'
-              ? 'محتاج إذن الميكروفون. فعّل الإذن من المتصفح وجرّب تاني، أو اكتب سؤالك.'
+              ? 'محتاج إذن الميكروفون. فعّله من المتصفح وجرّب تاني، أو اكتب سؤالك.'
               : 'I need microphone permission. Allow mic access in your browser and try again, or type your question.')
           : (L === 'ar'
               ? 'مش قادر أوصل لميكروفون. اتأكد إن فيه مايك متوصّل، أو اكتب سؤالك.'
               : "I couldn't reach a microphone. Check that a mic is connected, or type your question instead.");
+        setMicHint(msg);
         setMessages((prev) => {
           const next = [...prev, stamp('gogo', msg)];
           persistChat(next, L, nameRef.current);
@@ -656,8 +692,18 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         setPose((p) => (p === 'think' ? 'idle' : p));
       },
     });
+
+    if (!rec) {
+      setMicHint(
+        lang === 'ar'
+          ? 'الميكروفون غير مدعوم هنا.'
+          : 'Microphone is not supported here.',
+      );
+      return;
+    }
+
     recognizerRef.current = rec;
-    rec?.start?.();
+    rec.start();
   };
 
   if (hidden) return null;
@@ -721,23 +767,23 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 <p className="text-[9px] text-zinc-500 font-bold truncate">
                   {listening
                     ? rtl
-                      ? 'بيسمعك…'
+                      ? 'بسمعك…'
                       : 'Listening…'
                     : speaking
                       ? rtl
-                        ? 'بيتكلم…'
+                        ? 'بتكلم…'
                         : 'Speaking…'
                       : busy
                         ? rtl
-                          ? 'بيفكر…'
-                          : 'Thinking…'
+                          ? 'بلحظ…'
+                          : 'One moment…'
                         : phase === 'ask_name'
                           ? rtl
-                            ? 'اكتب اسمك للبدء'
-                            : 'Enter your name to start'
+                            ? 'قولّي اسمك'
+                            : "What's your name?"
                           : visitorName
                             ? rtl
-                              ? `مرحباً ${visitorName}`
+                              ? `أهلاً ${visitorName}`
                               : `Hi, ${visitorName}`
                             : rtl
                               ? 'مرشد SCORA'
@@ -756,8 +802,9 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleChip('lang_toggle')}
+                  onClick={switchLanguage}
                   className="px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5"
+                  title={lang === 'en' ? 'العربية' : 'English'}
                 >
                   {lang === 'en' ? 'ع' : 'EN'}
                 </button>
@@ -817,9 +864,11 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               )}
             </div>
 
-            {chips.length > 0 && (
+            {chips.filter((id) => id && id !== 'lang_toggle').length > 0 && (
               <div className="px-3 pb-2 flex flex-wrap gap-1.5">
-                {chips.map((id) => (
+                {chips
+                  .filter((id) => id && id !== 'lang_toggle')
+                  .map((id) => (
                   <button
                     key={id}
                     type="button"
@@ -837,11 +886,11 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               </div>
             )}
 
-            <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 border-t border-white/5">
-              {micSupported && (
+            <form onSubmit={handleSend} className="flex flex-col gap-1.5 px-3 py-3 border-t border-white/5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={toggleMic}
+                  onClick={() => { void toggleMic(); }}
                   disabled={busy && !listening}
                   className={`p-2 rounded-xl border transition-all ${
                     listening
@@ -853,23 +902,26 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 >
                   {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
-              )}
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={placeholder}
-                disabled={busy}
-                className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-white outline-none focus:border-blue-500/50 placeholder:text-zinc-600 disabled:opacity-60"
-                autoFocus={open}
-              />
-              <button
-                type="submit"
-                disabled={busy || !input.trim()}
-                className="p-2 rounded-xl bg-blue-600/30 border border-blue-500/30 text-blue-200 hover:bg-blue-600/45 transition-all disabled:opacity-50"
-                aria-label="Send"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={placeholder}
+                  disabled={busy}
+                  className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-white outline-none focus:border-blue-500/50 placeholder:text-zinc-600 disabled:opacity-60"
+                  autoFocus={open}
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !input.trim()}
+                  className="p-2 rounded-xl bg-blue-600/30 border border-blue-500/30 text-blue-200 hover:bg-blue-600/45 transition-all disabled:opacity-50"
+                  aria-label="Send"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+              {micHint ? (
+                <p className="text-[9px] text-amber-200/90 px-1">{micHint}</p>
+              ) : null}
             </form>
           </div>
         )}

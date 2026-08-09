@@ -11,14 +11,14 @@ const MAX_REPLY = 1200;
 
 function deniedReply(lang) {
   return lang === 'ar'
-    ? 'ما أقدر أساعد في هذا. اسأل عن SCORA أو TCS أو PQA فقط.'
-    : "I can't help with that. Ask about SCORA, TCS, or PQA only.";
+    ? 'أقدر أساعد في SCORA وTCS وPQA بس. تحب نبدأ من هناك؟'
+    : 'I can help with SCORA, TCS, and PQA. Want to start there?';
 }
 
 function needNameReply(lang) {
   return lang === 'ar'
-    ? 'من فضلك اكتب اسمك أولاً قبل الدردشة.'
-    : 'Please enter your name first before chatting.';
+    ? 'قولّي اسمك الأول وبعدين نكمل.'
+    : 'Tell me your name first, then we continue.';
 }
 
 function sanitizeHistory(history) {
