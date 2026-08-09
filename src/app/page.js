@@ -144,6 +144,7 @@ import {
   parseReceptionistWorkbook,
   isEphemeralRegistryId,
 } from '../lib/tcsMxReceptionistExcel';
+import GoGoAssistant from '../components/gogo/GoGoAssistant';
 import {
   FEEDBACK_PRODUCT_OPTIONS,
   validateArabicFeedbackForm,
@@ -5655,6 +5656,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     setShowSurveyShortcut(true);
                     navigateTo('TCS_DIVISION_SELECTION');
                   }}
+                  data-gogo-target="tcs"
                   className="group relative h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -5670,6 +5672,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 {/* PQA Portal (Service Center) */}
                 <button
                   onClick={() => { setPortalRealm('PQA'); navigateTo('PQA_DIVISION_SELECTION'); }}
+                  data-gogo-target="pqa"
                   className="group relative h-[32rem] rounded-[4.5rem] p-8 md:p-12 flex flex-col items-center justify-center gap-6 md:gap-8 overflow-hidden border border-white/10 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-yellow-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -5707,7 +5710,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest max-w-md mx-auto">Choose your TCS division (Mobile Experience, Digital Appliances, AV).</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl px-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl px-4" data-gogo-target="tcs">
                 <button
                   onClick={() => { setPortalRealm('TCS'); setAppMode('TCS_MX'); navigateTo('HOME'); }}
                   className="group relative min-h-[22rem] md:min-h-[28rem] rounded-[4rem] p-10 flex flex-col items-center justify-center gap-8 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
@@ -5775,7 +5778,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                 <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest max-w-md mx-auto">Choose your division cluster.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-5xl px-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-5xl px-4" data-gogo-target="pqa">
                 <button
                   onClick={() => { setPortalRealm('PQA'); setAppMode('PQA_MX'); navigateTo('HOME'); }}
                   className="group relative h-[32rem] rounded-[4.5rem] p-12 flex flex-col items-center justify-center gap-10 overflow-hidden border border-white/5 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 shadow-2xl"
@@ -10074,6 +10077,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             <button
               type="button"
               onClick={openFeedbackForm}
+              data-gogo-target="feedback"
               className="rounded-2xl bg-purple-600/95 px-4 py-3 shadow-[0_0_28px_rgba(147,51,234,0.75)] border border-purple-300/30 transition-all hover:scale-105 hover:bg-purple-500 active:scale-95"
               title="ملاحظات واقتراحات"
             >
@@ -10098,6 +10102,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           </button>
           <button
             onClick={openSurveyForm}
+            data-gogo-target="survey"
             className="rounded-2xl bg-blue-600/95 px-4 py-3 shadow-[0_0_28px_rgba(37,99,235,0.85)] border border-blue-300/30 animate-pulse transition-all hover:scale-105 hover:bg-blue-500 active:scale-95"
             title="Samsung Academy Survey"
           >
@@ -10107,6 +10112,49 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             </span>
           </button>
         </div>
+      )}
+
+      {/* GoGo visitor guide — lobby host (EN/AR FAQ only) */}
+      {!isAdminPortal && !showPhotoAuth && !showRankReveal && (
+        <GoGoAssistant
+          currentView={view}
+          hidden={view === 'EXTERNAL_LOGS' || view === 'ADMIN_DASHBOARD'}
+          onNavigate={(action) => {
+            if (action === 'goto_tcs') {
+              setPortalRealm('TCS');
+              navigateTo('TCS_DIVISION_SELECTION');
+              return;
+            }
+            if (action === 'goto_pqa') {
+              setPortalRealm('PQA');
+              navigateTo('PQA_DIVISION_SELECTION');
+              return;
+            }
+            if (action === 'goto_search') {
+              if (!appMode) {
+                setPortalRealm('TCS');
+                setAppMode('TCS_MX');
+              }
+              setProfileOpenedByExactCode(false);
+              navigateTo('ENGINEER_LOOKUP');
+              return;
+            }
+            if (action === 'goto_feedback') {
+              setPortalRealm((prev) => prev || 'TCS');
+              setAppMode((prev) => prev || 'TCS_MX');
+              setShowFeedbackPromo(false);
+              setEngineerFeedback(INITIAL_ENGINEER_FEEDBACK);
+              setFeedbackSent(false);
+              navigateTo('FEEDBACK');
+              return;
+            }
+            if (action === 'goto_survey') {
+              setPortalRealm('TCS');
+              setAppMode((prev) => prev || 'TCS_MX');
+              openSurveyForm();
+            }
+          }}
+        />
       )}
 
       {/* Engineer / Service Center Photo Auth Modal */}
@@ -10285,6 +10333,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             </button>
             <button
               onClick={() => { setProfileOpenedByExactCode(false); navigateTo('ENGINEER_LOOKUP'); }}
+              data-gogo-target="search"
               className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
             >
               <Search className={`w-5 h-5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />

@@ -346,4 +346,168 @@
   .animate-quiz-reveal-up {
     animation: quizRevealUp 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
+
+  /* ── GoGo assistant poses ─────────────────────────────────────────────── */
+  .gogo-sprite {
+    transition: opacity 0.12s ease-out;
+    image-rendering: auto;
+    object-fit: contain;
+    background: transparent !important;
+    mix-blend-mode: normal;
+  }
+
+  .gogo-pose-offstage {
+    transform: translateX(-120%) scale(0.92);
+    opacity: 0;
+  }
+
+  .gogo-pose-walk-in {
+    animation: gogoWalkIn 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .gogo-pose-idle {
+    animation: gogoIdle 3.2s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-pose-wave {
+    animation: gogoWave 0.75s ease-in-out 2;
+    transform-origin: 78% 22%;
+  }
+
+  .gogo-pose-point {
+    animation: gogoPoint 1.2s ease-out forwards;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-pose-think {
+    animation: gogoThink 1.4s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-pose-walk-to {
+    animation: gogoWalkTo 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-think-dots {
+    animation: gogoThinkBob 0.9s ease-in-out infinite;
+  }
+
+  .gogo-spotlight-pulse {
+    animation: gogoSpotPulse 1.4s ease-in-out infinite;
+  }
+
+  .gogo-hint-bounce {
+    animation: gogoHintBounce 1.1s ease-in-out infinite;
+  }
+
+  @keyframes gogoWalkIn {
+    0% {
+      transform: translateX(-110%) scale(0.94);
+      opacity: 0;
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes gogoWalkTo {
+    0% {
+      transform: translateX(0) translateY(0) scale(1);
+    }
+    20% {
+      transform: translateX(10px) translateY(-3px) scale(1.01);
+    }
+    45% {
+      transform: translateX(34px) translateY(0) scale(1.03);
+    }
+    70% {
+      transform: translateX(22px) translateY(-4px) scale(1.02);
+    }
+    100% {
+      transform: translateX(14px) translateY(0) rotate(2deg) scale(1.04);
+    }
+  }
+
+  @keyframes gogoIdle {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-5px) rotate(-1.2deg);
+    }
+  }
+
+  @keyframes gogoWave {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-8deg) translateY(-2px);
+    }
+    75% {
+      transform: rotate(7deg) translateY(-1px);
+    }
+  }
+
+  @keyframes gogoPoint {
+    0% {
+      transform: translateX(0) rotate(0deg);
+    }
+    35% {
+      transform: translateX(14px) rotate(8deg) scale(1.05);
+    }
+    100% {
+      transform: translateX(8px) rotate(4deg) scale(1.03);
+    }
+  }
+
+  @keyframes gogoThink {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-2deg) scale(1);
+    }
+    50% {
+      transform: translateY(-6px) rotate(2deg) scale(0.98);
+    }
+  }
+
+  @keyframes gogoThinkBob {
+    0%,
+    100% {
+      transform: translate(-50%, 0);
+      opacity: 0.85;
+    }
+    50% {
+      transform: translate(-50%, -6px);
+      opacity: 1;
+    }
+  }
+
+  @keyframes gogoSpotPulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45), 0 0 28px rgba(250, 204, 21, 0.35);
+    }
+    50% {
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 48px rgba(250, 204, 21, 0.65);
+    }
+  }
+
+  @keyframes gogoHintBounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
 }

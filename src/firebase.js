@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
@@ -33,8 +33,18 @@ if (typeof window !== "undefined" && !appCheckInitialized) {
   }
 }
 
-// Initialize Cloud Firestore and get a reference to the service
-export const db = getFirestore(app);
+// Auto-detect long polling helps on networks that block Firestore WebChannel.
+function createFirestore() {
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
+    return getFirestore(app);
+  }
+}
+
+export const db = createFirestore();
 
 // Initialize Cloud Storage and get a reference to the service
 export const storage = getStorage(app);
