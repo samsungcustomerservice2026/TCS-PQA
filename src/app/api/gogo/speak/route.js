@@ -6,9 +6,18 @@ export const dynamic = 'force-dynamic';
 
 const MAX_TEXT = 500;
 
-/** Adult male informative guide voice (Gemini prebuilt). */
-const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Charon';
-const DEFAULT_TTS_MODEL = process.env.GEMINI_TTS_MODEL || 'gemini-2.5-flash-preview-tts';
+/** Stable adult-male Gemini voices (EN default Charon). */
+const DEFAULT_VOICE_EN = process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || 'Charon';
+const DEFAULT_VOICE_AR = process.env.GEMINI_TTS_VOICE_AR || process.env.GEMINI_TTS_VOICE || 'Orus';
+const DEFAULT_TTS_MODELS = [
+  process.env.GEMINI_TTS_MODEL,
+  'gemini-2.5-flash-preview-tts',
+  'gemini-3.1-flash-tts-preview',
+].filter(Boolean);
+
+function unique(list) {
+  return [...new Set(list)];
+}
 
 function pcm16ToWavBuffer(pcmBuffer, sampleRate = 24000) {
   const numChannels = 1;
@@ -21,8 +30,8 @@ function pcm16ToWavBuffer(pcmBuffer, sampleRate = 24000) {
   header.writeUInt32LE(36 + dataSize, 4);
   header.write('WAVE', 8);
   header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16); // PCM chunk size
-  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
   header.writeUInt16LE(numChannels, 22);
   header.writeUInt32LE(sampleRate, 24);
   header.writeUInt32LE(byteRate, 28);
@@ -38,27 +47,50 @@ function parseSampleRate(mime = '') {
   return m ? Number(m[1]) : 24000;
 }
 
+function voiceForLang(lang, override) {
+  if (override) return String(override).slice(0, 40);
+  return lang === 'ar' ? DEFAULT_VOICE_AR : DEFAULT_VOICE_EN;
+}
+
+/**
+ * Structured director prompt — keeps the same adult-male persona stable.
+ * Transcript is clearly labeled so the model does not read the notes aloud.
+ */
 function buildSpeakPrompt(text, lang) {
-  const L = lang === 'ar' ? 'ar' : 'en';
-  if (L === 'ar') {
+  if (lang === 'ar') {
     return [
-      'Speak in natural Egyptian/Modern Standard Arabic.',
-      'You are GoGo, a friendly adult male Samsung SCORA guide, about 30 years old.',
-      'Calm, clear, warm — not robotic.',
-      'Say exactly this:',
+      'Read aloud the transcript below as natural speech audio only.',
+      'Do not read the director notes out loud.',
+      '',
+      '# DIRECTOR NOTES',
+      'Character: GoGo — friendly adult Egyptian Arabic male guide, about 30 years old.',
+      'Language: Natural Egyptian Arabic (عامية مصرية), clear and warm.',
+      'Style: Calm, confident, helpful Samsung SCORA visitor guide.',
+      'Pacing: Natural conversational pace — not robotic, not rushed.',
+      'Tone: Warm smile in the voice, professional but friendly.',
+      '',
+      '# TRANSCRIPT',
       text,
     ].join('\n');
   }
+
   return [
-    'Speak in natural native American English (US).',
-    'You are GoGo, a friendly adult male Samsung SCORA guide, about 30 years old.',
-    'Calm, clear, warm — not robotic, not cartoonish.',
-    'Say exactly this:',
+    'Read aloud the transcript below as natural speech audio only.',
+    'Do not read the director notes out loud.',
+    '',
+    '# DIRECTOR NOTES',
+    'Character: GoGo — friendly adult American male guide, about 30 years old.',
+    'Language: Native American English (US).',
+    'Style: Calm, clear, warm Samsung SCORA visitor guide.',
+    'Pacing: Natural conversational pace — not robotic, not cartoonish.',
+    'Tone: Confident, helpful, easy to understand.',
+    '',
+    '# TRANSCRIPT',
     text,
   ].join('\n');
 }
 
-async function synthesizeWithGemini({ text, lang, apiKey, model, voice }) {
+async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: 'POST',
@@ -104,6 +136,22 @@ async function synthesizeWithGemini({ text, lang, apiKey, model, voice }) {
   };
 }
 
+async function synthesizeWithGemini({ text, lang, apiKey, voice }) {
+  const models = unique(DEFAULT_TTS_MODELS);
+  let lastErr = null;
+  for (const model of models) {
+    try {
+      return await synthesizeOnce({ text, lang, apiKey, model, voice });
+    } catch (err) {
+      lastErr = err;
+      const retryable = err?.status === 429 || err?.status === 404 || /quota|not found|unavailable/i.test(err?.message || '');
+      if (!retryable) throw err;
+      console.warn(`GoGo TTS model ${model} failed:`, err.message);
+    }
+  }
+  throw lastErr || new Error('Gemini TTS unavailable');
+}
+
 export async function POST(request) {
   let body;
   try {
@@ -124,11 +172,10 @@ export async function POST(request) {
     return NextResponse.json({ error: 'GEMINI_API_KEY missing', fallback: true }, { status: 503 });
   }
 
-  const model = process.env.GEMINI_TTS_MODEL || DEFAULT_TTS_MODEL;
-  const voice = String(body?.voice || DEFAULT_VOICE).slice(0, 40);
+  const voice = voiceForLang(lang, body?.voice);
 
   try {
-    const audio = await synthesizeWithGemini({ text, lang, apiKey, model, voice });
+    const audio = await synthesizeWithGemini({ text, lang, apiKey, voice });
     return NextResponse.json({
       ...audio,
       source: 'gemini-tts',

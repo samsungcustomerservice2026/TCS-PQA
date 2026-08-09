@@ -1,10 +1,19 @@
 /**
  * GoGo STT + TTS helpers.
- * TTS prefers Gemini Charon (adult male ~30), then browser adult-male voices.
+ *
+ * Stable adult-male casting:
+ * - English → Gemini Charon (native US male), browser male fallback
+ * - Arabic → native browser Arabic male first (Hamed / Neural), Gemini fallback
+ *
+ * Chosen browser voices are pinned in localStorage so the same “guy” stays stable.
  * Chrome / Edge recommended. Graceful no-ops when unsupported.
  */
 
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
+const PINNED_VOICE_KEY = {
+  en: 'gogo_pinned_voice_en',
+  ar: 'gogo_pinned_voice_ar',
+};
 
 /** Incremented on every stop/cancel so in-flight speak loops abort. */
 let speechGeneration = 0;
@@ -187,6 +196,30 @@ export function stopGoGoSpeech() {
   stopBrowserSpeech();
 }
 
+function getPinnedVoiceKey(lang) {
+  return PINNED_VOICE_KEY[lang === 'ar' ? 'ar' : 'en'];
+}
+
+function readPinnedVoiceId(lang) {
+  if (typeof window === 'undefined') return '';
+  try {
+    return localStorage.getItem(getPinnedVoiceKey(lang)) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writePinnedVoiceId(lang, voice) {
+  if (typeof window === 'undefined' || !voice) return;
+  const id = voice.voiceURI || voice.name || '';
+  if (!id) return;
+  try {
+    localStorage.setItem(getPinnedVoiceKey(lang), id);
+  } catch {
+    /* ignore */
+  }
+}
+
 function scoreMaleVoice(voice, lang) {
   const name = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
   const vLang = (voice.lang || '').toLowerCase();
@@ -197,7 +230,7 @@ function scoreMaleVoice(voice, lang) {
   const maleHints =
     /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|hamed|naayf|maged|farid/;
   const femaleHints =
-    /female|woman|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine/;
+    /female|woman|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine|hoda|laila/;
 
   if (maleHints.test(name)) score += 80;
   if (femaleHints.test(name)) score -= 90;
@@ -208,19 +241,36 @@ function scoreMaleVoice(voice, lang) {
     if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 25;
   } else {
-    if (vLang.includes('eg') || /egypt/.test(name)) score += 25;
-    if (/hamed|naayf|maged|farid|male/.test(name)) score += 35;
-    if (/natural|neural|online|premium/.test(name)) score += 20;
+    // Prefer the natural Arabic male voices Windows/Edge usually ships
+    if (/microsoft.*(hamed|naayf)|google.*(arabic|مصر|egypt).*male|hamed|naayf|maged|farid/.test(name)) {
+      score += 70;
+    }
+    if (vLang.includes('eg') || /egypt|مصر/.test(name)) score += 35;
+    else if (vLang.includes('sa') || vLang.includes('xa')) score += 15;
+    if (/natural|neural|online|premium/.test(name)) score += 30;
+    if (/male/.test(name)) score += 20;
   }
 
   if (/compact|espeak|robot|novelty|whisper|child|kids/.test(name)) score -= 60;
   return score;
 }
 
-function pickAdultMaleVoice(lang) {
+function findVoiceById(voices, id) {
+  if (!id) return null;
+  return voices.find((v) => v.voiceURI === id || v.name === id) || null;
+}
+
+function pickAdultMaleVoice(lang, { requireGoodArabic = false } = {}) {
   try {
     const voices = window.speechSynthesis.getVoices?.() || [];
     if (!voices.length) return null;
+
+    const pinnedId = readPinnedVoiceId(lang);
+    const pinned = findVoiceById(voices, pinnedId);
+    if (pinned && scoreMaleVoice(pinned, lang) > -500) {
+      return pinned;
+    }
+
     let best = null;
     let bestScore = -9999;
     voices.forEach((v) => {
@@ -230,9 +280,23 @@ function pickAdultMaleVoice(lang) {
         best = v;
       }
     });
-    return bestScore > -500 ? best : null;
+
+    // For Arabic, only claim a “good” native voice when score is solid
+    if (requireGoodArabic && bestScore < 40) return null;
+    if (bestScore <= -500) return null;
+    if (best) writePinnedVoiceId(lang, best);
+    return best;
   } catch {
     return null;
+  }
+}
+
+function hasGoodArabicBrowserVoice() {
+  try {
+    const voices = window.speechSynthesis.getVoices?.() || [];
+    return voices.some((v) => scoreMaleVoice(v, 'ar') >= 40);
+  } catch {
+    return false;
   }
 }
 
@@ -356,7 +420,7 @@ function playBase64Audio(audioBase64, mimeType, generation) {
   });
 }
 
-async function speakWithBrowser(clean, lang, generation, onStart) {
+async function speakWithBrowser(clean, lang, generation, onStart, { requireGoodArabic = false } = {}) {
   if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
     return false;
   }
@@ -365,9 +429,11 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
   await waitForVoices();
   if (generation !== speechGeneration) return false;
 
-  const voice = pickAdultMaleVoice(lang);
-  const rate = lang === 'ar' ? 0.93 : 0.96;
-  const pitch = lang === 'ar' ? 0.92 : 0.9;
+  const voice = pickAdultMaleVoice(lang, { requireGoodArabic });
+  if (requireGoodArabic && !voice) return false;
+
+  const rate = lang === 'ar' ? 0.95 : 0.96;
+  const pitch = lang === 'ar' ? 0.95 : 0.9;
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
@@ -393,8 +459,15 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
   return generation === speechGeneration;
 }
 
+async function speakWithGemini(clean, lang, generation, onStart) {
+  const data = await fetchGeminiSpeech(clean, lang);
+  if (generation !== speechGeneration) return false;
+  onStart?.();
+  return playBase64Audio(data.audioBase64, data.mimeType, generation);
+}
+
 /**
- * Speak GoGo reply: Gemini Charon (adult male) first, browser male fallback.
+ * Speak GoGo reply with a stable adult-male cast per language.
  * Safe across EN↔AR switches via speechGeneration token.
  */
 export async function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
@@ -425,15 +498,38 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
     onStart?.();
   };
 
-  try {
-    const data = await fetchGeminiSpeech(clean, L);
+  // Arabic: restore the natural local Arabic male first (was better than Gemini).
+  // English: keep Gemini Charon as the stable US male guide.
+  if (L === 'ar') {
+    await waitForVoices();
     if (generation !== speechGeneration) {
       onEnd?.();
       return;
     }
-    markStart();
-    const played = await playBase64Audio(data.audioBase64, data.mimeType, generation);
-    if (played) {
+    if (hasGoodArabicBrowserVoice()) {
+      const ok = await speakWithBrowser(clean, L, generation, markStart, { requireGoodArabic: true });
+      if (ok) {
+        onEnd?.();
+        return;
+      }
+    }
+    try {
+      const ok = await speakWithGemini(clean, L, generation, markStart);
+      if (ok) {
+        onEnd?.();
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    await speakWithBrowser(clean, L, generation, markStart);
+    onEnd?.();
+    return;
+  }
+
+  try {
+    const ok = await speakWithGemini(clean, L, generation, markStart);
+    if (ok) {
       onEnd?.();
       return;
     }
@@ -442,11 +538,6 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
   }
 
   if (generation !== speechGeneration) {
-    onEnd?.();
-    return;
-  }
-
-  if (typeof window.speechSynthesis === 'undefined') {
     onEnd?.();
     return;
   }
