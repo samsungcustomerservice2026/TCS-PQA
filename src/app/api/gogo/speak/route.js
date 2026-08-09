@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { textForSpeech } from '../../../../lib/gogoVoice';
+import { textForSpeech } from '../../../../lib/gogoSpeechText';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_TEXT = 500;
 
-/** Stable adult-male Gemini voices (~30). Achird = friendly younger male for Arabic. */
+/** Adult male ~30. Keep prompts SHORT — long director notes get read aloud by Gemini TTS. */
 const DEFAULT_VOICE_EN = process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || 'Charon';
 const DEFAULT_VOICE_AR = process.env.GEMINI_TTS_VOICE_AR || 'Achird';
 const DEFAULT_TTS_MODELS = [
@@ -52,43 +52,12 @@ function voiceForLang(lang, override) {
   return lang === 'ar' ? DEFAULT_VOICE_AR : DEFAULT_VOICE_EN;
 }
 
-/**
- * Structured director prompt — keeps the same adult-male persona stable.
- * Transcript is clearly labeled so the model does not read the notes aloud.
- */
+/** One-line style cue + exact transcript (Google TTS pattern). */
 function buildSpeakPrompt(text, lang) {
   if (lang === 'ar') {
-    return [
-      'Read aloud the transcript below as natural speech audio only.',
-      'Do not read the director notes out loud.',
-      '',
-      '# DIRECTOR NOTES',
-      'Character: GoGo — young adult Egyptian man, exactly 28–32 years old (NOT elderly, NOT 50+, NOT deep old-man gravel).',
-      'Language: Natural modern Egyptian Arabic (عامية مصرية شبابية), clear Cairo-style.',
-      'Voice quality: Fresh, friendly young-adult male — medium pitch, smooth, energetic but calm.',
-      'Avoid: old uncle/grandpa tone, heavy throaty bass, slow elderly pacing, robotic flatness.',
-      'Style: Helpful Samsung SCORA visitor guide — warm smile, confident, approachable.',
-      'Pacing: Natural conversational young-adult pace.',
-      '',
-      '# TRANSCRIPT',
-      text,
-    ].join('\n');
+    return `Speak in natural modern Egyptian Arabic as a friendly young adult man about 30 years old. Say exactly: ${text}`;
   }
-
-  return [
-    'Read aloud the transcript below as natural speech audio only.',
-    'Do not read the director notes out loud.',
-    '',
-    '# DIRECTOR NOTES',
-    'Character: GoGo — friendly adult American male guide, about 30 years old.',
-    'Language: Native American English (US).',
-    'Style: Calm, clear, warm Samsung SCORA visitor guide.',
-    'Pacing: Natural conversational pace — not robotic, not cartoonish.',
-    'Tone: Confident, helpful, easy to understand.',
-    '',
-    '# TRANSCRIPT',
-    text,
-  ].join('\n');
+  return `Speak in natural native American English as a friendly adult man about 30 years old. Say exactly: ${text}`;
 }
 
 async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
@@ -127,6 +96,10 @@ async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
 
   const mime = inline.mimeType || inline.mime_type || 'audio/L16;codec=pcm;rate=24000';
   const pcm = Buffer.from(inline.data, 'base64');
+  // Guard against tiny/corrupt payloads
+  if (pcm.length < 1000) {
+    throw new Error('Gemini TTS audio too short');
+  }
   const sampleRate = parseSampleRate(mime);
   const wav = pcm16ToWavBuffer(pcm, sampleRate);
   return {
@@ -145,7 +118,10 @@ async function synthesizeWithGemini({ text, lang, apiKey, voice }) {
       return await synthesizeOnce({ text, lang, apiKey, model, voice });
     } catch (err) {
       lastErr = err;
-      const retryable = err?.status === 429 || err?.status === 404 || /quota|not found|unavailable/i.test(err?.message || '');
+      const retryable =
+        err?.status === 429 ||
+        err?.status === 404 ||
+        /quota|not found|unavailable|too short|empty/i.test(err?.message || '');
       if (!retryable) throw err;
       console.warn(`GoGo TTS model ${model} failed:`, err.message);
     }
@@ -186,7 +162,7 @@ export async function POST(request) {
   } catch (err) {
     console.warn('GoGo Gemini TTS failed:', err?.message || err);
     return NextResponse.json(
-      { error: String(err?.message || 'TTS unavailable'), fallback: true },
+      { error: String(err?.message || 'TTS unavailable'), fallback: true, code: 'tts_failed' },
       { status: 503 },
     );
   }

@@ -4,16 +4,19 @@
  * Stable adult-male casting (~30):
  * - English → Gemini Charon (native US male), browser male fallback
  * - Arabic → Gemini Achird (friendly young adult male), browser fallback
- *   (Windows “Hamed” is intentionally avoided — sounds elderly)
  *
  * Chosen browser voices are pinned in localStorage so the same “guy” stays stable.
  * Chrome / Edge recommended. Graceful no-ops when unsupported.
  */
 
+import { textForSpeech } from './gogoSpeechText';
+
+export { textForSpeech };
+
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
 const PINNED_VOICE_KEY = {
-  en: 'gogo_pinned_voice_en_v2',
-  ar: 'gogo_pinned_voice_ar_v2',
+  en: 'gogo_pinned_voice_en_v3',
+  ar: 'gogo_pinned_voice_ar_v3',
 };
 
 /** Incremented on every stop/cancel so in-flight speak loops abort. */
@@ -232,8 +235,8 @@ function scoreMaleVoice(voice, lang) {
     /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|maged|farid/;
   const femaleHints =
     /female|woman|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine|hoda|laila/;
-  // Windows Hamed / Naayf often read as elderly — hard-pass for GoGo's ~30 cast
-  const elderlyArabicHints = /hamed|naayf|naayef|نصيف|حامد/;
+  // Prefer neural/Google Arabic over classic Windows Hamed (can sound elderly)
+  const classicArabicHints = /hamed|naayf|naayef|نصيف|حامد/;
 
   if (maleHints.test(name)) score += 80;
   if (femaleHints.test(name)) score -= 90;
@@ -244,15 +247,15 @@ function scoreMaleVoice(voice, lang) {
     if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 25;
   } else {
-    if (elderlyArabicHints.test(name)) score -= 120;
+    if (classicArabicHints.test(name)) score -= 40;
     if (/google.*(arabic|مصر|egypt).*male|maged|farid/.test(name)) score += 55;
     if (vLang.includes('eg') || /egypt|مصر/.test(name)) score += 35;
     else if (vLang.includes('sa') || vLang.includes('xa')) score += 10;
     if (/natural|neural|online|premium/.test(name)) score += 40;
-    if (/male/.test(name) && !elderlyArabicHints.test(name)) score += 20;
+    if (/male/.test(name)) score += 20;
   }
 
-  if (/compact|espeak|robot|novelty|whisper|child|kids|senior|old/.test(name)) score -= 60;
+  if (/compact|espeak|robot|novelty|whisper|child|kids|senior/.test(name)) score -= 60;
   return score;
 }
 
@@ -261,7 +264,7 @@ function findVoiceById(voices, id) {
   return voices.find((v) => v.voiceURI === id || v.name === id) || null;
 }
 
-function pickAdultMaleVoice(lang, { requireGoodArabic = false } = {}) {
+function pickAdultMaleVoice(lang) {
   try {
     const voices = window.speechSynthesis.getVoices?.() || [];
     if (!voices.length) return null;
@@ -282,50 +285,12 @@ function pickAdultMaleVoice(lang, { requireGoodArabic = false } = {}) {
       }
     });
 
-    // For Arabic, only claim a “good” native voice when score is solid
-    if (requireGoodArabic && bestScore < 40) return null;
     if (bestScore <= -500) return null;
     if (best) writePinnedVoiceId(lang, best);
     return best;
   } catch {
     return null;
   }
-}
-
-function hasGoodArabicBrowserVoice() {
-  try {
-    const voices = window.speechSynthesis.getVoices?.() || [];
-    return voices.some((v) => scoreMaleVoice(v, 'ar') >= 40);
-  } catch {
-    return false;
-  }
-}
-
-/** Clean reply text for spoken delivery (safe on server + client). */
-export function textForSpeech(text, lang = 'en') {
-  let s = String(text || '');
-  s = s
-    .replace(/[👋👇💭👉✨🎯📌✅❌•·]/gu, ' ')
-    .replace(/\*\*|__/g, '')
-    .replace(/`+/g, '')
-    .replace(/\([^)]{0,40}\)/g, ' ')
-    .replace(/\[[^\]]{0,40}\]/g, ' ')
-    .replace(/[←→➡︎⟶]/g, ', ')
-    .replace(/\n+/g, '. ')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([,.!?])/g, '$1')
-    .replace(/([.!?])\1+/g, '$1')
-    .trim();
-
-  if (s.length > 320) {
-    const cut = s.slice(0, 320);
-    const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('؟'));
-    s = (lastStop > 80 ? cut.slice(0, lastStop + 1) : cut).trim();
-  }
-
-  if (!s && lang === 'ar') s = 'تمام';
-  if (!s) s = 'Okay';
-  return s;
 }
 
 function waitForVoices(timeoutMs = 1000) {
@@ -385,18 +350,32 @@ function speakChunk(text, { lang, voice, rate, pitch, generation }) {
 }
 
 async function fetchGeminiSpeech(text, lang) {
-  const response = await fetch('/api/gogo/speak', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, lang }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.audioBase64) {
-    const err = new Error(data?.error || 'Gemini TTS unavailable');
-    err.code = data?.code || 'tts_failed';
-    throw err;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
+  try {
+    const response = await fetch('/api/gogo/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lang }),
+      signal: controller?.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.audioBase64) {
+      const err = new Error(data?.error || 'Gemini TTS unavailable');
+      err.code = data?.code || 'tts_failed';
+      throw err;
+    }
+    return data;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return data;
+}
+
+function base64ToBlob(base64, mimeType) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType || 'audio/wav' });
 }
 
 function playBase64Audio(audioBase64, mimeType, generation) {
@@ -406,12 +385,29 @@ function playBase64Audio(audioBase64, mimeType, generation) {
       return;
     }
     stopCurrentAudio();
-    const audio = new Audio(`data:${mimeType || 'audio/wav'};base64,${audioBase64}`);
+
+    let objectUrl = '';
+    try {
+      const blob = base64ToBlob(audioBase64, mimeType || 'audio/wav');
+      objectUrl = URL.createObjectURL(blob);
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    const audio = new Audio(objectUrl);
     currentAudio = audio;
     let settled = false;
     const finish = (ok) => {
       if (settled) return;
       settled = true;
+      if (objectUrl) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+          /* ignore */
+        }
+      }
       if (currentAudio === audio) currentAudio = null;
       resolve(Boolean(ok) && generation === speechGeneration);
     };
@@ -421,7 +417,7 @@ function playBase64Audio(audioBase64, mimeType, generation) {
   });
 }
 
-async function speakWithBrowser(clean, lang, generation, onStart, { requireGoodArabic = false } = {}) {
+async function speakWithBrowser(clean, lang, generation, onStart) {
   if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
     return false;
   }
@@ -430,8 +426,7 @@ async function speakWithBrowser(clean, lang, generation, onStart, { requireGoodA
   await waitForVoices();
   if (generation !== speechGeneration) return false;
 
-  const voice = pickAdultMaleVoice(lang, { requireGoodArabic });
-  if (requireGoodArabic && !voice) return false;
+  const voice = pickAdultMaleVoice(lang);
 
   // Slightly brighter Arabic pitch if we must fall back to browser TTS
   const rate = lang === 'ar' ? 1.02 : 0.96;
@@ -487,7 +482,7 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
 
   stopGoGoSpeech();
   const generation = speechGeneration;
-  await new Promise((r) => setTimeout(r, 60));
+  await new Promise((r) => setTimeout(r, 40));
   if (generation !== speechGeneration) {
     onEnd?.();
     return;
@@ -500,23 +495,18 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
     onStart?.();
   };
 
-  // Both languages: Gemini young-adult male first (EN Charon, AR Achird).
-  // Browser is fallback only — and Arabic avoids elderly Windows Hamed.
   try {
-    const ok = await speakWithGemini(clean, L, generation, markStart);
-    if (ok) {
-      onEnd?.();
-      return;
+    // Gemini first (EN Charon / AR Achird), then browser male fallback.
+    try {
+      const ok = await speakWithGemini(clean, L, generation, markStart);
+      if (ok) return;
+    } catch {
+      // fall through
     }
-  } catch {
-    // fall through to browser TTS
-  }
 
-  if (generation !== speechGeneration) {
+    if (generation !== speechGeneration) return;
+    await speakWithBrowser(clean, L, generation, markStart);
+  } finally {
     onEnd?.();
-    return;
   }
-
-  await speakWithBrowser(clean, L, generation, markStart);
-  onEnd?.();
 }
