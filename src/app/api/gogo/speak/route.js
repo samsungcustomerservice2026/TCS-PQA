@@ -194,7 +194,7 @@ export async function POST(request) {
   } catch (err) {
     console.warn('GoGo Gemini TTS failed:', err?.message || err);
     return NextResponse.json(
-      { error: String(err?.message || 'TTS unavailable'), fallback: true, code: 'tts_failed' },
+      { error: 'Voice temporarily unavailable', fallback: true, code: 'tts_failed' },
       { status: 503 },
     );
   }
