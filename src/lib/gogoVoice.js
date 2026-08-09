@@ -1,9 +1,9 @@
 /**
  * GoGo STT + TTS helpers.
  *
- * Stable adult-male casting (~30):
- * - English → Gemini Charon (native US male), browser male fallback
- * - Arabic → Gemini Achird (friendly young adult male), browser fallback
+ * Stable adult-male casting (~30) for BOTH languages:
+ * - Gemini Charon (male) first for EN + AR
+ * - Browser fallback: male voices ONLY (female hard-rejected)
  *
  * Chosen browser voices are pinned in localStorage so the same “guy” stays stable.
  * Chrome / Edge recommended. Graceful no-ops when unsupported.
@@ -15,8 +15,8 @@ export { textForSpeech };
 
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
 const PINNED_VOICE_KEY = {
-  en: 'gogo_pinned_voice_en_v3',
-  ar: 'gogo_pinned_voice_ar_v3',
+  en: 'gogo_pinned_voice_en_v4_male',
+  ar: 'gogo_pinned_voice_ar_v4_male',
 };
 
 /** Incremented on every stop/cancel so in-flight speak loops abort. */
@@ -224,22 +224,29 @@ function writePinnedVoiceId(lang, voice) {
   }
 }
 
+function isFemaleVoiceName(name) {
+  return /female|woman|girl|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine|hoda|laila|heather|allison|ava|emma|joanna|ivy|salli|kimberly|kendra|olivia|amy|emma|nancy|raveena|aditi|zephyr|kore|aoede|leda|callirrhoe|autonoe|despina|erinome|laomedeia|achernar|pulcherrima|vindemiatrix|sulafat|gacrux/.test(
+    name,
+  );
+}
+
+function isMaleVoiceName(name) {
+  return /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|hamed|naayf|naayef|maged|farid|charon|orus|fenrir|puck|alnilam|schedar|achird/.test(
+    name,
+  );
+}
+
 function scoreMaleVoice(voice, lang) {
   const name = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
   const vLang = (voice.lang || '').toLowerCase();
   const want = lang === 'ar' ? 'ar' : 'en';
   if (!vLang.startsWith(want)) return -1000;
+  // Hard reject female — never cast a woman for GoGo
+  if (isFemaleVoiceName(name)) return -1000;
 
   let score = 0;
-  const maleHints =
-    /male|man|guy|david|mark|james|john|daniel|alex|fred|tom|ryan|eric|george|richard|christopher|microsoft david|microsoft mark|microsoft guy|google us english male|google uk english male|maged|farid/;
-  const femaleHints =
-    /female|woman|zira|hazel|susan|samantha|karen|moira|aria|jenny|sonia|sara|salma|heera|tessa|fiona|victoria|linda|catherine|hoda|laila/;
-  // Prefer neural/Google Arabic over classic Windows Hamed (can sound elderly)
-  const classicArabicHints = /hamed|naayf|naayef|نصيف|حامد/;
-
-  if (maleHints.test(name)) score += 80;
-  if (femaleHints.test(name)) score -= 90;
+  if (isMaleVoiceName(name)) score += 100;
+  else score -= 30; // unknown gender: prefer not to use unless nothing else
 
   if (lang === 'en') {
     if (vLang === 'en-us') score += 40;
@@ -247,15 +254,14 @@ function scoreMaleVoice(voice, lang) {
     if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 25;
   } else {
-    if (classicArabicHints.test(name)) score -= 40;
-    if (/google.*(arabic|مصر|egypt).*male|maged|farid/.test(name)) score += 55;
+    // Arabic: adult male including Hamed/Naayf beats any female default
+    if (/hamed|naayf|naayef|maged|farid|male/.test(name)) score += 60;
     if (vLang.includes('eg') || /egypt|مصر/.test(name)) score += 35;
     else if (vLang.includes('sa') || vLang.includes('xa')) score += 10;
-    if (/natural|neural|online|premium/.test(name)) score += 40;
-    if (/male/.test(name)) score += 20;
+    if (/natural|neural|online|premium/.test(name)) score += 30;
   }
 
-  if (/compact|espeak|robot|novelty|whisper|child|kids|senior/.test(name)) score -= 60;
+  if (/compact|espeak|robot|novelty|whisper|child|kids/.test(name)) score -= 60;
   return score;
 }
 
@@ -271,7 +277,8 @@ function pickAdultMaleVoice(lang) {
 
     const pinnedId = readPinnedVoiceId(lang);
     const pinned = findVoiceById(voices, pinnedId);
-    if (pinned && scoreMaleVoice(pinned, lang) > -500) {
+    // Only keep pin if it is clearly male
+    if (pinned && scoreMaleVoice(pinned, lang) >= 40) {
       return pinned;
     }
 
@@ -285,8 +292,9 @@ function pickAdultMaleVoice(lang) {
       }
     });
 
-    if (bestScore <= -500) return null;
-    if (best) writePinnedVoiceId(lang, best);
+    // Require a real male score — never fall back to a female/default woman voice
+    if (!best || bestScore < 40) return null;
+    writePinnedVoiceId(lang, best);
     return best;
   } catch {
     return null;
@@ -427,10 +435,12 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
   if (generation !== speechGeneration) return false;
 
   const voice = pickAdultMaleVoice(lang);
+  // Do not speak with the browser default if it would be female/unknown
+  if (!voice) return false;
 
-  // Brighter Arabic browser fallback so classic voices feel less elderly
-  const rate = lang === 'ar' ? 1.05 : 0.96;
-  const pitch = lang === 'ar' ? 1.12 : 0.92;
+  // Adult male pacing; slightly lower pitch reads more masculine
+  const rate = lang === 'ar' ? 0.98 : 0.96;
+  const pitch = lang === 'ar' ? 0.88 : 0.85;
   const parts = clean
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())

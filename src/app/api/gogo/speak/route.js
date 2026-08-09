@@ -6,14 +6,45 @@ export const dynamic = 'force-dynamic';
 
 const MAX_TEXT = 500;
 
-/** Adult male ~30. Keep prompts SHORT — long director notes get read aloud by Gemini TTS. */
-const DEFAULT_VOICE_EN = process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || 'Charon';
-const DEFAULT_VOICE_AR = process.env.GEMINI_TTS_VOICE_AR || 'Achird';
+/** Adult male Gemini voices only (~30). Charon = informative male for both languages. */
+const MALE_VOICES = new Set([
+  'Charon',
+  'Orus',
+  'Fenrir',
+  'Puck',
+  'Enceladus',
+  'Iapetus',
+  'Umbriel',
+  'Algieba',
+  'Algenib',
+  'Alnilam',
+  'Rasalgethi',
+  'Schedar',
+  'Achird',
+  'Zubenelgenubi',
+  'Sadachbia',
+  'Sadaltager',
+]);
+
+const DEFAULT_MALE_VOICE = 'Charon';
+const DEFAULT_VOICE_EN = sanitizeMaleVoice(
+  process.env.GEMINI_TTS_VOICE_EN || process.env.GEMINI_TTS_VOICE || DEFAULT_MALE_VOICE,
+);
+const DEFAULT_VOICE_AR = sanitizeMaleVoice(
+  process.env.GEMINI_TTS_VOICE_AR || process.env.GEMINI_TTS_VOICE || DEFAULT_MALE_VOICE,
+);
 const DEFAULT_TTS_MODELS = [
   process.env.GEMINI_TTS_MODEL,
   'gemini-2.5-flash-preview-tts',
   'gemini-3.1-flash-tts-preview',
 ].filter(Boolean);
+
+function sanitizeMaleVoice(name) {
+  const voice = String(name || '').trim();
+  if (MALE_VOICES.has(voice)) return voice;
+  // Never allow female presets (Kore, Aoede, Zephyr, etc.)
+  return DEFAULT_MALE_VOICE;
+}
 
 function unique(list) {
   return [...new Set(list)];
@@ -48,16 +79,16 @@ function parseSampleRate(mime = '') {
 }
 
 function voiceForLang(lang, override) {
-  if (override) return String(override).slice(0, 40);
+  if (override) return sanitizeMaleVoice(override);
   return lang === 'ar' ? DEFAULT_VOICE_AR : DEFAULT_VOICE_EN;
 }
 
-/** One-line style cue + exact transcript (Google TTS pattern). */
+/** Short male-only style cue — keep prompts short so notes are not spoken. */
 function buildSpeakPrompt(text, lang) {
   if (lang === 'ar') {
-    return `Speak in natural modern Egyptian Arabic as a friendly young adult man about 30 years old. Say exactly: ${text}`;
+    return `Speak as an adult male (man, not woman), about 30 years old, in natural Egyptian Arabic. Say exactly: ${text}`;
   }
-  return `Speak in natural native American English as a friendly adult man about 30 years old. Say exactly: ${text}`;
+  return `Speak as an adult male (man, not woman), about 30 years old, in natural American English. Say exactly: ${text}`;
 }
 
 async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
@@ -96,7 +127,6 @@ async function synthesizeOnce({ text, lang, apiKey, model, voice }) {
 
   const mime = inline.mimeType || inline.mime_type || 'audio/L16;codec=pcm;rate=24000';
   const pcm = Buffer.from(inline.data, 'base64');
-  // Guard against tiny/corrupt payloads
   if (pcm.length < 1000) {
     throw new Error('Gemini TTS audio too short');
   }
@@ -158,6 +188,7 @@ export async function POST(request) {
       source: 'gemini-tts',
       lang,
       text,
+      gender: 'male',
     });
   } catch (err) {
     console.warn('GoGo Gemini TTS failed:', err?.message || err);
