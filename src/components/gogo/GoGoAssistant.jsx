@@ -438,7 +438,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
     // Structured chip keywords still use guided tree first
     const matched = matchFreeTextToFlow(text, lang);
-    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_)/.test(matched)) {
+    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_)/.test(matched)) {
       // Prefer guided path for clear menu topics; Gemini for open questions
       const looksOpen =
         text.split(/\s+/).length > 8 ||
