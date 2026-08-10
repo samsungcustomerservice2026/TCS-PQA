@@ -68,8 +68,8 @@ const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
 export const GOGO_FLOW = {
   ask_name: {
     replies: {
-      en: "Hi! I'm GoGo, your SCORA guide.\n\nWhat's your name?",
-      ar: 'أهلاً! أنا GoGo مرشدك في SCORA.\n\nاسمك إيه؟',
+      en: "Hi! I'm Fooz, your SCORA guide.\n\nWhat's your name?",
+      ar: 'أهلاً! أنا Fooz مرشدك في SCORA.\n\nاسمك إيه؟',
     },
     chips: [],
   },
@@ -411,8 +411,8 @@ export const GOGO_FLOW = {
 };
 
 export const GOGO_BUBBLE = {
-  en: "Hi! I'm GoGo 👋\nTap me to chat",
-  ar: 'أهلاً! أنا GoGo 👋\nاضغط عليّ للدردشة',
+  en: "Hi! I'm Fooz 👋\nTap me to chat",
+  ar: 'أهلاً! أنا Fooz 👋\nاضغط عليّ للدردشة',
 };
 
 export function getFlowNode(id) {

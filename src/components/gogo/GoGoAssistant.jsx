@@ -34,7 +34,20 @@ import {
   saveGoGoChat,
 } from '../../services/gogoService';
 
-const SPRITE = '/gogo/idle.png?v=5';
+const SPRITE_BY_POSE = {
+  idle: '/gogo/idle.png?v=fooz2',
+  walk: '/gogo/walk-a.png?v=fooz2',
+  walkto: '/gogo/walk-b.png?v=fooz2',
+  wave: '/gogo/wave.png?v=fooz2',
+  welcome: '/gogo/welcome.png?v=fooz2',
+  speak: '/gogo/speak.png?v=fooz2',
+  think: '/gogo/think.png?v=fooz2',
+  point: '/gogo/point.png?v=fooz2',
+  bye: '/gogo/bye.png?v=fooz2',
+  nod: '/gogo/idle.png?v=fooz2',
+};
+const SPRITE_FALLBACK = '/gogo/fooz.png?v=fooz2';
+const ASSISTANT_NAME = 'Fooz';
 const STORAGE_LANG = 'gogo_lang';
 
 const ACTION_TARGET = {
@@ -322,6 +335,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     () => poseClassFor({ entered, listening, speaking, pose }),
     [entered, listening, speaking, pose],
   );
+
+  const spriteSrc = useMemo(() => {
+    if (listening || pose === 'think' || busy) return SPRITE_BY_POSE.think;
+    if (speaking) return SPRITE_BY_POSE.speak;
+    return SPRITE_BY_POSE[pose] || SPRITE_FALLBACK;
+  }, [listening, speaking, pose, busy]);
 
   const showThinkCue = listening || pose === 'think' || busy;
   const showSpeakCue = speaking && !listening;
@@ -760,8 +779,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             ? 'لحظة…'
             : 'One moment…'
           : rtl
-            ? 'اكتب أو كلّم GoGo…'
-            : 'Type or talk to GoGo…';
+            ? 'اكتب أو كلّم Fooz…'
+            : 'Type or talk to Fooz…';
 
   return (
     <>
@@ -801,7 +820,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           <div className="w-[min(100vw-1.5rem,21rem)] rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/5 bg-gradient-to-r from-blue-600/25 to-transparent">
               <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-widest text-white truncate">GoGo</p>
+                <p className="text-[11px] font-black uppercase tracking-widest text-white truncate">{ASSISTANT_NAME}</p>
                 <p className="text-[9px] text-zinc-500 font-bold truncate">
                   {listening
                     ? rtl
@@ -905,7 +924,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               {busy && (
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500 mr-4 px-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  {rtl ? 'GoGo بيفكر…' : 'GoGo is thinking…'}
+                  {rtl ? `${ASSISTANT_NAME} بيفكر…` : `${ASSISTANT_NAME} is thinking…`}
                 </div>
               )}
             </div>
@@ -1000,39 +1019,39 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               }
             }}
             className="relative group focus:outline-none"
-            aria-label="Open GoGo chat"
-          >
-            <span
-              className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
-                listening || speaking
-                  ? 'bg-blue-400/40 opacity-100 gogo-mic-pulse'
-                  : 'bg-blue-500/20 opacity-60 group-hover:opacity-90'
-              }`}
-            />
-            <span className="gogo-stage relative">
-              {showThinkCue && (
-                <span className="gogo-gesture-cue gogo-cue-think" aria-hidden>
-                  <span />
-                  <span />
-                  <span />
-                </span>
-              )}
-              {showPointCue && <span className="gogo-gesture-cue gogo-cue-point" aria-hidden />}
-              {showSpeakCue && (
-                <span className="gogo-gesture-cue gogo-cue-speak" aria-hidden>
-                  <i />
-                  <i />
-                  <i />
-                  <i />
-                </span>
-              )}
-              <img
-                src={SPRITE}
-                alt="GoGo"
-                className={`relative h-28 w-auto sm:h-36 drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass}`}
-                draggable={false}
+              aria-label="Open Fooz chat"
+            >
+              <span
+                className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
+                  listening || speaking
+                    ? 'bg-blue-400/40 opacity-100 gogo-mic-pulse'
+                    : 'bg-blue-500/20 opacity-60 group-hover:opacity-90'
+                }`}
               />
-            </span>
+              <span className="gogo-stage relative">
+                {showThinkCue && (
+                  <span className="gogo-gesture-cue gogo-cue-think" aria-hidden>
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                )}
+                {showPointCue && <span className="gogo-gesture-cue gogo-cue-point" aria-hidden />}
+                {showSpeakCue && (
+                  <span className="gogo-gesture-cue gogo-cue-speak" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
+                <img
+                  src={spriteSrc}
+                  alt="Fooz"
+                  className={`relative h-32 w-auto sm:h-40 drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass}`}
+                  draggable={false}
+                />
+              </span>
             {!open && (
               <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 border border-blue-300/40 text-white shadow-lg">
                 <MessageCircle className="w-3.5 h-3.5" />

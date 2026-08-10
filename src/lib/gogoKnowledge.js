@@ -26,8 +26,8 @@ const TOPICS = [
     id: 'welcome',
     match: [/^(hi|hello|hey|مرحبا|اهلا|أهلا|السلام)/i, /who\s*are\s*you|من\s*أنت|مين\s*انت/i],
     replies: {
-      en: "Hi! I'm GoGo — your SCORA guide. I can explain TCS, PQA, Search, Feedback, and the Academy survey. What do you need?",
-      ar: 'أهلاً! أنا GoGo مرشدك في SCORA. أقدر أشرح لك TCS وPQA والبحث والملاحظات واستبيان الأكاديمية. محتاج إيه؟',
+      en: "Hi! I'm Fooz — your SCORA guide. I can explain TCS, PQA, Search, Feedback, and the Academy survey. What do you need?",
+      ar: 'أهلاً! أنا Fooz مرشدك في SCORA. أقدر أشرح لك TCS وPQA والبحث والملاحظات واستبيان الأكاديمية. محتاج إيه؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'],
   },
