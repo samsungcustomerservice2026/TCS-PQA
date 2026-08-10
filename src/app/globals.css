@@ -552,6 +552,31 @@
     transform-origin: 50% 20%;
   }
 
+  .gogo-pose-typing {
+    animation: gogoTyping 0.85s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-pose-explaining {
+    animation: gogoExplaining 1.35s ease-in-out infinite;
+    transform-origin: 42% 100%;
+  }
+
+  .gogo-pose-success {
+    animation: gogoSuccess 0.95s cubic-bezier(0.22, 1, 0.36, 1) 1;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-pose-empathetic {
+    animation: gogoEmpathetic 2.1s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+
+  .gogo-pose-error {
+    animation: gogoError 0.85s ease-in-out 2;
+    transform-origin: 50% 100%;
+  }
+
   .gogo-think-dots {
     animation: gogoThinkBob 0.9s ease-in-out infinite;
   }
@@ -748,6 +773,76 @@
     }
     70% {
       transform: rotateX(-4deg) translateY(-1px);
+    }
+  }
+
+  @keyframes gogoTyping {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg) scale(1);
+    }
+    25% {
+      transform: translateY(-2px) rotate(-1deg) scale(1.01);
+    }
+    50% {
+      transform: translateY(-5px) rotate(1.2deg) scale(1.02);
+    }
+    75% {
+      transform: translateY(-1px) rotate(-0.6deg) scale(1.01);
+    }
+  }
+
+  @keyframes gogoExplaining {
+    0%,
+    100% {
+      transform: translateX(0) rotate(0deg) scale(1);
+    }
+    30% {
+      transform: translateX(8px) translateY(-3px) rotate(4deg) scale(1.03);
+    }
+    60% {
+      transform: translateX(4px) translateY(-1px) rotate(2deg) scale(1.02);
+    }
+  }
+
+  @keyframes gogoSuccess {
+    0% {
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+    35% {
+      transform: translateY(-10px) scale(1.06) rotate(-4deg);
+    }
+    60% {
+      transform: translateY(-4px) scale(1.03) rotate(5deg);
+    }
+    100% {
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+  }
+
+  @keyframes gogoEmpathetic {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-1deg) scale(0.99);
+    }
+    50% {
+      transform: translateY(-4px) rotate(1.5deg) scale(1.01);
+    }
+  }
+
+  @keyframes gogoError {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    25% {
+      transform: translateY(-6px) rotate(-4deg) scale(1.02);
+    }
+    50% {
+      transform: translateY(2px) rotate(3deg);
+    }
+    75% {
+      transform: translateY(-3px) rotate(-2deg);
     }
   }
 

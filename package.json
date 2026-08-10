@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:pqa-map": "node scripts/verify-pqa-partner-map.mjs",
+    "ingest:gsmarena": "node scripts/ingest-gsmarena-samsung.mjs",
     "deploy:storage": "firebase deploy --only storage --project tcs-for-engineers"
   },
   "dependencies": {

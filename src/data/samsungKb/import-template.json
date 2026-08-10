@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "note": "Template only — replace placeholders with verified source values. Do not import this file as-is into production.",
+  "products": [
+    {
+      "product_id": "sm-xxxxxx",
+      "marketing_name": "",
+      "family": "",
+      "category": "mobile_phones",
+      "model_numbers": ["SM-XXXXXX"],
+      "primary_model_number": "SM-XXXXXX",
+      "region": "",
+      "release_date": "",
+      "discontinued_date": null,
+      "country_availability": [],
+      "specifications": {
+        "platform": {},
+        "display": {},
+        "battery": {},
+        "camera": {},
+        "memory": {},
+        "comms": {},
+        "body": {},
+        "network": {}
+      },
+      "egypt": {
+        "available": "UNKNOWN",
+        "officially_sold": "UNKNOWN",
+        "manufactured_in_egypt": "UNKNOWN",
+        "assembled_in_egypt": "UNKNOWN",
+        "manufacturing_location": "",
+        "manufacturing_period": "",
+        "evidence_source": "",
+        "evidence": []
+      },
+      "sources": [],
+      "conflicts": [],
+      "DATA_STATUS": "UNVERIFIED",
+      "aliases": []
+    }
+  ]
+}

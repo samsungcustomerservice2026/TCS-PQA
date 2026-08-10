@@ -5,8 +5,12 @@
  *   gogo_assistant / workspace / qa / {qaId}
  *   gogo_assistant / workspace / culture / {cultureId}
  *   gogo_assistant / workspace / chats / {visitorId}
+ *   gogo_assistant / workspace / learned / {learnedId}
+ *   gogo_assistant / workspace / feedback / {feedbackId}
+ *   gogo_assistant / workspace / products / {productId}
  *
  * Chat docs MUST use document id === visitorId. Clients only read/write their own chat.
+ * Learned + feedback + products are shared assistant memory (no PII dumps).
  */
 export const FIREBASE_GOGO_FIRESTORE_RULES_SNIPPET = `
 // --- GoGo AI assistant ---
@@ -26,6 +30,24 @@ match /gogo_assistant/workspace/culture/{cultureId} {
   allow delete: if false;
 }
 
+match /gogo_assistant/workspace/learned/{learnedId} {
+  allow read: if true;
+  allow create, update: if true;
+  allow delete: if false;
+}
+
+match /gogo_assistant/workspace/products/{productId} {
+  allow read: if true;
+  allow create, update: if true;
+  allow delete: if false;
+}
+
+match /gogo_assistant/workspace/feedback/{feedbackId} {
+  allow read: if false;
+  allow create: if true;
+  allow update, delete: if false;
+}
+
 match /gogo_assistant/workspace/chats/{visitorId} {
   allow create: if request.resource.data.visitorId == visitorId
     && request.resource.data.visitorId is string
@@ -39,4 +61,6 @@ match /gogo_assistant/workspace/chats/{visitorId} {
 `;
 
 export const FIREBASE_GOGO_CONSOLE_HINT =
-  'Firebase Console → Firestore → Data → gogo_assistant / workspace / {qa, culture, chats}';
+  'Firebase Console → Firestore → Data → gogo_assistant / workspace / {qa, culture, chats, learned, feedback, products}\n' +
+  'Product docs use template fields: id, name_en/ar, series, variant, aliases, seriesKeys, specs, gsmarenaUrl, source=gsmarena\n' +
+  'NEW structured KB (model-number primary): samsung_kb / workspace / products + samsung_kb / catalog_meta — see firebaseSamsungKbRules.js';

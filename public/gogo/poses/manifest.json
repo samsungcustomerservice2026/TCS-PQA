@@ -1,0 +1,78 @@
+{
+  "source": "public/gogo/_gallery-source.png",
+  "generatedAt": "2026-08-10T15:19:57.742Z",
+  "layout": "6+6+5+4",
+  "rows": [
+    {
+      "top": 46,
+      "bottom": 296,
+      "cols": 6
+    },
+    {
+      "top": 306,
+      "bottom": 556,
+      "cols": 6
+    },
+    {
+      "top": 566,
+      "bottom": 806,
+      "cols": 5
+    },
+    {
+      "top": 816,
+      "bottom": 1018,
+      "cols": 4
+    }
+  ],
+  "stateMap": {
+    "idle": 1,
+    "welcome": 2,
+    "success": 3,
+    "listening": 4,
+    "point": 5,
+    "explaining": 6,
+    "wave": 7,
+    "shrug": 8,
+    "empathetic": 9,
+    "think": 10,
+    "point_ui": 11,
+    "typing_tablet": 12,
+    "walk": 13,
+    "celebrate": 14,
+    "typing": 15,
+    "error": 16,
+    "think_chin": 17,
+    "success_fists": 18,
+    "think_close": 19,
+    "speak": 20,
+    "shock": 21
+  },
+  "liveExports": {
+    "idle.png": "idle",
+    "welcome.png": "welcome",
+    "wave.png": "wave",
+    "bye.png": "wave",
+    "speak.png": "speak",
+    "think.png": "think",
+    "point.png": "point",
+    "walk-a.png": "walk",
+    "walk-b.png": "walk",
+    "typing.png": "typing",
+    "explaining.png": "explaining",
+    "success.png": "success",
+    "empathetic.png": "empathetic",
+    "error.png": "error",
+    "listening.png": "listening",
+    "celebrate.png": "celebrate",
+    "gogo.png": "idle"
+  },
+  "chatStateToFile": {
+    "idle": "idle.png ← pose 1",
+    "thinking": "think.png ← pose 10",
+    "typing": "typing.png ← pose 15",
+    "explaining": "explaining.png ← pose 6",
+    "pointing": "point.png ← pose 5",
+    "success": "success.png ← pose 3",
+    "empathetic": "empathetic.png ← pose 9"
+  }
+}

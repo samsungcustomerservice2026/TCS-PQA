@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { isGoGoDeniedMessage } from '../../../../lib/gogoKnowledge';
+import { getGoGoSoftRedirectReply, isGoGoDeniedMessage } from '../../../../lib/gogoKnowledge';
 import { buildGoGoSystemPrompt, GOGO_SMART_CHIPS } from '../../../../lib/gogoGeminiContext';
+import { ensureGoGoCompleteReply, parseGoGoStateTaggedText } from '../../../../lib/gogoStateTags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,20 +9,15 @@ export const dynamic = 'force-dynamic';
 const MAX_HISTORY = 10;
 const MAX_MESSAGE = 800;
 const MAX_REPLY = 1200;
+const MAX_LEARNING_HINT = 900;
 
 /** Prefer env model, then free-tier-friendly Flash aliases. */
 const MODEL_FALLBACKS = [
   'gemini-flash-latest',
   'gemini-flash-lite-latest',
-  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
 ];
-
-function deniedReply(lang) {
-  return lang === 'ar'
-    ? 'أقدر أساعد في SCORA وTCS وPQA بس. تحب نبدأ من هناك؟'
-    : 'I can help with SCORA, TCS, and PQA. Want to start there?';
-}
 
 function needNameReply(lang) {
   return lang === 'ar'
@@ -76,7 +72,7 @@ async function callGeminiOnce({ system, history, message, model, apiKey }) {
       contents,
       generationConfig: {
         temperature: 0.4,
-        maxOutputTokens: 512,
+        maxOutputTokens: 768,
       },
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -139,6 +135,7 @@ export async function POST(request) {
   const lang = body?.lang === 'ar' ? 'ar' : 'en';
   const visitorName = String(body?.visitorName || '').trim().slice(0, 40);
   const message = String(body?.message || '').trim().slice(0, MAX_MESSAGE);
+  const learningHint = String(body?.learningHint || '').trim().slice(0, MAX_LEARNING_HINT);
   const history = sanitizeHistory(body?.history);
 
   if (!message) {
@@ -154,16 +151,16 @@ export async function POST(request) {
 
   if (isGoGoDeniedMessage(message)) {
     return NextResponse.json({
-      reply: deniedReply(lang),
+      reply: getGoGoSoftRedirectReply(lang),
       chips: GOGO_SMART_CHIPS,
       denied: true,
       source: 'guard',
+      learnable: false,
     });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    // Log server-side only — never expose keys, env paths, or setup steps to visitors
     console.warn('GoGo chat unavailable: missing server API configuration');
     return NextResponse.json(
       { error: 'Assistant temporarily unavailable', code: 'unavailable', fallback: true },
@@ -172,7 +169,7 @@ export async function POST(request) {
   }
 
   const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-  const system = buildGoGoSystemPrompt({ lang, visitorName });
+  const system = buildGoGoSystemPrompt({ lang, visitorName, learningHint });
 
   try {
     const { text: reply, model: usedModel } = await callGemini({
@@ -182,13 +179,26 @@ export async function POST(request) {
       model,
       apiKey,
     });
+    const parsed = parseGoGoStateTaggedText(reply);
+    const clean = ensureGoGoCompleteReply(parsed.displayText || reply);
+    const segments = Array.isArray(parsed.segments)
+      ? parsed.segments.map((seg) => ({
+          ...seg,
+          text: ensureGoGoCompleteReply(seg.text),
+        })).filter((seg) => seg.text)
+      : null;
     return NextResponse.json({
-      reply,
+      reply: clean,
       chips: GOGO_SMART_CHIPS,
       denied: false,
       source: 'gemini',
       model: usedModel,
-      spoken: reply,
+      spoken: clean,
+      learnable: true,
+      animation: {
+        initialState: parsed.initialState,
+        segments: segments?.length ? segments : parsed.segments,
+      },
     });
   } catch (err) {
     console.warn('GoGo Gemini chat failed:', err?.message || err);

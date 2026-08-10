@@ -3,6 +3,13 @@
  * No scores, admin secrets, or engineer PII.
  */
 
+import {
+  findGoGoKpiDefinition,
+  formatGoGoKpiAnswer,
+  buildGoGoOrgPlainText,
+} from './gogoOrgAndKpis';
+import { getGoGoSamsungPositiveBlurb } from './gogoSamsungPositive';
+
 export const GOGO_DENIED_PATTERNS = [
   /password|passwd|credential|api\s*key|token|secret|firebase|firestore/i,
   /admin\s*password|login\s*as\s*admin|bypass/i,
@@ -10,6 +17,10 @@ export const GOGO_DENIED_PATTERNS = [
   /show\b[\s\S]{0,40}\b(scores?|ranks?|winners?|engineers?|salary)\b/i,
   /\b(all|every)\s+(scores?|ranks?|winners?|engineers?)\b/i,
   /database|export\s*all|dump\s*data|hack/i,
+  /religion|religious|christian|muslim|islam|jesus|allah|bible|quran|سياسة|دين|مسيحي|مسلم|يهود/i,
+  /politic|election|president|government|حزب|انتخاب|حكومة|رئيس\s*الجمهورية/i,
+  /hate\s*samsung|samsung\s*(sucks|is\s*bad|scam)|مقاطعة\s*سامسونج|سامسونج\s*(وحش|نصب|زبالة)/i,
+  /racist|slur|insult|abuse|fuck\s*you|idiot|stupid|اهان|شتيم|العنصر/i,
   /كلمة\s*المرور|باسورد|سر\s*الإدارة|هكر|قتل|عنف/i,
 ];
 
@@ -17,6 +28,16 @@ export function isGoGoDeniedMessage(text) {
   const s = String(text || '').trim();
   if (!s) return false;
   return GOGO_DENIED_PATTERNS.some((re) => re.test(s));
+}
+
+export function isHostileOrOffTopicMessage(text) {
+  return isGoGoDeniedMessage(text);
+}
+
+export function getGoGoSoftRedirectReply(lang = 'en') {
+  return lang === 'ar'
+    ? 'آسف على الإزعاج. إحنا هنا نتكلم عن تطبيق Samsung SCORA وخدمة العملاء بطريقة ودودة ومفيدة. تحب أشرح لك TCS أو PQA أو البحث؟'
+    : "I'm sorry — let's keep things positive. We're here to talk about the Samsung SCORA app and customer-service excellence in a friendly way. Want me to explain TCS, PQA, or Search?";
 }
 
 /** @typedef {'en'|'ar'} GoGoLang */
@@ -212,10 +233,23 @@ const TOPICS = [
     // Answer only if asked — never pinned as a chip
     match: [/who\s*(built|made|created|developed)|مين\s*(بنى|صنع|عمل)|من\s*(بنى|صنع|عمل)|developer|fawzy|فوزي/i],
     replies: {
-      en: 'Eng Fawzy — Technical Support Engineer at Samsung Egypt.',
-      ar: 'المهندس فوزي — مهندس دعم فني في سامسونج مصر.',
+      en:
+        'Fawzy Maher is a Technical Support Engineer at Samsung Egypt — MX Tech under Mahmoud Hassan in Service Operation. He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
+      ar:
+        'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation. هو اللي بنى SCORA عشان التميز يكون عادل وواضح لكل عائلة خدمة العملاء (TCS وPQA والبحث والملاحظات وأكتر). تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
     },
     chips: ['what_scora', 'what_tcs', 'goal_scora'],
+  },
+  {
+    id: 'george_samir',
+    match: [/george(\s*samir)?|جورج(\s*سمير)?/i],
+    replies: {
+      en:
+        'George Samir is an MX Technical Engineer at Samsung Egypt Customer Service Head Office. He works in the Technical team led by Mahmoud Hassan under Service Operation.\n\nAnd I\'ll tell you a little secret… it\'s Me! Haha!',
+      ar:
+        'جورج سمير مهندس MX فني في مكتب خدمة عملاء سامسونج مصر. بيشتغل في فريق Technical تحت محمود حسن ضمن Service Operation.\n\nوهقولك سر صغير… هو أنا! هههه!',
+    },
+    chips: ['what_scora', 'who_built'],
   },
   {
     id: 'goal_scora',
@@ -228,10 +262,10 @@ const TOPICS = [
   },
   {
     id: 'mx_kpis',
-    match: [/mx\s*kpi|kpi.*mx|ssr|iqc\s*skip|rrr90|مؤشر.*mx|مؤشرات\s*mx/i],
+    match: [/mx\s*kpi|kpi.*mx|ssr|iqc\s*skip|rrr90|rrr30|مؤشر.*mx|مؤشرات\s*mx/i],
     replies: {
-      en: 'MX KPIs change by quarter. Common ones: SSR, RRR90, IQC Skip, Core Parts, MPU, Training, DRNPS, Exam, Final Result. I explain concepts — live scores stay in Search/Dashboard.',
-      ar: 'مؤشرات MX تتغير حسب الربع. الشائع منها: SSR وRRR90 وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان والنتيجة النهائية. أشرح الفكرة — الدرجات الحية في البحث أو اللوحة.',
+      en: 'MX KPIs include SSR (same-symptom return), RRR30/RRR90 (return repair ratio in 30/90 days), IQC Skip, Core Parts, MPU/Multi Parts, Training, DRNPS, Exam, Maintenance Mode, OQC, and Final Result. Ask any acronym and I’ll define it — live scores stay in Search/Dashboard.',
+      ar: 'مؤشرات MX تشمل SSR (عودة بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسأل عن أي اختصار أعرّفه — الدرجات الحية في البحث أو اللوحة.',
     },
     chips: ['da_av_kpis', 'ranks_tiers', 'what_tcs'],
   },
@@ -239,10 +273,30 @@ const TOPICS = [
     id: 'da_av_kpis',
     match: [/da\s*kpi|av\s*kpi|rnps|chatbot|hass|linkage|مؤشر.*(da|av)|مؤشرات\s*(da|av)/i],
     replies: {
-      en: 'DA/AV Q1 often: Final, SSR, REDO, Chatbot, HASS, Acc Core Parts, Training, Linkage. Q2 often: Final, RNPS, REDO, Training, ST Con, MJ %, Complete Repair, Kahoot, HASS, Repair Volume.',
-      ar: 'في DA وAV غالباً Q1: النتيجة وSSR وREDO وChatbot وHASS والقطع الأساسية والتدريب وLinkage. وQ2: النتيجة وRNPS وإعادة العمل والتدريب وST وMJ وإكمال الإصلاح وKahoot وHASS وحجم الإصلاح.',
+      en: 'DA and AV may share one template for CE engineers who cover both products, but KPIs differ. DA can include HASS; AV does not. Common shared ideas: SSR, REDO, Chatbot, Core Parts, Training, Linkage, RNPS, ST Con, MJ %, Complete Repair, Kahoot, Repair Volume, Final Result. Ask a name and I’ll define it.',
+      ar: 'DA وAV قد يشتركان في قالب واحد لمهندسي CE، لكن المؤشرات تختلف. DA قد يشمل HASS بينما AV لا. أفكار مشتركة: SSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح والنتيجة النهائية. اسأل عن اسم وأعرّفه.',
     },
     chips: ['mx_kpis', 'what_tcs', 'goto_tcs'],
+  },
+  {
+    id: 'samsung_positive',
+    match: [
+      /samsung\s*(product|phone|galaxy|sale|market|fold|ai|ultra)|galaxy\s*(s\s*26|s26|a\s*1[7]|a17|a27|a37|a57|z\s*fold|fold\s*8|flip\s*8|s26\s*fe)|موبايل\s*سامسونج|منتجات\s*سامسونج|مبيعات\s*سامسونج|جالاكسي|s26|a17|a27|a37|a57|fold\s*8|flip\s*8/i,
+    ],
+    replies: {
+      en: '',
+      ar: '',
+    },
+    chips: ['what_scora', 'what_tcs', 'how_search'],
+  },
+  {
+    id: 'cs_org',
+    match: [/hierarch|org\s*chart|organisation|organization|head\s*office|هيكل|تسلسل|منظمة|مكتب\s*(خدمة|الرأس)|hod\b|kbm\b/i],
+    replies: {
+      en: '', // filled dynamically
+      ar: '',
+    },
+    chips: ['what_scora', 'mx_kpis', 'what_tcs'],
   },
   {
     id: 'ranks_tiers',
@@ -274,6 +328,8 @@ export const GOGO_CHIP_LABELS = {
     mx_kpis: 'MX KPIs',
     da_av_kpis: 'DA/AV KPIs',
     ranks_tiers: 'Ranks & tiers',
+    cs_org: 'CS Head Office',
+    samsung_positive: 'Samsung highlights',
   },
   ar: {
     what_scora: 'ما هو SCORA؟',
@@ -293,12 +349,9 @@ export const GOGO_CHIP_LABELS = {
     mx_kpis: 'مؤشرات MX',
     da_av_kpis: 'مؤشرات DA/AV',
     ranks_tiers: 'الترتيب والمستويات',
+    cs_org: 'هيكل مكتب الخدمة',
+    samsung_positive: 'أبرز سامسونج',
   },
-};
-
-const DENIED_REPLY = {
-  en: "I'd love to help with everything, but I'm GoGo for SCORA only — TCS, PQA, Search, Feedback, and KPIs. Pick a topic below!",
-  ar: 'نفسي أساعد في كل حاجة، بس أنا GoGo لـ SCORA بس — TCS وPQA والبحث والملاحظات والمؤشرات. اختار موضوع من تحت!',
 };
 
 const FALLBACK = {
@@ -351,13 +404,19 @@ export function resolveGoGoReply(text, lang = 'en', opts = {}) {
     return { reply: welcome.replies[L], chips: welcome.chips, topicId: 'welcome' };
   }
   if (isGoGoDeniedMessage(raw)) {
-    return { reply: DENIED_REPLY[L], chips: ['what_scora', 'what_tcs', 'how_search'], denied: true };
+    return { reply: getGoGoSoftRedirectReply(L), chips: ['what_scora', 'what_tcs', 'how_search'], denied: true };
   }
 
   const byId = TOPICS.find((t) => t.id === raw);
   if (byId) {
+    const reply =
+      byId.id === 'cs_org'
+        ? buildGoGoOrgPlainText(L)
+        : byId.id === 'samsung_positive'
+          ? getGoGoSamsungPositiveBlurb(L)
+          : byId.replies[L];
     return {
-      reply: byId.replies[L],
+      reply,
       chips: byId.chips || DEFAULT_CHIPS,
       action: byId.action,
       topicId: byId.id,
@@ -366,13 +425,28 @@ export function resolveGoGoReply(text, lang = 'en', opts = {}) {
 
   for (const topic of TOPICS) {
     if (topic.match.some((re) => re.test(raw))) {
+      const reply =
+        topic.id === 'cs_org'
+          ? buildGoGoOrgPlainText(L)
+          : topic.id === 'samsung_positive'
+            ? getGoGoSamsungPositiveBlurb(L)
+            : topic.replies[L];
       return {
-        reply: topic.replies[L],
+        reply,
         chips: topic.chips || DEFAULT_CHIPS,
         action: topic.action,
         topicId: topic.id,
       };
     }
+  }
+
+  const kpi = findGoGoKpiDefinition(raw);
+  if (kpi) {
+    return {
+      reply: formatGoGoKpiAnswer(kpi, L),
+      chips: ['mx_kpis', 'da_av_kpis', 'what_tcs'],
+      topicId: `kpi_${kpi.id}`,
+    };
   }
 
   const remoteHit = matchRemoteQa(raw, L, opts.remoteQa || []);

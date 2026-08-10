@@ -33,6 +33,7 @@ export const GOGO_CHIP_LABELS = {
     how_search: 'How to search',
     feedback: 'Feedback',
     survey: 'Academy survey',
+    cs_org: 'CS Head Office structure',
   },
   ar: {
     lang_toggle: 'English',
@@ -59,6 +60,7 @@ export const GOGO_CHIP_LABELS = {
     how_search: 'طريقة البحث',
     feedback: 'الملاحظات',
     survey: 'استبيان الأكاديمية',
+    cs_org: 'هيكل مكتب خدمة العملاء',
   },
 };
 
@@ -133,98 +135,97 @@ export const GOGO_FLOW = {
     replies: {
       en:
         'MX (Mobile) TCS evaluates field engineers on repair quality, process KPIs, training, and customer feedback.\n\n' +
-        'KPIs change by quarter (Q1 vs Q2 sheets). The Final Result comes from the uploaded Excel, and ranking often uses the average of available quarter finals.',
+        'KPIs can differ by quarter. Final Result drives ranking, and SCORA often averages available quarter finals. Ask me any KPI name (like RRR30) and I’ll define it.',
       ar:
         'TCS لقسم MX (موبايل) يقيّم مهندسي الميدان على جودة الإصلاح ومؤشرات العملية والتدريب ورأي العميل.\n\n' +
-        'المؤشرات تتغير حسب الربع (Q1 وQ2). النتيجة النهائية تأتي من ملف Excel المرفوع، والترتيب غالباً يعتمد متوسط نتائج الأرباع المتاحة.',
+        'المؤشرات قد تختلف حسب الربع. النتيجة النهائية تقود الترتيب، وSCORA غالباً يحسب متوسط نتائج الأرباع المتاحة. اسألني عن أي مؤشر (مثل RRR30) أعرّفه لك.',
     },
     chips: ['mx_kpis', 'mx_calc', 'goto_tcs', 'what_tcs', 'main_menu'],
   },
   mx_kpis: {
     replies: {
       en:
-        'Common MX KPIs (examples — follow the live quarter sheet):\n\n' +
-        'Q1 focus:\n' +
-        '• SSR % / score · RRR90 % / score\n' +
-        '• IQC Skip % · Core Parts % · MPU %\n' +
-        '• Training · DRNPS % · Exam · Final Result\n\n' +
-        'Q2 focus:\n' +
-        '• LCD/OCTA · PBA · Multi Parts\n' +
-        '• IQC Skip · RRR30 · Training · DRNPS\n' +
-        '• Maintenance Mode · OQC · Final Result\n\n' +
-        'I explain concepts only — live scores stay in Dashboard/Search.',
+        'Common MX KPIs and what they mean:\n\n' +
+        '• SSR — Same Symptom return/REDO\n' +
+        '• RRR90 / RRR30 — Return Repair Ratio in 90 / 30 days\n' +
+        '• IQC Skip — skipped incoming quality checks\n' +
+        '• Core Parts / PBA / LCD-OCTA — correct critical-part usage\n' +
+        '• MPU / Multi Parts — multi-part usage ratio\n' +
+        '• Training · DRNPS · Exam · Maintenance Mode · OQC · Final Result\n\n' +
+        'Ask any acronym for a fuller definition. Live scores stay in Dashboard/Search.',
       ar:
-        'مؤشرات MX الشائعة (أمثلة — اتبع ورقة الربع الحالية):\n\n' +
-        'تركيز Q1:\n' +
-        '• SSR وRRR90 · تخطي IQC · القطع الأساسية · MPU\n' +
-        '• التدريب · DRNPS · الامتحان · النتيجة النهائية\n\n' +
-        'تركيز Q2:\n' +
-        '• LCD/OCTA · PBA · Multi Parts\n' +
-        '• تخطي IQC · RRR30 · التدريب · DRNPS\n' +
-        '• وضع الصيانة · OQC · النتيجة النهائية\n\n' +
-        'أشرح المفاهيم فقط — الدرجات الحية في اللوحة أو البحث.',
+        'مؤشرات MX الشائعة ومعناها:\n\n' +
+        '• SSR — عودة / إعادة بنفس العَرَض\n' +
+        '• RRR90 / RRR30 — نسبة إعادة الإصلاح خلال 90 / 30 يوم\n' +
+        '• تخطي IQC — تجاوز فحص الجودة الوارد\n' +
+        '• القطع الأساسية / PBA / LCD-OCTA — استخدام صحيح للقطع الحرجة\n' +
+        '• MPU / Multi Parts — نسبة استخدام قطع متعددة\n' +
+        '• التدريب · DRNPS · الامتحان · وضع الصيانة · OQC · النتيجة النهائية\n\n' +
+        'اسأل عن أي اختصار لتعريف أوضح. الدرجات الحية في اللوحة أو البحث.',
     },
     chips: ['mx_calc', 'tcs_mx', 'tcs_da', 'main_menu'],
   },
   mx_calc: {
     replies: {
       en:
-        'How MX Final Result / targeted score works:\n\n' +
-        '1) Admins upload the quarter Excel (Engineer_Wide).\n' +
-        '2) Each KPI has a % and/or points column on that sheet.\n' +
-        '3) Final Result is taken from Excel (not reinvented in chat).\n' +
-        '4) For ranking display, SCORA often averages Final Results across present quarters.\n\n' +
-        'Legacy formula (when used): ~50% KPI block + 30% DRNPS + 20% Exam.\n' +
-        'Always trust the uploaded sheet for the current period.',
+        'How MX Final Result works:\n\n' +
+        '1) Each period has KPI % and/or points that feed the Final Result.\n' +
+        '2) Ranking often uses the average of available quarter Final Results.\n' +
+        '3) A common legacy mix is about 50% operational KPIs + 30% DRNPS + 20% Exam.\n\n' +
+        'Open Search with an engineer code for the live dossier.',
       ar:
-        'كيف تُحسب نتيجة MX النهائية / المستهدفة:\n\n' +
-        '1) الإدارة ترفع ملف Excel للربع.\n' +
-        '2) كل مؤشر له نسبة و/أو نقاط في الورقة.\n' +
-        '3) النتيجة النهائية تُؤخذ من Excel (مش من الشات).\n' +
-        '4) للترتيب، SCORA غالباً يحسب متوسط نتائج الأرباع المتاحة.\n\n' +
-        'صيغة قديمة (عند استخدامها): حوالي 50% مؤشرات + 30% DRNPS + 20% امتحان.\n' +
-        'دائماً اعتبر ورقة الربع المرفوعة هي المرجع.',
+        'كيف تعمل نتيجة MX النهائية:\n\n' +
+        '1) لكل فترة نسب و/أو نقاط مؤشرات تغذي النتيجة النهائية.\n' +
+        '2) الترتيب غالباً يعتمد متوسط نتائج الأرباع المتاحة.\n' +
+        '3) مزيج شائع قديم: حوالي 50% مؤشرات تشغيل + 30% DRNPS + 20% امتحان.\n\n' +
+        'افتح البحث بكود المهندس لرؤية الملف الحي.',
     },
     chips: ['mx_kpis', 'goto_tcs', 'what_tcs', 'main_menu'],
   },
   tcs_da: {
     replies: {
       en:
-        'DA (Domestic Appliances) TCS tracks appliance engineers with a wide Q1/Q2 KPI sheet.\n\n' +
-        'Final Result per quarter comes from Excel; overall TCS often averages available quarter finals.',
+        'DA (Domestic Appliances) TCS tracks appliance engineers on period KPIs and Final Result.\n\n' +
+        'Overall TCS often averages available quarter finals. Ask me to define any KPI.',
       ar:
-        'TCS لقسم DA (أجهزة منزلية) يتابع مهندسي الأجهزة بورقة مؤشرات Q1/Q2.\n\n' +
-        'النتيجة النهائية لكل ربع من Excel، والترتيب غالباً متوسط نتائج الأرباع المتاحة.',
+        'TCS لقسم DA (أجهزة منزلية) يتابع مهندسي الأجهزة بمؤشرات الفترة والنتيجة النهائية.\n\n' +
+        'الترتيب غالباً متوسط نتائج الأرباع المتاحة. اسألني أعرّف أي مؤشر.',
     },
     chips: ['da_kpis', 'da_calc', 'goto_tcs', 'what_tcs', 'main_menu'],
   },
   da_kpis: {
     replies: {
       en:
-        'DA KPIs (typical sheet columns):\n\n' +
-        'Q1: Final · SSR · REDO · Chatbot · HASS · Acc Core Parts · Training · Linkage\n\n' +
-        'Q2: Final · RNPS · REDO · Training · ST Con · MJ % · Complete Repair · Kahoot · HASS · Repair Volume\n\n' +
-        'Product group HA maps to DA in uploads.',
+        'DA KPIs (typical):\n\n' +
+        '• SSR — same-symptom return\n' +
+        '• REDO — rework / return repair\n' +
+        '• Chatbot · HASS · Acc Core Parts · Training · Linkage\n' +
+        '• RNPS — repair NPS\n' +
+        '• ST Con · MJ % · Complete Repair · Kahoot · Repair Volume · Final Result\n\n' +
+        'Note: DA and AV can share one template for CE engineers who cover both, but DA includes HASS while AV does not.\n' +
+        'Say a KPI name and I’ll define it.',
       ar:
-        'مؤشرات DA (أعمدة الورقة الشائعة):\n\n' +
-        'Q1: النتيجة · SSR · REDO · Chatbot · HASS · القطع الأساسية · التدريب · Linkage\n\n' +
-        'Q2: النتيجة · RNPS · REDO · التدريب · ST · MJ % · إكمال الإصلاح · Kahoot · HASS · حجم الإصلاح\n\n' +
-        'مجموعة HA تُربط بقسم DA عند الرفع.',
+        'مؤشرات DA (شائعة):\n\n' +
+        '• SSR — عودة بنفس العَرَض\n' +
+        '• REDO — إعادة العمل / الإصلاح\n' +
+        '• Chatbot · HASS · القطع الأساسية · التدريب · Linkage\n' +
+        '• RNPS — مؤشر توصية الإصلاح\n' +
+        '• ST · MJ % · إكمال الإصلاح · Kahoot · حجم الإصلاح · النتيجة النهائية\n\n' +
+        'ملاحظة: DA وAV قد يشتركان في قالب واحد لمهندسي CE، لكن HASS ضمن DA وليس ضمن AV.\n' +
+        'قول اسم المؤشر وأعرّفه لك.',
     },
-    chips: ['da_calc', 'tcs_da', 'tcs_av', 'main_menu'],
+    chips: ['da_calc', 'tcs_da', 'av_kpis', 'main_menu'],
   },
   da_calc: {
     replies: {
       en:
         'How DA Final Result is calculated:\n\n' +
-        '• Sub-KPIs are scored on the Excel sheet for each quarter.\n' +
-        '• Q1 Final / Q2 Final are imported as-is.\n' +
+        '• Period sub-KPIs feed each quarter’s Final Result.\n' +
         '• Displayed TCS score is typically the average of available quarter Finals.\n\n' +
         'Open Search with an engineer code to see the live dossier.',
       ar:
         'كيف تُحسب نتيجة DA النهائية:\n\n' +
-        '• المؤشرات الفرعية تُحسب في ورقة Excel لكل ربع.\n' +
-        '• نتيجة Q1 وQ2 تُستورد كما هي.\n' +
+        '• مؤشرات الفترة تغذي نتيجة كل ربع.\n' +
         '• درجة TCS المعروضة غالباً متوسط نتائج الأرباع المتاحة.\n\n' +
         'افتح البحث بكود المهندس لرؤية الملف الحي.',
     },
@@ -233,36 +234,42 @@ export const GOGO_FLOW = {
   tcs_av: {
     replies: {
       en:
-        'AV TCS uses the same wide DA/AV Excel structure (Q1/Q2), mapped to the AV division.\n\n' +
-        'Explore KPIs and how Final Result is calculated next.',
+        'AV TCS uses the same style of period KPIs as DA/AV evaluations, mapped to the AV division.\n\n' +
+        'Explore KPI meanings or how Final Result is calculated next.',
       ar:
-        'TCS لقسم AV يستخدم نفس هيكل ورقة DA/AV (Q1/Q2) ويرتبط بقسم AV.\n\n' +
-        'بعدها تقدر تشوف المؤشرات وطريقة حساب النتيجة النهائية.',
+        'TCS لقسم AV يستخدم نفس أسلوب مؤشرات الفترة مثل تقييمات DA/AV ويرتبط بقسم AV.\n\n' +
+        'بعدها تقدر تشوف معاني المؤشرات أو طريقة حساب النتيجة النهائية.',
     },
     chips: ['av_kpis', 'av_calc', 'goto_tcs', 'what_tcs', 'main_menu'],
   },
   av_kpis: {
     replies: {
       en:
-        'AV KPIs match the DA/AV sheet:\n\n' +
-        'Q1: Final · SSR · REDO · Chatbot · HASS · Acc Core Parts · Training · Linkage\n\n' +
-        'Q2: Final · RNPS · REDO · Training · ST Con · MJ % · Complete Repair · Kahoot · HASS · Repair Volume',
+        'AV and DA may share one upload template because some CE engineers support both product lines — but the KPI sets are NOT the same.\n\n' +
+        'AV KPIs (typical):\n' +
+        '• SSR · REDO · Chatbot · Acc Core Parts · Training · Linkage\n' +
+        '• RNPS · ST Con · MJ % · Complete Repair · Kahoot · Repair Volume · Final Result\n\n' +
+        'Important: AV does NOT use HASS in its KPI set (HASS is a DA-side measure).\n' +
+        'Ask any name and I’ll define it.',
       ar:
-        'مؤشرات AV من ورقة DA/AV:\n\n' +
-        'Q1: النتيجة · SSR · REDO · Chatbot · HASS · القطع الأساسية · التدريب · Linkage\n\n' +
-        'Q2: النتيجة · RNPS · REDO · التدريب · ST · MJ % · إكمال الإصلاح · Kahoot · HASS · حجم الإصلاح',
+        'AV وDA قد يشتركان في قالب رفع واحد لأن بعض مهندسي CE يخدمون المنتجين — لكن مجموعة المؤشرات ليست واحدة واحدة.\n\n' +
+        'مؤشرات AV (شائعة):\n' +
+        '• SSR · REDO · Chatbot · القطع الأساسية · التدريب · Linkage\n' +
+        '• RNPS · ST · MJ · إكمال الإصلاح · Kahoot · حجم الإصلاح · النتيجة النهائية\n\n' +
+        'مهم: AV لا يستخدم HASS ضمن مؤشراته (HASS مؤشر جانب DA).\n' +
+        'اسأل عن أي اسم وأعرّفه.',
     },
-    chips: ['av_calc', 'tcs_av', 'tcs_mx', 'main_menu'],
+    chips: ['av_calc', 'tcs_av', 'da_kpis', 'main_menu'],
   },
   av_calc: {
     replies: {
       en:
         'How AV Final Result is calculated:\n\n' +
-        'Same rule as DA — quarter Finals come from Excel; overall score averages available quarters.\n' +
+        'Same idea as DA — quarter Finals from period KPIs; overall score averages available quarters.\n' +
         'Use Dashboard/Search for live numbers.',
       ar:
         'كيف تُحسب نتيجة AV النهائية:\n\n' +
-        'نفس قاعدة DA — نتائج الأرباع من Excel، والدرجة الكلية متوسط الأرباع المتاحة.\n' +
+        'نفس فكرة DA — نتائج الأرباع من مؤشرات الفترة، والدرجة الكلية متوسط الأرباع المتاحة.\n' +
         'استخدم اللوحة أو البحث للأرقام الحية.',
     },
     chips: ['av_kpis', 'goto_tcs', 'what_tcs', 'main_menu'],
@@ -321,7 +328,7 @@ export const GOGO_FLOW = {
         '2) Add: LTP + Ex-LTP + REDO + SSR + D-RNPS + OFS + R-CXE + SDR\n' +
         '3) Subtract Audit and PR (treated as deductions)\n' +
         '4) Clamp the result between 0 and 100\n\n' +
-        'If Excel already provides a TCS/PQA score (0–100), the app may display that directly.\n' +
+        'If a ready 0–100 score already exists for the period, SCORA may display that directly.\n' +
         'Partners are ranked monthly from these results.',
       ar:
         'كيف تُحسب درجة / هدف PQA:\n\n' +
@@ -329,10 +336,42 @@ export const GOGO_FLOW = {
         '2) اجمع: LTP + Ex-LTP + REDO + SSR + D-RNPS + OFS + R-CXE + SDR\n' +
         '3) اطرح Audit وPR (خصومات)\n' +
         '4) النتيجة بين 0 و100\n\n' +
-        'لو الملف فيه درجة جاهزة (0–100) قد يعرضها التطبيق مباشرة.\n' +
+        'لو فيه درجة جاهزة (0–100) للفترة قد يعرضها SCORA مباشرة.\n' +
         'يتم ترتيب الشركاء شهرياً بناءً على هذه النتائج.',
     },
     chips: ['pqa_kpis', 'goto_pqa', 'what_pqa', 'main_menu'],
+  },
+  cs_org: {
+    replies: {
+      en:
+        'Samsung Egypt Customer Service Head Office structure:\n\n' +
+        'Leadership: Bishoy Adib (HOD) · Donald Jung (KBM)\n\n' +
+        '1) Service Operation — Mostafa Rady\n' +
+        '   Field (Mohamed Mohmdy): Mohamed Gamal (CE Field), Ahmed Elsawaf (MX Field)\n' +
+        '   Technical (Mahmoud Hassan): Mohamed Atef (VD/B2B Tech · System AC B2B Tech), Mostafa Amin (DA Tech), Fawzy Maher (MX Tech), George Samir (MX Tech)\n\n' +
+        '2) Parts Operation — Ahmed Khalifa\n' +
+        '   Planning: Salma Zaki, Fatma Kotb\n' +
+        '   Order Desk: Abdelhalim Mohamed (MX), Trez Medhat (VD), Karim Safory (DA)\n' +
+        '   Supply Chain: Reda Fathy\n' +
+        '   Warehouse: Emad Salam (UPC+DOA), Mohamed Salah, Ahmed Gamal\n\n' +
+        '3) Operation Support — Mohamed Farid\n' +
+        '   Warranty: Mohamed Kamal, Ahmed Abozaid, Hajer Ayman\n' +
+        '   PR/DOA: Reham Samir, Ahmed Bolkiny\n\n' +
+        '4) Customer Experience — Emad Ibrahim\n' +
+        '   Rehab Mostafa (DA CX), Mina Safwat (MX CX + RNPS), Caty Gamal (VD CX)\n\n' +
+        '5) Customer Support — Ahmed Abdelhady\n' +
+        '   Mai Elbarany (Digital SVC), Ahmed Samir (Call SVC + SDF), Ahmed Ayad (VOD + eStore NPS)',
+      ar:
+        'هيكل مكتب خدمة عملاء سامسونج مصر:\n\n' +
+        'القيادة: بيشوي أديب (HOD) · دونالد جونغ (KBM)\n\n' +
+        '1) Service Operation — مصطفى راضي\n' +
+        '2) Parts Operation — أحمد خليفة\n' +
+        '3) Operation Support — محمد فريد\n' +
+        '4) Customer Experience — عماد إبراهيم\n' +
+        '5) Customer Support — أحمد عبدالهادي\n\n' +
+        'اسأل عن أي محور بالإنجليزي وأفصّل لك أسماء الفرق.',
+    },
+    chips: ['what_scora', 'who_are_you', 'main_menu'],
   },
   how_search: {
     replies: {
@@ -410,15 +449,35 @@ export const GOGO_FLOW = {
   },
   who_built: {
     replies: {
-      en: 'Eng Fawzy — Technical Support Engineer at Samsung Egypt.',
-      ar: 'المهندس فوزي — مهندس دعم فني في سامسونج مصر.',
+      en:
+        'Fawzy Maher is a Technical Support Engineer at Samsung Egypt — MX Tech under Mahmoud Hassan in Service Operation.\n\n' +
+        'He built SCORA so excellence stays fair and visible for the whole CS family: TCS, PQA, Search, Feedback, and more.\n' +
+        'Real credit to him for turning that idea into this app — thank you, Fawzy!',
+      ar:
+        'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation.\n\n' +
+        'هو اللي بنى SCORA عشان التميز يكون عادل وواضح لكل عائلة خدمة العملاء: TCS وPQA والبحث والملاحظات وأكتر.\n' +
+        'تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده — شكراً فوزي!',
     },
     chips: MAIN_CHIPS,
   },
+  george_samir: {
+    replies: {
+      en:
+        'George Samir is an MX Technical Engineer at Samsung Egypt Customer Service Head Office. ' +
+        'He works in the Technical team led by Mahmoud Hassan under Service Operation.\n\n' +
+        "And I'll tell you a little secret… it's Me! Haha!",
+      ar:
+        'جورج سمير مهندس MX فني في مكتب خدمة عملاء سامسونج مصر. ' +
+        'بيشتغل في فريق Technical تحت محمود حسن ضمن Service Operation.\n\n' +
+        'وهقولك سر صغير… هو أنا! هههه!',
+    },
+    chips: MAIN_CHIPS,
+    expression: 'celebrate',
+  },
   denied: {
     replies: {
-      en: "I stay focused on SCORA — TCS, PQA, Search, and Feedback. Pick a topic below and I'll help right away.",
-      ar: 'أنا متخصص في SCORA — TCS وPQA والبحث والملاحظات. اختار موضوع من تحت وأنا معاك.',
+      en: "I'm sorry — let's keep things positive and friendly. We're here to talk about the Samsung SCORA app (TCS, PQA, Search, Feedback). What would you like to explore?",
+      ar: 'آسف — خلّينا نخلي الحوار إيجابي وودي. إحنا هنا نتكلم عن تطبيق Samsung SCORA (TCS وPQA والبحث والملاحظات). تحب نبدأ بإيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -453,7 +512,13 @@ export function resolveFlowReply(nodeId, lang = 'en', name = '') {
   if (!node) return { reply: '', chips: MAIN_CHIPS };
   const raw = node.replies[L];
   const reply = typeof raw === 'function' ? raw(name || (L === 'ar' ? 'صديقنا' : 'friend')) : raw;
-  return { reply, chips: node.chips || MAIN_CHIPS, action: node.action, nodeId };
+  return {
+    reply,
+    chips: node.chips || MAIN_CHIPS,
+    action: node.action,
+    nodeId,
+    expression: node.expression || null,
+  };
 }
 
 export function isValidGoGoName(text) {
@@ -505,6 +570,10 @@ export function matchFreeTextToFlow(text, lang = 'en') {
     return 'nice_to_meet';
   }
   if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|fawzy|فوزي/i.test(raw)) return 'who_built';
+  if (/george(\s*samir)?|جورج(\s*سمير)?/i.test(raw)) return 'george_samir';
+  if (/hierarch|org\s*chart|organisation|organization|head\s*office|هيكل|تسلسل|منظمة|مكتب\s*الرأس|hod\b|kbm\b|service\s*operation|parts\s*operation/i.test(raw)) {
+    return 'cs_org';
+  }
   if (/who\s*is\s*samsung|what\s*is\s*samsung|samsung\s*egypt|سامسونج/i.test(raw)) return 'what_scora';
   if (/scora|سكورا|التطبيق/i.test(raw)) return 'what_scora';
   if (/\bpqa\b|partner\s*quality|جائزة|شريك|مراكز/i.test(raw)) {

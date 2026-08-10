@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "production_ready": false,
+  "window": { "from": "2015-01-01", "to": "2026-08-10" },
+  "note": "EMPTY CATALOG — populate only from verified Samsung / GSMArena imports. Do not treat as production data.",
+  "products": []
+}

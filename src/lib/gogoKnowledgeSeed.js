@@ -30,9 +30,9 @@ export const GOGO_SEED_CULTURE = [
     title_en: 'Product journey',
     title_ar: 'رحلة المنتج',
     body_en:
-      'Journey: TCS for engineers → PQA for centers → Arabic feedback & Academy survey → Scora Challenge → more roles and unified MX/DA/AV Excel formats.',
+      'Journey: TCS for engineers → PQA for centers → Arabic feedback & Academy survey → Scora Challenge → more roles across MX / DA / AV.',
     body_ar:
-      'الرحلة: TCS للمهندسين ← PQA للمراكز ← الملاحظات واستبيان الأكاديمية ← Scora Challenge ← أدوار إضافية وصيغ Excel موحدة لـ MX وDA وAV.',
+      'الرحلة: TCS للمهندسين ← PQA للمراكز ← الملاحظات واستبيان الأكاديمية ← Scora Challenge ← أدوار إضافية عبر MX وDA وAV.',
     tags: ['history', 'journey'],
   },
 ];
@@ -84,13 +84,13 @@ export const GOGO_SEED_QA = [
   },
   {
     id: 'mx_kpis',
-    keywords: ['kpi', 'mx', 'ssr', 'iqc', 'rrr', 'مؤشر'],
+    keywords: ['kpi', 'mx', 'ssr', 'iqc', 'rrr', 'rrr30', 'rrr90', 'مؤشر'],
     question_en: 'What KPIs does MX TCS use?',
     question_ar: 'ما مؤشرات MX في TCS؟',
     answer_en:
-      'MX KPIs change by quarter. Common examples: SSR, RRR90, IQC Skip, Core Parts, MPU, Training, DRNPS, Exam, and Final Result. Live scores are in Search/Dashboard — I explain concepts only.',
+      'MX looks at repair-quality and process KPIs such as SSR (same-symptom return), RRR30/RRR90 (return repair ratio in 30/90 days), IQC Skip, Core Parts, MPU/Multi Parts, Training, DRNPS, Exam, Maintenance Mode, OQC, and Final Result. Ask me any acronym and I’ll define it. Live scores stay in Search/Dashboard.',
     answer_ar:
-      'مؤشرات MX تتغير حسب الربع. أمثلة شائعة: SSR وRRR90 وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان والنتيجة النهائية. الدرجات الحية موجودة في البحث أو اللوحة — أنا أشرح الفكرة فقط.',
+      'MX ينظر لمؤشرات جودة الإصلاح والعملية مثل SSR (عودة بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU/Multi Parts والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسألني عن أي اختصار أعرّفه لك. الدرجات الحية في البحث أو اللوحة.',
     category: 'kpi',
   },
   {
@@ -99,10 +99,64 @@ export const GOGO_SEED_QA = [
     question_en: 'What KPIs do DA / AV use?',
     question_ar: 'ما مؤشرات DA و AV؟',
     answer_en:
-      'DA/AV use Q1/Q2 sheets. Q1 often includes Final, SSR, REDO, Chatbot, HASS, Acc Core Parts, Training, Linkage. Q2 often includes Final, RNPS, REDO, Training, ST Con, MJ %, Complete Repair, Kahoot, HASS, Repair Volume.',
+      'DA and AV may share one template when CE engineers cover both products, but KPI sets differ. DA can include HASS; AV does not. Shared ideas often include Final Result, SSR, REDO, Chatbot, Acc Core Parts, Training, Linkage, RNPS, ST Con, MJ %, Complete Repair, Kahoot, and Repair Volume. Ask any name and I’ll define it.',
     answer_ar:
-      'DA وAV يستخدمان ورقة Q1 وQ2. غالباً في Q1: النتيجة وSSR وREDO وChatbot وHASS والقطع الأساسية والتدريب وLinkage. وفي Q2: النتيجة وRNPS وإعادة العمل والتدريب وST وMJ وإكمال الإصلاح وKahoot وHASS وحجم الإصلاح.',
+      'DA وAV قد يشتركان في قالب واحد عندما يغطي مهندسو CE المنتجين، لكن مجموعات المؤشرات تختلف. DA قد يشمل HASS بينما AV لا. أفكار مشتركة غالباً: النتيجة النهائية وSSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح. اسأل عن أي اسم وأعرّفه.',
     category: 'kpi',
+  },
+  {
+    id: 'samsung_highlights',
+    keywords: ['samsung', 'galaxy', 'sales', 'foldable', 'galaxy ai', 'مبيعات', 'جالاكسي'],
+    question_en: 'Tell me positive Samsung product and sales highlights',
+    question_ar: 'قولّي أبرز إيجابية عن منتجات ومبيعات سامسونج',
+    answer_en:
+      'Happy to share positive Samsung highlights:\n' +
+      '• Galaxy S26 Ultra launched early 2026 (around March) with Galaxy AI — plus S26 / S26+; S26 FE is coming soon.\n' +
+      '• Galaxy A multi-models include A17, A27, A37, and A57.\n' +
+      '• Latest foldables include Galaxy Z Fold8, Z Fold8 Ultra, and Z Flip8.\n' +
+      'And in Egypt, SCORA (TCS / PQA) helps keep after-sales excellence strong!',
+    answer_ar:
+      'سعيد أشارك أبرز إيجابية عن سامسونج:\n' +
+      '• Galaxy S26 Ultra انطلق مطلع 2026 (حوالي مارس) مع Galaxy AI — ومعاه S26 وS26+؛ وS26 FE قادم قريباً.\n' +
+      '• موديلات Galaxy A تشمل A17 وA27 وA37 وA57.\n' +
+      '• أحدث القابلة للطي: Galaxy Z Fold8 وZ Fold8 Ultra وZ Flip8.\n' +
+      'وفي مصر SCORA (TCS / PQA) بيدعم تميز ما بعد البيع!',
+    category: 'culture',
+  },
+  {
+    id: 'kpi_rrr30',
+    keywords: ['rrr30', 'rrr 30', 'return repair', 'نسبة إعادة'],
+    question_en: 'What is RRR30?',
+    question_ar: 'ما هو RRR30؟',
+    answer_en:
+      'RRR30 means Return Repair Ratio in 30 days — the share of units that come back for repair again within 30 days. Lower is better.',
+    answer_ar:
+      'RRR30 يعني نسبة إعادة الإصلاح خلال 30 يومًا — نسبة الأجهزة التي تعود للإصلاح مرة أخرى خلال 30 يومًا. الأقل أفضل.',
+    category: 'kpi',
+  },
+  {
+    id: 'cs_org',
+    keywords: [
+      'hierarchy',
+      'org chart',
+      'organisation',
+      'organization',
+      'head office',
+      'hod',
+      'structure',
+      'هيكل',
+      'تسلسل',
+      'منظمة',
+      'مكتب',
+      'رئيس',
+    ],
+    question_en: 'What is the Customer Service Head Office structure?',
+    question_ar: 'ما هيكل مكتب خدمة العملاء؟',
+    answer_en:
+      'Samsung Egypt CS Head Office is led by Bishoy Adib (HOD) and Donald Jung (KBM). Five pillars: Service Operation (Mostafa Rady), Parts Operation (Ahmed Khalifa), Operation Support (Mohamed Farid), Customer Experience (Emad Ibrahim), Customer Support (Ahmed Abdelhady). Ask about a pillar and I’ll list the teams.',
+    answer_ar:
+      'مكتب خدمة العملاء بقيادة بيشوي أديب (HOD) ودونالد جونغ (KBM). خمسة محاور: Service Operation (مصطفى راضي)، Parts Operation (أحمد خليفة)، Operation Support (محمد فريد)، Customer Experience (عماد إبراهيم)، Customer Support (أحمد عبدالهادي). اسأل عن أي محور وأقولك الفرق.',
+    category: 'org',
   },
   {
     id: 'ranks_tiers',
@@ -120,8 +174,10 @@ export const GOGO_SEED_QA = [
     keywords: ['who', 'built', 'developer', 'مين', 'صنع', 'بنى', 'fawzy', 'فوزي'],
     question_en: 'Who built this?',
     question_ar: 'من بنى هذا التطبيق؟',
-    answer_en: 'Eng Fawzy — Technical Support Engineer at Samsung Egypt.',
-    answer_ar: 'المهندس فوزي — مهندس دعم فني في سامسونج مصر.',
+    answer_en:
+      'Fawzy Maher is a Technical Support Engineer at Samsung Egypt — MX Tech under Mahmoud Hassan in Service Operation. He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
+    answer_ar:
+      'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation. هو اللي بنى SCORA عشان التميز يكون عادل وواضح لكل عائلة خدمة العملاء (TCS وPQA والبحث والملاحظات وأكتر). تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
     category: 'culture',
   },
   {

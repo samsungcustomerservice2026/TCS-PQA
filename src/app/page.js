@@ -54,6 +54,7 @@ import QuizAdminPanel from '../components/quiz/QuizAdminPanel';
 import AdminAccountsPanel, { EMPTY_ADMIN_FORM } from '../components/admin/AdminAccountsPanel';
 import LogTrafficPanel from '../components/admin/LogTrafficPanel';
 import VisitorEngagementPanel from '../components/admin/VisitorEngagementPanel';
+import SamsungProductKbPanel from '../components/admin/SamsungProductKbPanel';
 import { useVisitorEngagement } from '../hooks/useVisitorEngagement';
 import { recordFunnelStep } from '../services/visitorEngagementService';
 import { exportAnalyticsReport } from '../lib/exportAnalyticsReport';
@@ -2171,6 +2172,9 @@ const PageContent = () => {
       setIsAdminPortal(true);
       const tab = String(params.get('tab') || '').toLowerCase();
       if (tab === 'scora-challenge' || tab === 'quiz') setAdminPanelTab('scora-challenge');
+      if (tab === 'samsung-kb' || tab === 'samsung-products' || tab === 'products-kb') {
+        setAdminPanelTab('samsung-kb');
+      }
       if (isLogged && (logs === 'external' || logs === '1')) {
         setView('EXTERNAL_LOGS');
         viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'EXTERNAL_LOGS'];
@@ -5620,7 +5624,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         appMode={appMode}
       />
 
-      <main className={`flex-1 w-full min-w-0 mx-auto px-4 py-8 overflow-x-clip ${view === 'ADMIN_DASHBOARD' && adminPanelTab === 'scora-challenge' ? 'max-w-[min(100%,1680px)]' : 'max-w-4xl'}`}>
+      <main className={`flex-1 w-full min-w-0 mx-auto px-4 py-8 overflow-x-clip ${view === 'ADMIN_DASHBOARD' && (adminPanelTab === 'scora-challenge' || adminPanelTab === 'samsung-kb') ? 'max-w-[min(100%,1680px)]' : 'max-w-4xl'}`}>
         {/* Error Notification */}
         {fetchError && (
           <div className="mb-8 p-4 bg-red-600/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-500 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -6416,6 +6420,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   { key: 'survey', label: 'Survey', show: canAccessModule(currentUser, 'survey') },
                   { key: 'feedback', label: 'Feedback', show: canAccessModule(currentUser, 'feedback') },
                   { key: 'scora-challenge', label: 'SCORA Challenge', show: currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' || canAccessModule(currentUser, 'quiz') },
+                  { key: 'samsung-kb', label: 'Samsung KB', show: currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' },
                   ...(currentUser.role === 'SUPER_ADMIN'
                     ? [
                         { key: 'insights', label: 'Insights' },
@@ -7040,6 +7045,12 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                     canRead={canReadModule(currentUser, 'quiz')}
                     canWrite={canWriteModule(currentUser, 'quiz')}
                   />
+                </div>
+              )}
+
+              {adminPanelTab === 'samsung-kb' && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') && (
+                <div className="rounded-[2rem] border border-emerald-500/15 bg-zinc-900/35 p-4 md:p-6 lg:p-8 w-full">
+                  <SamsungProductKbPanel actor={currentUser.username || currentUser.name || 'admin'} />
                 </div>
               )}
 

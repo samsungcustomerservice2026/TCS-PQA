@@ -1,0 +1,231 @@
+{
+  "source": "gsmarena_bulk",
+  "updatedAt": "2026-08-10T19:14:12.583Z",
+  "note": "Samsung-only GSMArena ingest (title + slug verified). Re-run: npm run ingest:gsmarena",
+  "products": [
+    {
+      "id": "galaxy_s25",
+      "name_en": "Galaxy S25",
+      "name_ar": "Galaxy S25",
+      "brand": "Samsung",
+      "series": "S25",
+      "variant": "base",
+      "aliases": ["s25", "galaxy s25"],
+      "seriesKeys": ["s25"],
+      "category": "flagship",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_s25-13610.php",
+      "specs": {
+        "processor": "Qualcomm SM8750-AC Snapdragon 8 Elite (3 nm) — Octa-core (2x4.47 GHz Oryon V2 Phoenix L + 6x3.53 GHz Oryon V2 Phoenix M), Adreno 830",
+        "battery": "Li-Ion 4000 mAh — 25W wired / 15W wireless (Qi2 Ready)",
+        "display": "6.2\" Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 1080×2340, Gorilla Glass Victus 2 (2600 nits peak)",
+        "camera": "Triple main: 50 MP f/1.8 wide (OIS) + 10 MP f/2.4 tele 3x (OIS) + 12 MP f/2.2 ultrawide; video up to 8K. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Snapdragon 8 Elite (3 nm) — ثماني النواة، Adreno 830",
+        "battery": "4000 mAh — شحن سلكي 25W / لاسلكي 15W",
+        "display": "شاشة 6.2 إنش Dynamic LTPO AMOLED 2X، 120Hz",
+        "camera": "كاميرا ثلاثية: 50 + 10 (3x) + 12 ميجابكسل؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy S25: Snapdragon 8 Elite, 4000 mAh, 6.2\" AMOLED 120Hz, triple camera 50+10+12 MP.",
+      "summary_ar": "Galaxy S25: Snapdragon 8 Elite، بطارية 4000 mAh، شاشة 6.2 إنش، كاميرا ثلاثية 50+10+12.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_s25_plus",
+      "name_en": "Galaxy S25+",
+      "name_ar": "Galaxy S25+",
+      "brand": "Samsung",
+      "series": "S25",
+      "variant": "plus",
+      "aliases": ["s25+", "s25 plus", "s25plus"],
+      "seriesKeys": ["s25plus"],
+      "category": "flagship",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_s25+-13609.php",
+      "specs": {
+        "processor": "Qualcomm SM8750-AC Snapdragon 8 Elite (3 nm) — Octa-core Oryon V2, Adreno 830",
+        "battery": "Li-Ion 4900 mAh — 45W wired / 15W wireless (Qi2 Ready)",
+        "display": "6.7\" Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 1440×3120, Gorilla Glass Victus 2 (2600 nits peak)",
+        "camera": "Triple main: 50 MP f/1.8 wide (OIS) + 10 MP f/2.4 tele 3x (OIS) + 12 MP f/2.2 ultrawide; video up to 8K. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Snapdragon 8 Elite (3 nm)",
+        "battery": "4900 mAh — شحن سلكي 45W / لاسلكي 15W",
+        "display": "شاشة 6.7 إنش Dynamic LTPO AMOLED 2X، 120Hz، 1440×3120",
+        "camera": "كاميرا ثلاثية: 50 + 10 (3x) + 12 ميجابكسل؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy S25+: Snapdragon 8 Elite, 4900 mAh (45W), 6.7\" QHD+ AMOLED, triple camera 50+10+12 MP.",
+      "summary_ar": "Galaxy S25+: Snapdragon 8 Elite، بطارية 4900 mAh، شاشة 6.7 إنش، كاميرا ثلاثية 50+10+12.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_s25_ultra",
+      "name_en": "Galaxy S25 Ultra",
+      "name_ar": "Galaxy S25 Ultra",
+      "brand": "Samsung",
+      "series": "S25",
+      "variant": "ultra",
+      "aliases": ["s25 ultra", "s25ultra"],
+      "seriesKeys": ["s25ultra"],
+      "category": "flagship",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_s25_ultra-13322.php",
+      "specs": {
+        "processor": "Qualcomm SM8750-AC Snapdragon 8 Elite (3 nm) — Octa-core Oryon V2, Adreno 830",
+        "battery": "Li-Ion 5000 mAh — 45W wired / 15W wireless (Qi2 Ready)",
+        "display": "6.9\" Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 1440×3120, Gorilla Armor 2 (2600 nits peak)",
+        "camera": "Quad main: 200 MP f/1.7 wide (OIS) + 10 MP f/2.4 tele 3x + 50 MP f/3.4 periscope 5x + 50 MP f/1.9 ultrawide; video up to 8K. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Snapdragon 8 Elite (3 nm)",
+        "battery": "5000 mAh — شحن سلكي 45W / لاسلكي 15W",
+        "display": "شاشة 6.9 إنش Dynamic LTPO AMOLED 2X، 120Hz",
+        "camera": "كاميرا رباعية: 200 + 10 (3x) + 50 (5x) + 50 واسعة جداً؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy S25 Ultra: Snapdragon 8 Elite, 5000 mAh, 6.9\" QHD+ AMOLED, 200 MP quad camera.",
+      "summary_ar": "Galaxy S25 Ultra: Snapdragon 8 Elite، بطارية 5000 mAh، شاشة 6.9 إنش، كاميرا 200 ميجابكسل.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_s25_fe",
+      "name_en": "Galaxy S25 FE",
+      "name_ar": "Galaxy S25 FE",
+      "brand": "Samsung",
+      "series": "S25",
+      "variant": "fe",
+      "aliases": ["s25 fe", "s25fe", "galaxy s25 fe"],
+      "seriesKeys": ["s25fe"],
+      "category": "flagship",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_s25_fe_5g-14042.php",
+      "specs": {
+        "processor": "Exynos 2400 (4 nm) — 10-core (1x3.2 GHz X4 & 2x2.9 + 3x2.6 GHz A720 & 4x1.95 GHz A520), Xclipse 940",
+        "battery": "4900 mAh — 45W wired / 15W wireless (Qi2) / reverse wireless",
+        "display": "6.7\" Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 1080×2340, Gorilla Glass Victus+ (1900 nits peak)",
+        "camera": "Triple main: 50 MP f/1.8 wide (OIS) + 8 MP f/2.4 tele 3x (OIS) + 12 MP f/2.2 ultrawide; video up to 8K. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Exynos 2400 (4 nm) — عشر أنوية، Xclipse 940",
+        "battery": "4900 mAh — شحن سلكي 45W / لاسلكي 15W",
+        "display": "شاشة 6.7 إنش Dynamic LTPO AMOLED 2X، 120Hz",
+        "camera": "كاميرا ثلاثية: 50 + 8 (3x) + 12؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy S25 FE: Exynos 2400, 4900 mAh (45W), 6.7\" AMOLED 120Hz, triple camera 50+8+12 MP.",
+      "summary_ar": "Galaxy S25 FE: Exynos 2400، بطارية 4900 mAh، شاشة 6.7 إنش، كاميرا ثلاثية 50+8+12.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_a36",
+      "name_en": "Galaxy A36",
+      "name_ar": "Galaxy A36",
+      "brand": "Samsung",
+      "series": "A36",
+      "variant": "a-series",
+      "aliases": ["a36", "galaxy a36", "a36 5g"],
+      "seriesKeys": ["a36"],
+      "category": "a-series",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_a36-13497.php",
+      "specs": {
+        "processor": "Qualcomm SM6475-AB Snapdragon 6 Gen 3 (4 nm) — Octa-core (4x2.4 GHz A78 & 4x1.8 GHz A55), Adreno 710",
+        "battery": "5000 mAh — 45W wired",
+        "display": "6.7\" Super AMOLED, 120Hz, 1080×2340, Gorilla Glass Victus+ (1200 nits HBM / 1900 nits peak)",
+        "camera": "Triple main: 50 MP f/1.8 wide (PDAF, OIS) + 8 MP f/2.2 ultrawide + 5 MP f/2.4 macro; video 4K@30. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Snapdragon 6 Gen 3 (4 nm) — ثماني النواة، Adreno 710",
+        "battery": "5000 mAh — شحن سلكي 45W",
+        "display": "شاشة 6.7 إنش Super AMOLED، 120Hz",
+        "camera": "كاميرا ثلاثية: 50 + 8 + 5؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy A36: Snapdragon 6 Gen 3, 5000 mAh (45W), 6.7\" Super AMOLED 120Hz, triple camera 50+8+5 MP.",
+      "summary_ar": "Galaxy A36: Snapdragon 6 Gen 3، بطارية 5000 mAh، شاشة 6.7 إنش، كاميرا ثلاثية 50+8+5.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_a37",
+      "name_en": "Galaxy A37",
+      "name_ar": "Galaxy A37",
+      "brand": "Samsung",
+      "series": "A37",
+      "variant": "a-series",
+      "aliases": ["a37", "galaxy a37"],
+      "seriesKeys": ["a37"],
+      "category": "a-series",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_a37_5g-14378.php",
+      "specs": {
+        "processor": "Exynos 1480 (4 nm) — Octa-core (4x2.75 GHz A78 & 4x2.0 GHz A55), Xclipse 530",
+        "battery": "5000 mAh — 45W wired",
+        "display": "6.7\" Super AMOLED, 120Hz, 1080×2340, Gorilla Glass Victus+",
+        "camera": "Triple main: 50 MP f/1.8 wide (PDAF, OIS) + 8 MP f/2.2 ultrawide + 5 MP f/2.4 macro; video 4K@30. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Exynos 1480 (4 nm)",
+        "battery": "5000 mAh — شحن سلكي 45W",
+        "display": "شاشة 6.7 إنش Super AMOLED، 120Hz",
+        "camera": "كاميرا ثلاثية: 50 + 8 + 5؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy A37: Exynos 1480, 5000 mAh (45W), 6.7\" Super AMOLED 120Hz, triple camera 50+8+5 MP.",
+      "summary_ar": "Galaxy A37: Exynos 1480، بطارية 5000 mAh، شاشة 6.7 إنش، كاميرا ثلاثية 50+8+5.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_a57",
+      "name_en": "Galaxy A57",
+      "name_ar": "Galaxy A57",
+      "brand": "Samsung",
+      "series": "A57",
+      "variant": "a-series",
+      "aliases": ["a57", "galaxy a57"],
+      "seriesKeys": ["a57"],
+      "category": "a-series",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_a57_5g-14379.php",
+      "specs": {
+        "processor": "Exynos 1680 (4 nm) — Octa-core, Xclipse 550",
+        "battery": "5000 mAh — 45W wired",
+        "display": "6.7\" Super AMOLED+, 120Hz, HDR10+, 1080×2340, Gorilla Glass Victus+",
+        "camera": "Triple main: 50 MP f/1.8 wide (PDAF, OIS) + 12 MP f/2.2 ultrawide + 5 MP f/2.4 macro; video 4K@30. Selfie: 12 MP"
+      },
+      "specs_ar": {
+        "processor": "Exynos 1680 (4 nm)",
+        "battery": "5000 mAh — شحن سلكي 45W",
+        "display": "شاشة 6.7 إنش Super AMOLED+، 120Hz",
+        "camera": "كاميرا ثلاثية: 50 + 12 + 5؛ سيلفي 12"
+      },
+      "summary_en": "Galaxy A57: Exynos 1680, 5000 mAh (45W), 6.7\" Super AMOLED+ 120Hz, triple camera 50+12+5 MP.",
+      "summary_ar": "Galaxy A57: Exynos 1680، بطارية 5000 mAh، شاشة 6.7 إنش، كاميرا ثلاثية 50+12+5.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    },
+    {
+      "id": "galaxy_a17",
+      "name_en": "Galaxy A17",
+      "name_ar": "Galaxy A17",
+      "brand": "Samsung",
+      "series": "A17",
+      "variant": "a-series",
+      "aliases": ["a17", "galaxy a17"],
+      "seriesKeys": ["a17"],
+      "category": "a-series",
+      "gsmarenaUrl": "https://www.gsmarena.com/samsung_galaxy_a17-14041.php",
+      "specs": {
+        "processor": "Exynos 1330 (5 nm) — Octa-core (2x2.4 GHz A78 & 6x2.0 GHz A55), Mali-G68 MP2",
+        "battery": "5000 mAh — 25W wired",
+        "display": "6.7\" Super AMOLED, 90Hz, 1080×2340, Gorilla Glass Victus",
+        "camera": "Triple main: 50 MP f/1.8 wide (AF, OIS) + 5 MP f/2.2 ultrawide + 2 MP macro; 1080p@30. Selfie: 13 MP"
+      },
+      "specs_ar": {
+        "processor": "Exynos 1330 (5 nm)",
+        "battery": "5000 mAh — شحن سلكي 25W",
+        "display": "شاشة 6.7 إنش Super AMOLED، 90Hz",
+        "camera": "كاميرا ثلاثية: 50 + 5 + 2؛ سيلفي 13"
+      },
+      "summary_en": "Galaxy A17: Exynos 1330, 5000 mAh (25W), 6.7\" Super AMOLED 90Hz, triple camera 50+5+2 MP.",
+      "summary_ar": "Galaxy A17: Exynos 1330، بطارية 5000 mAh، شاشة 6.7 إنش، كاميرا ثلاثية 50+5+2.",
+      "source": "gsmarena_bulk",
+      "type": "GOGO_PRODUCT_SPEC"
+    }
+  ]
+}
