@@ -25,6 +25,10 @@ import {
   stopGoGoSpeech,
 } from '../../lib/gogoVoice';
 import {
+  GOGO_POSE_HOLD_MS,
+  poseClassFor,
+} from '../../lib/gogoGestures';
+import {
   getOrCreateGoGoVisitorId,
   loadGoGoChatLocal,
   saveGoGoChat,
@@ -153,7 +157,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     }, 450);
   }, [visitorId]);
 
-  const speakReply = useCallback(async (text, { force = false, lang: langOverride } = {}) => {
+  const speakReply = useCallback(async (text, { force = false, lang: langOverride, gesture = 'speak' } = {}) => {
     if (!force && voiceMuted && !voiceAskRef.current) return;
     const muted = force ? false : voiceMuted && !voiceAskRef.current;
     const speakLang = langOverride || langRef.current;
@@ -162,7 +166,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       muted,
       onStart: () => {
         setSpeaking(true);
-        setPose('wave');
+        setPose(gesture === 'wave' || gesture === 'welcome' ? gesture : 'speak');
       },
       onEnd: () => {
         setSpeaking(false);
@@ -171,6 +175,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       },
     });
   }, [voiceMuted]);
+
+  const playGesture = useCallback((nextPose, holdMs) => {
+    setPose(nextPose);
+    const ms = holdMs ?? GOGO_POSE_HOLD_MS[nextPose];
+    if (!ms) return;
+    schedule(() => {
+      setPose((current) => (current === nextPose ? 'idle' : current));
+    }, ms);
+  }, []);
 
   useEffect(() => {
     if (hidden) return undefined;
@@ -222,11 +235,11 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   useEffect(() => {
     if (hidden || !ready) return undefined;
     const t1 = setTimeout(() => setEntered(true), 80);
-    const t2 = setTimeout(() => setPose('wave'), 700);
+    const t2 = setTimeout(() => setPose('welcome'), 750);
     const t3 = setTimeout(() => {
       setPose('idle');
       setShowBubble(true);
-    }, 2200);
+    }, 2400);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -305,16 +318,14 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const rtl = lang === 'ar';
   const labels = GOGO_CHIP_LABELS[lang] || GOGO_CHIP_LABELS.en;
 
-  const poseClass = useMemo(() => {
-    if (!entered) return 'gogo-pose-offstage';
-    if (listening) return 'gogo-pose-think';
-    if (pose === 'walk') return 'gogo-pose-walk-in';
-    if (pose === 'walkto') return 'gogo-pose-walk-to';
-    if (pose === 'wave') return 'gogo-pose-wave';
-    if (pose === 'point') return 'gogo-pose-point';
-    if (pose === 'think') return 'gogo-pose-think';
-    return 'gogo-pose-idle';
-  }, [entered, pose, listening]);
+  const poseClass = useMemo(
+    () => poseClassFor({ entered, listening, speaking, pose }),
+    [entered, listening, speaking, pose],
+  );
+
+  const showThinkCue = listening || pose === 'think' || busy;
+  const showSpeakCue = speaking && !listening;
+  const showPointCue = pose === 'point';
 
   const persistLang = (next) => {
     setLang(next);
@@ -378,7 +389,11 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     });
     setChips((result.chips || []).filter((id) => id !== 'lang_toggle'));
     setPose('think');
-    schedule(() => setPose('idle'), 700);
+    schedule(() => {
+      // speaking pose takes over when TTS starts; otherwise settle
+      setPose((p) => (p === 'think' ? 'nod' : p));
+      schedule(() => setPose((p) => (p === 'nod' ? 'idle' : p)), 800);
+    }, 650);
     void speakReply(result.reply);
     if (result.action) runGuidedAction(result.action);
   };
@@ -492,8 +507,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const startChatSession = () => {
     setShowBubble(false);
     setOpen(true);
-    setPose('wave');
-    schedule(() => setPose('idle'), 1400);
+    playGesture('welcome', 1800);
 
     const name = nameRef.current || loadGoGoVisitorName();
     if (name) {
@@ -506,7 +520,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         setMessages(next);
         setChips(menu.chips);
         persistChat(next, langRef.current, name);
-        void speakReply(menu.reply);
+        void speakReply(menu.reply, { gesture: 'speak' });
       } else {
         const menu = resolveFlowReply('main_menu', langRef.current, name);
         setChips(menu.chips);
@@ -520,7 +534,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     setMessages(next);
     setChips(ask.chips);
     persistChat(next, langRef.current, '');
-    void speakReply(ask.reply);
+    void speakReply(ask.reply, { gesture: 'wave' });
   };
 
   const acceptName = (rawName) => {
@@ -547,9 +561,10 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       return next;
     });
     setChips(menu.chips);
-    setPose('wave');
-    schedule(() => setPose('idle'), 1200);
-    void speakReply(menu.reply);
+    setPose('nod');
+    schedule(() => setPose('welcome'), 700);
+    schedule(() => setPose('idle'), 2200);
+    void speakReply(menu.reply, { gesture: 'welcome' });
   };
 
   const switchLanguage = () => {
@@ -966,8 +981,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               if (open) {
                 recognizerRef.current?.abort?.();
                 stopGoGoSpeech();
-                setOpen(false);
-                setShowBubble(true);
+                playGesture('bye', 1200);
+                schedule(() => {
+                  setOpen(false);
+                  setShowBubble(true);
+                  setPose('idle');
+                }, 900);
               } else {
                 startChatSession();
               }
@@ -982,12 +1001,30 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   : 'bg-blue-500/20 opacity-60 group-hover:opacity-90'
               }`}
             />
-            <img
-              src={SPRITE}
-              alt="GoGo"
-              className={`relative h-28 w-auto sm:h-36 drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass}`}
-              draggable={false}
-            />
+            <span className="gogo-stage relative">
+              {showThinkCue && (
+                <span className="gogo-gesture-cue gogo-cue-think" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              )}
+              {showPointCue && <span className="gogo-gesture-cue gogo-cue-point" aria-hidden />}
+              {showSpeakCue && (
+                <span className="gogo-gesture-cue gogo-cue-speak" aria-hidden>
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              )}
+              <img
+                src={SPRITE}
+                alt="GoGo"
+                className={`relative h-28 w-auto sm:h-36 drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass}`}
+                draggable={false}
+              />
+            </span>
             {!open && (
               <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 border border-blue-300/40 text-white shadow-lg">
                 <MessageCircle className="w-3.5 h-3.5" />
