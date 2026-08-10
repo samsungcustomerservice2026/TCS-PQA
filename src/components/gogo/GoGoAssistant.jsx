@@ -852,8 +852,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                     dismissGuide();
                     recognizerRef.current?.abort?.();
                     stopGoGoSpeech();
-                    setOpen(false);
-                    setShowBubble(true);
+                    playGesture('bye', 1100);
+                    schedule(() => {
+                      setOpen(false);
+                      setShowBubble(true);
+                      setPose('idle');
+                    }, 850);
                   }}
                   className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/5"
                   aria-label="Minimize"
@@ -866,8 +870,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                     dismissGuide();
                     recognizerRef.current?.abort?.();
                     stopGoGoSpeech();
-                    setOpen(false);
-                    setShowBubble(true);
+                    playGesture('bye', 1100);
+                    schedule(() => {
+                      setOpen(false);
+                      setShowBubble(true);
+                      setPose('idle');
+                    }, 850);
                   }}
                   className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/5"
                   aria-label="Close chat"
