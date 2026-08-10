@@ -68,15 +68,15 @@ const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
 export const GOGO_FLOW = {
   ask_name: {
     replies: {
-      en: "Hi! I'm Fooz, your SCORA guide.\n\nWhat's your name?",
-      ar: 'أهلاً! أنا Fooz مرشدك في SCORA.\n\nاسمك إيه؟',
+      en: "Hi! I am Fooz, your AI assistant for SCORA.\n\nWhat's your name?",
+      ar: 'أهلاً! أنا Fooz، مساعدك الذكي في SCORA.\n\nاسمك إيه؟',
     },
     chips: [],
   },
   main_menu: {
     replies: {
-      en: (name) => `Nice to meet you, ${name}!\n\nWhat would you like to know?`,
-      ar: (name) => `تشرفنا يا ${name}!\n\nتحب تعرف عن إيه؟`,
+      en: (name) => `Nice to meet you, ${name}! I'm happy you're here.\n\nWhat would you like to know?`,
+      ar: (name) => `تشرفنا يا ${name}! سعيد بوجودك.\n\nتحب تعرف عن إيه؟`,
     },
     chips: MAIN_CHIPS,
   },
@@ -380,6 +380,34 @@ export const GOGO_FLOW = {
     chips: ['how_search', 'main_menu'],
     action: 'goto_search',
   },
+  who_are_you: {
+    replies: {
+      en: "I am Fooz, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
+      ar: 'أنا Fooz، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
+    },
+    chips: MAIN_CHIPS,
+  },
+  how_are_you: {
+    replies: {
+      en: "I'm doing great — thanks for asking! Ready when you are. Want a quick tour of SCORA, TCS, or PQA?",
+      ar: 'تمام الحمد لله — شكراً لسؤالك! جاهز أساعدك. تحب جولة سريعة على SCORA أو TCS أو PQA؟',
+    },
+    chips: MAIN_CHIPS,
+  },
+  what_can_you_do: {
+    replies: {
+      en: "I can explain SCORA, walk you to TCS or PQA, show how Search works, and point you to Feedback or the Academy survey. Just ask in plain words!",
+      ar: 'أقدر أشرح SCORA، وأودّيك لـ TCS أو PQA، وأوضح البحث، وأفتح لك الملاحظات أو استبيان الأكاديمية. قولّي اللي محتاجه بكلام بسيط!',
+    },
+    chips: ['what_scora', 'goto_tcs', 'goto_pqa', 'how_search', 'main_menu'],
+  },
+  nice_to_meet: {
+    replies: {
+      en: "Nice to meet you too! I am Fooz — glad you're here. What should we look at first?",
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا Fooz — سعيد بوجودك. نبدأ بإيه؟',
+    },
+    chips: MAIN_CHIPS,
+  },
   who_built: {
     replies: {
       en: 'Eng Fawzy — Technical Support Engineer at Samsung Egypt.',
@@ -389,22 +417,22 @@ export const GOGO_FLOW = {
   },
   denied: {
     replies: {
-      en: "I can only help with SCORA, TCS, and PQA. Try one of the topics below.",
-      ar: 'أقدر أساعد في SCORA وTCS وPQA بس. جرّب موضوع من اللي تحت.',
+      en: "I stay focused on SCORA — TCS, PQA, Search, and Feedback. Pick a topic below and I'll help right away.",
+      ar: 'أنا متخصص في SCORA — TCS وPQA والبحث والملاحظات. اختار موضوع من تحت وأنا معاك.',
     },
     chips: MAIN_CHIPS,
   },
   need_name: {
     replies: {
-      en: 'Tell me your name first, then we can start.',
-      ar: 'قولّي اسمك الأول وبعدين نبدأ.',
+      en: "I'd love to help — tell me your first name first, then we continue.",
+      ar: 'حابب أساعدك — قولّي اسمك الأول وبعدين نكمل.',
     },
     chips: [],
   },
   name_invalid: {
     replies: {
-      en: 'Hmm, that doesn’t look like a name. Try again?',
-      ar: 'مش باين إنه اسم. تحب تجربه تاني؟',
+      en: 'Hmm, that doesn’t look like a name. Try your first name again?',
+      ar: 'مش باين إنه اسم. جرّب اسمك الأول تاني؟',
     },
     chips: [],
   },
@@ -464,6 +492,18 @@ export function saveGoGoVisitorName(name) {
 export function matchFreeTextToFlow(text, lang = 'en') {
   const raw = String(text || '').trim();
   const lower = raw.toLowerCase();
+  if (/who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|\bfooz\b/i.test(raw)) {
+    return 'who_are_you';
+  }
+  if (/how\s*are\s*you|how'?s\s*it\s*going|عامل\s*ايه|ازيك|إزيك|أخبارك|اخبارك/i.test(raw)) {
+    return 'how_are_you';
+  }
+  if (/what\s*can\s*you\s*do|help\s*me|your\s*job|capabilities|تقدر\s*تعمل|تقدر\s*ايه|ممكن\s*تساعد/i.test(raw)) {
+    return 'what_can_you_do';
+  }
+  if (/nice\s*to\s*meet|pleased\s*to\s*meet|تشرفنا|فرصة\s*سعيدة|نورت/i.test(raw)) {
+    return 'nice_to_meet';
+  }
   if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|fawzy|فوزي/i.test(raw)) return 'who_built';
   if (/who\s*is\s*samsung|what\s*is\s*samsung|samsung\s*egypt|سامسونج/i.test(raw)) return 'what_scora';
   if (/scora|سكورا|التطبيق/i.test(raw)) return 'what_scora';
