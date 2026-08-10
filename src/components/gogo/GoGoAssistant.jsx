@@ -35,19 +35,19 @@ import {
 } from '../../services/gogoService';
 
 const SPRITE_BY_POSE = {
-  idle: '/gogo/idle.png?v=fooz2',
-  walk: '/gogo/walk-a.png?v=fooz2',
-  walkto: '/gogo/walk-b.png?v=fooz2',
-  wave: '/gogo/wave.png?v=fooz2',
-  welcome: '/gogo/welcome.png?v=fooz2',
-  speak: '/gogo/speak.png?v=fooz2',
-  think: '/gogo/think.png?v=fooz2',
-  point: '/gogo/point.png?v=fooz2',
-  bye: '/gogo/bye.png?v=fooz2',
-  nod: '/gogo/idle.png?v=fooz2',
+  idle: '/gogo/idle.png?v=gogo2',
+  walk: '/gogo/walk-a.png?v=gogo2',
+  walkto: '/gogo/walk-b.png?v=gogo2',
+  wave: '/gogo/wave.png?v=gogo2',
+  welcome: '/gogo/welcome.png?v=gogo2',
+  speak: '/gogo/speak.png?v=gogo2',
+  think: '/gogo/think.png?v=gogo2',
+  point: '/gogo/point.png?v=gogo2',
+  bye: '/gogo/bye.png?v=gogo2',
+  nod: '/gogo/idle.png?v=gogo2',
 };
-const SPRITE_FALLBACK = '/gogo/fooz.png?v=fooz2';
-const ASSISTANT_NAME = 'Fooz';
+const SPRITE_FALLBACK = '/gogo/idle.png?v=gogo2';
+const ASSISTANT_NAME = 'GoGo';
 const STORAGE_LANG = 'gogo_lang';
 
 const ACTION_TARGET = {
@@ -438,7 +438,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
     // Structured chip keywords still use guided tree first
     const matched = matchFreeTextToFlow(text, lang);
-    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_)/.test(matched)) {
+    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_)/.test(matched)) {
       // Prefer guided path for clear menu topics; Gemini for open questions
       const looksOpen =
         text.split(/\s+/).length > 8 ||
@@ -779,8 +779,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             ? 'لحظة…'
             : 'One moment…'
           : rtl
-            ? 'اكتب أو كلّم Fooz…'
-            : 'Type or talk to Fooz…';
+            ? 'اكتب أو كلّم GoGo…'
+            : 'Type or talk to GoGo…';
 
   return (
     <>
@@ -1019,7 +1019,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               }
             }}
             className="relative group focus:outline-none"
-              aria-label="Open Fooz chat"
+              aria-label="Open GoGo chat"
             >
               <span
                 className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
@@ -1047,7 +1047,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 )}
                 <img
                   src={spriteSrc}
-                  alt="Fooz"
+                  alt="GoGo"
                   className={`relative h-32 w-auto sm:h-40 drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass}`}
                   draggable={false}
                 />

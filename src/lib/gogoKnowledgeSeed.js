@@ -39,14 +39,25 @@ export const GOGO_SEED_CULTURE = [
 
 export const GOGO_SEED_QA = [
   {
+    id: 'who_are_you',
+    keywords: ['who are you', 'your name', 'gogo', 'مين انت', 'اسمك', 'عرّف', 'مساعد'],
+    question_en: 'Who are you?',
+    question_ar: 'مين انت؟',
+    answer_en:
+      'I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools.',
+    answer_ar:
+      'أنا GoGo، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية.',
+    category: 'identity',
+  },
+  {
     id: 'what_is_scora',
     keywords: ['scora', 'app', 'application', 'تطبيق', 'سكورا'],
     question_en: 'What is the SCORA app?',
     question_ar: 'ما هو تطبيق SCORA؟',
     answer_en:
-      'SCORA is Samsung Egypt’s service performance hub. Visitors use TCS, PQA, Feedback, Academy Survey, and Scora Challenge.',
+      'SCORA is Samsung Egypt’s service performance hub. Visitors use TCS, PQA, Feedback, Academy Survey, and Scora Challenge. Ask GoGo anytime!',
     answer_ar:
-      'SCORA هو مركز أداء خدمة سامسونج مصر. الزوار يستخدمون TCS وPQA والملاحظات واستبيان الأكاديمية وScora Challenge.',
+      'SCORA هو مركز أداء خدمة سامسونج مصر. الزوار يستخدمون TCS وPQA والملاحظات واستبيان الأكاديمية وScora Challenge. اسأل GoGo في أي وقت!',
     category: 'overview',
   },
   {

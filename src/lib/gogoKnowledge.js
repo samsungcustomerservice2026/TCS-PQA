@@ -23,13 +23,53 @@ export function isGoGoDeniedMessage(text) {
 
 const TOPICS = [
   {
-    id: 'welcome',
-    match: [/^(hi|hello|hey|مرحبا|اهلا|أهلا|السلام)/i, /who\s*are\s*you|من\s*أنت|مين\s*انت/i],
+    id: 'who_are_you',
+    match: [
+      /who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|your\s*name|introduce\s*yourself/i,
+      /مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|عرّف\s*نفسك|عرف\s*نفسك/i,
+      /\bgogo\b/i,
+    ],
     replies: {
-      en: "Hi! I'm Fooz — your SCORA guide. I can explain TCS, PQA, Search, Feedback, and the Academy survey. What do you need?",
-      ar: 'أهلاً! أنا Fooz مرشدك في SCORA. أقدر أشرح لك TCS وPQA والبحث والملاحظات واستبيان الأكاديمية. محتاج إيه؟',
+      en: "I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to explore?",
+      ar: 'أنا GoGo، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب نبدأ بإيه؟',
+    },
+    chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search'],
+  },
+  {
+    id: 'welcome',
+    match: [/^(hi|hello|hey|yo|مرحبا|اهلا|أهلا|السلام|هاي|هلو)(\s|$|[!.؟?])/i],
+    replies: {
+      en: "Hey! I'm GoGo, your friendly AI assistant for SCORA. Ask me anything about TCS, PQA, Search, or Feedback — or tap a topic below.",
+      ar: 'أهلاً! أنا GoGo مساعدك الودود في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'],
+  },
+  {
+    id: 'how_are_you',
+    match: [/how\s*are\s*you|how'?s\s*it\s*going|you\s*ok|عامل\s*ايه|ازيك|إزيك|أخبارك|اخبارك/i],
+    replies: {
+      en: "I'm doing great — thanks for asking! Ready when you are. Want a quick tour of SCORA, TCS, or PQA?",
+      ar: 'تمام الحمد لله — شكراً لسؤالك! جاهز أساعدك. تحب جولة سريعة على SCORA أو TCS أو PQA؟',
+    },
+    chips: ['what_scora', 'what_tcs', 'what_pqa'],
+  },
+  {
+    id: 'what_can_you_do',
+    match: [/what\s*can\s*you\s*do|help\s*me|your\s*job|capabilities|تقدر\s*تعمل|تقدر\s*ايه|ممكن\s*تساعد|وظائفک|وظيفتك/i],
+    replies: {
+      en: "I can explain SCORA, walk you to TCS or PQA, show how Search works, and point you to Feedback or the Academy survey. Just ask in plain words.",
+      ar: 'أقدر أشرح SCORA، وأودّيك لـ TCS أو PQA، وأوضح البحث، وأفتح لك الملاحظات أو استبيان الأكاديمية. قولّي اللي محتاجه بكلام بسيط.',
+    },
+    chips: ['what_scora', 'goto_tcs', 'goto_pqa', 'how_search'],
+  },
+  {
+    id: 'nice_to_meet',
+    match: [/nice\s*to\s*meet|pleased\s*to\s*meet|good\s*to\s*meet|تشرفنا|فرصة\s*سعيدة|نورت/i],
+    replies: {
+      en: "Nice to meet you too! I'm GoGo — glad you're here. What should we look at first?",
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا GoGo — سعيد بوجودك. نبدأ بإيه؟',
+    },
+    chips: ['what_scora', 'what_tcs', 'what_pqa'],
   },
   {
     id: 'what_samsung',
@@ -162,8 +202,8 @@ const TOPICS = [
     id: 'thanks',
     match: [/thanks|thank\s*you|شكرا|merci/i, /تمام|اوك|ok\b|cool/i],
     replies: {
-      en: "You're welcome! Call me anytime if you need help.",
-      ar: 'العفو! نادني في أي وقت لو محتاج مساعدة.',
+      en: "You're so welcome! Happy I could help. Anything else about SCORA, TCS, or PQA?",
+      ar: 'العفو جدًا! فرحت إني قدرت أساعد. في حاجة تانية عن SCORA أو TCS أو PQA؟',
     },
     chips: ['what_scora', 'what_tcs'],
   },
@@ -257,13 +297,13 @@ export const GOGO_CHIP_LABELS = {
 };
 
 const DENIED_REPLY = {
-  en: "I can't help with that. I only guide you around the app — try asking about TCS, PQA, KPIs, or Feedback.",
-  ar: 'ما أقدر أساعد في هذا. أرشدك داخل التطبيق فقط — اسأل عن TCS أو PQA أو المؤشرات أو الملاحظات.',
+  en: "I'd love to help with everything, but I'm GoGo for SCORA only — TCS, PQA, Search, Feedback, and KPIs. Pick a topic below!",
+  ar: 'نفسي أساعد في كل حاجة، بس أنا GoGo لـ SCORA بس — TCS وPQA والبحث والملاحظات والمؤشرات. اختار موضوع من تحت!',
 };
 
 const FALLBACK = {
-  en: "I'm not sure — try: What is SCORA? · What is TCS? · MX KPIs · How to search",
-  ar: 'مش متأكد — جرّب: ما هو SCORA؟ · ما هو TCS؟ · مؤشرات MX · طريقة البحث',
+  en: "Happy to help! Ask me about SCORA, TCS, PQA, or Search — or tap a guided chip. I'm GoGo, your AI assistant.",
+  ar: 'فرحان أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا GoGo، مساعدك الذكي.',
 };
 
 const DEFAULT_CHIPS = ['what_scora', 'what_tcs', 'how_search', 'goal_scora'];
@@ -299,11 +339,16 @@ function matchRemoteQa(raw, lang, remoteQa = []) {
  * @param {GoGoLang} lang
  * @param {{ remoteQa?: Array }} [opts]
  */
+function topicById(id) {
+  return TOPICS.find((t) => t.id === id) || null;
+}
+
 export function resolveGoGoReply(text, lang = 'en', opts = {}) {
   const L = lang === 'ar' ? 'ar' : 'en';
   const raw = String(text || '').trim();
   if (!raw) {
-    return { reply: TOPICS[0].replies[L], chips: TOPICS[0].chips, topicId: 'welcome' };
+    const welcome = topicById('welcome') || TOPICS[0];
+    return { reply: welcome.replies[L], chips: welcome.chips, topicId: 'welcome' };
   }
   if (isGoGoDeniedMessage(raw)) {
     return { reply: DENIED_REPLY[L], chips: ['what_scora', 'what_tcs', 'how_search'], denied: true };
@@ -338,8 +383,9 @@ export function resolveGoGoReply(text, lang = 'en', opts = {}) {
 
 export function getGoGoWelcome(lang = 'en') {
   const L = lang === 'ar' ? 'ar' : 'en';
+  const welcome = topicById('welcome') || TOPICS[0];
   return {
-    reply: TOPICS[0].replies[L],
+    reply: welcome.replies[L],
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'goal_scora', 'mx_kpis', 'lang_toggle'],
   };
 }
