@@ -223,7 +223,7 @@ export const GOGO_CS_ORG = {
   summary_en:
     'Samsung Customer Service Head Office is led by the HOD and KBM, then five pillars: Service Operation, Parts Operation, Operation Support, Customer Experience, and Customer Support.',
   summary_ar:
-    'مكتب خدمة العملاء يُقاد بواسطة HOD وKBM، ثم خمسة محاور: Service Operation وParts Operation وOperation Support وCustomer Experience وCustomer Support.',
+    'مكتب خدمة العملاء بيقوده الـ HOD والـ KBM، وبعدين خمسة محاور: Service Operation وParts Operation وOperation Support وCustomer Experience وCustomer Support.',
   leaders: [
     { name: 'Bishoy Adib', role: 'HOD' },
     { name: 'Donald Jung', role: 'KBM' },
@@ -695,7 +695,7 @@ export function formatGoGoOrgPersonAnswer(person, lang = 'en') {
     const lines = [`${person.name} — ${person.role}`];
     if (brief) lines.push(brief);
     if (person.kind === 'leader') {
-      lines.push('القيادة: مكتب خدمة عملاء سامسونج مصر (Head Office).');
+      lines.push('ده من قيادة مكتب خدمة عملاء سامسونج مصر (Head Office).');
     } else {
       if (person.pillar) lines.push(`المحور: ${person.pillar}`);
       if (person.team) lines.push(`الفريق: ${person.team}`);
@@ -739,9 +739,15 @@ export function buildGoGoOrgPlainText(lang = 'en') {
       : `Leadership: ${GOGO_CS_ORG.leaders.map((x) => `${x.name} (${x.role})`).join(' · ')}`,
   );
   for (const pillar of GOGO_CS_ORG.pillars) {
-    lines.push(`\n${pillar.name} — Head: ${pillar.head}`);
+    lines.push(
+      L === 'ar'
+        ? `\n${pillar.name} — الرئيس: ${pillar.head}`
+        : `\n${pillar.name} — Head: ${pillar.head}`,
+    );
     for (const team of pillar.teams) {
-      const lead = team.lead ? ` (lead: ${team.lead})` : '';
+      const lead = team.lead
+        ? (L === 'ar' ? ` (قائد: ${team.lead})` : ` (lead: ${team.lead})`)
+        : '';
       const people = team.members.map((m) => `${m.name} — ${m.role}`).join('; ');
       lines.push(`• ${team.name}${lead}: ${people}`);
     }

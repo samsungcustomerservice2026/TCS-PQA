@@ -89,15 +89,15 @@ const ACTION_TARGET = {
 const GUIDE_LINES = {
   goto_pqa: {
     en: { think: 'Thinking… walking you to PQA.', point: 'Point here — tap PQA.' },
-    ar: { think: 'بلفكّر… هوديك لـ PQA.', point: 'أشر هنا — اضغط PQA.' },
+    ar: { think: 'ثواني… هوديك لـ PQA.', point: 'هنا — دوس على PQA.' },
   },
   goto_tcs: {
     en: { think: 'Thinking… guiding you to TCS.', point: 'Point here — tap TCS.' },
-    ar: { think: 'بلفكّر… هوديك لـ TCS.', point: 'أشر هنا — اضغط TCS.' },
+    ar: { think: 'ثواني… هوديك لـ TCS.', point: 'هنا — دوس على TCS.' },
   },
   goto_search: {
     en: { think: 'Opening Search…', point: 'Point here — Search tab.' },
-    ar: { think: 'فتح البحث…', point: 'أشر هنا — تبويب البحث.' },
+    ar: { think: 'بفتح البحث…', point: 'هنا — تبويب البحث.' },
   },
 };
 
@@ -1052,7 +1052,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     if (!isSpeechRecognitionSupported()) {
       setMicHint(
         lang === 'ar'
-          ? 'الميكروفون متاح على Chrome أو Edge.'
+          ? 'الميكروفون شغال أحسن على Chrome أو Edge.'
           : 'Voice works best in Chrome or Edge.',
       );
       return;
@@ -1068,7 +1068,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     if (!perm.ok) {
       setMicHint(
         lang === 'ar'
-          ? 'اسمح باستخدام الميكروفون من إعدادات المتصفح.'
+          ? 'اسمح بالميكروفون من إعدادات المتصفح لو سمحت.'
           : 'Please allow microphone access in your browser.',
       );
       voiceAskRef.current = false;

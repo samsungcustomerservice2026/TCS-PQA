@@ -39,7 +39,7 @@ export function isHostileOrOffTopicMessage(text) {
 
 export function getGoGoSoftRedirectReply(lang = 'en') {
   return lang === 'ar'
-    ? 'آسف على الإزعاج. إحنا هنا نتكلم عن تطبيق Samsung SCORA وخدمة العملاء بطريقة ودودة ومفيدة. تحب أشرح لك TCS أو PQA أو البحث؟'
+    ? 'آسف على الإزعاج. إحنا هنا بنتكلم عن تطبيق Samsung SCORA وخدمة العملاء بطريقة ودودة ومفيدة. تحب أشرحلك TCS أو PQA أو البحث؟'
     : "I'm sorry — let's keep things positive. We're here to talk about the Samsung SCORA app and customer-service excellence in a friendly way. Want me to explain TCS, PQA, or Search?";
 }
 
@@ -64,7 +64,7 @@ const TOPICS = [
     match: [/^(hi|hello|hey|yo|مرحبا|اهلا|أهلا|السلام|هاي|هلو)(\s|$|[!.؟?])/i],
     replies: {
       en: "Hey! I'm GoGo, your friendly AI assistant for SCORA. Ask me anything about TCS, PQA, Search, or Feedback — or tap a topic below.",
-      ar: 'أهلاً! أنا GoGo مساعدك الودود في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
+      ar: 'أهلاً وسهلاً! أنا GoGo مساعدك الودود في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'],
   },
@@ -73,7 +73,7 @@ const TOPICS = [
     match: [/how\s*are\s*you|how'?s\s*it\s*going|you\s*ok|عامل\s*ايه|ازيك|إزيك|أخبارك|اخبارك/i],
     replies: {
       en: "I'm doing great — thanks for asking! Ready when you are. Want a quick tour of SCORA, TCS, or PQA?",
-      ar: 'تمام الحمد لله — شكراً لسؤالك! جاهز أساعدك. تحب جولة سريعة على SCORA أو TCS أو PQA؟',
+      ar: 'تمام الحمد لله — متشكر على السؤال! جاهز أساعدك. تحب جولة سريعة على SCORA أو TCS أو PQA؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa'],
   },
@@ -82,7 +82,7 @@ const TOPICS = [
     match: [/what\s*can\s*you\s*do|help\s*me|your\s*job|capabilities|تقدر\s*تعمل|تقدر\s*ايه|ممكن\s*تساعد|وظائفک|وظيفتك/i],
     replies: {
       en: "I can explain SCORA, walk you to TCS or PQA, show how Search works, and point you to Feedback or the Academy survey. Just ask in plain words.",
-      ar: 'أقدر أشرح SCORA، وأودّيك لـ TCS أو PQA، وأوضح البحث، وأفتح لك الملاحظات أو استبيان الأكاديمية. قولّي اللي محتاجه بكلام بسيط.',
+      ar: 'أقدر أشرحلك SCORA، وأودّيك لـ TCS أو PQA، وأوضحلك البحث، وأفتحلك الملاحظات أو استبيان الأكاديمية. قولّي اللي محتاجه بكلام بسيط.',
     },
     chips: ['what_scora', 'goto_tcs', 'goto_pqa', 'how_search'],
   },
@@ -91,7 +91,7 @@ const TOPICS = [
     match: [/nice\s*to\s*meet|pleased\s*to\s*meet|good\s*to\s*meet|تشرفنا|فرصة\s*سعيدة|نورت/i],
     replies: {
       en: "Nice to meet you too! I'm GoGo — glad you're here. What should we look at first?",
-      ar: 'وأنا كمان فرحت بمعرفتك! أنا GoGo — سعيد بوجودك. نبدأ بإيه؟',
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا GoGo — مبسوط بوجودك. نبدأ بإيه؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa'],
   },
@@ -109,7 +109,7 @@ const TOPICS = [
     match: [/scora|what\s*(is\s*)?(this\s*)?app|عن\s*التطبيق|ما\s*هو\s*scora|ايه\s*التطبيق|سكورا/i],
     replies: {
       en: 'SCORA is Samsung Egypt’s service performance hub: TCS, PQA, Arabic feedback, Academy survey, and Scora Challenge.',
-      ar: 'SCORA هو مركز أداء خدمة سامسونج مصر: TCS وPQA والملاحظات بالعربية واستبيان الأكاديمية وScora Challenge.',
+      ar: 'SCORA ده مركز أداء خدمة سامسونج مصر: TCS وPQA والملاحظات بالعربي واستبيان الأكاديمية وScora Challenge.',
     },
     chips: ['what_tcs', 'what_pqa', 'goal_scora'],
   },
@@ -118,7 +118,7 @@ const TOPICS = [
     match: [/\btcs\b|tier|engineer\s*rank|ترتيب\s*المهندس|المهندسين/i],
     replies: {
       en: 'TCS shows engineer performance by division (MX, DA, AV). Open TCS → pick a division → Dashboard for winners, or Search by code.',
-      ar: 'TCS يعرض أداء المهندسين حسب القسم (MX وDA وAV). افتح TCS ← اختر القسم ← لوحة الترتيب للفائزين، أو ابحث بالكود.',
+      ar: 'TCS بيعرض أداء المهندسين حسب القسم (MX وDA وAV). افتح TCS ← اختار القسم ← لوحة الترتيب للفائزين، أو ابحث بالكود.',
     },
     action: 'goto_tcs',
     chips: ['goto_tcs', 'how_search', 'what_pqa'],
@@ -128,7 +128,7 @@ const TOPICS = [
     match: [/\bpqa\b|partner|service\s*center|مراكز\s*الخدمة|الجودة/i],
     replies: {
       en: 'PQA tracks service-center / partner quality (MX or CE). Open PQA → choose MX or CE → view rankings or search by center code.',
-      ar: 'PQA يتابع جودة مراكز الخدمة والشركاء (MX أو CE). افتح PQA ← اختر MX أو CE ← شاهد الترتيب أو ابحث بكود المركز.',
+      ar: 'PQA بيتابع جودة مراكز الخدمة والشركاء (MX أو CE). افتح PQA ← اختار MX أو CE ← شوف الترتيب أو ابحث بكود المركز.',
     },
     action: 'goto_pqa',
     chips: ['goto_pqa', 'what_tcs'],
@@ -138,7 +138,7 @@ const TOPICS = [
     match: [/search|find\s*engineer|lookup|بحث|دور\s*على|كود/i],
     replies: {
       en: 'Use the Search tab at the bottom. Enter an engineer code (TCS) or service-center code (PQA) to open the dossier.',
-      ar: 'استخدم تبويب البحث أسفل الشاشة. أدخل كود المهندس (TCS) أو كود مركز الخدمة (PQA) لفتح الملف.',
+      ar: 'استخدم تبويب البحث اللي تحت. اكتب كود المهندس (TCS) أو كود مركز الخدمة (PQA) عشان تفتح الملف.',
     },
     action: 'goto_search',
     chips: ['goto_search', 'what_tcs'],
@@ -148,7 +148,7 @@ const TOPICS = [
     match: [/feedback|suggestion|ملاحظات|اقتراح|شكوى/i],
     replies: {
       en: 'Arabic feedback is available from the Feedback form — no login required. I can open it for you.',
-      ar: 'نموذج الملاحظات والاقتراحات بالعربية متاح بدون تسجيل دخول. أقدر أفتحه لك الآن.',
+      ar: 'فورم الملاحظات والاقتراحات بالعربي متاح من غير تسجيل دخول. أقدر أفتحهالك دلوقتي.',
     },
     action: 'goto_feedback',
     chips: ['goto_feedback', 'survey'],
@@ -158,7 +158,7 @@ const TOPICS = [
     match: [/survey|academy|استبيان|الأكاديمية|اكاديمية/i],
     replies: {
       en: 'The Samsung Academy Survey is a short visitor form on the TCS portal. Look for the blue floating button, or I can open it.',
-      ar: 'استبيان Samsung Academy نموذج قصير لزوار بوابة TCS. دور على الزر الأزرق العائم، أو أفتحه لك.',
+      ar: 'استبيان Samsung Academy فورم قصير لزوار بوابة TCS. دور على الزر الأزرق العائم، أو أفتحهالك.',
     },
     action: 'goto_survey',
     chips: ['goto_survey', 'feedback'],
@@ -168,7 +168,7 @@ const TOPICS = [
     match: [/quiz|challenge|scora\s*challenge|تحدي|اختبار/i],
     replies: {
       en: 'Scora Challenge is a live quiz hosted by admins. Join with a session link or QR from your host.',
-      ar: 'Scora Challenge اختبار مباشر يشغّله المسؤول. انضم برابط الجلسة أو رمز QR من المضيف.',
+      ar: 'Scora Challenge اختبار لايف بيشغّله المسؤول. ادخل برابط الجلسة أو QR من المضيف.',
     },
     chips: ['what_scora', 'what_tcs'],
   },
@@ -177,7 +177,7 @@ const TOPICS = [
     match: [/open\s*pqa|خذني\s*ل|وديني\s*(على\s*)?pqa|روح\s*pqa/i],
     replies: {
       en: 'Okay — walking you to PQA…',
-      ar: 'حاضر — هوديك على PQA…',
+      ar: 'حاضر — هوديك على PQA دلوقتي…',
     },
     action: 'goto_pqa',
     chips: ['what_pqa'],
@@ -187,7 +187,7 @@ const TOPICS = [
     match: [/open\s*tcs|وديني\s*(على\s*)?tcs|روح\s*tcs/i],
     replies: {
       en: 'Okay — walking you to TCS…',
-      ar: 'حاضر — هوديك على TCS…',
+      ar: 'حاضر — هوديك على TCS دلوقتي…',
     },
     action: 'goto_tcs',
     chips: ['what_tcs'],
@@ -197,7 +197,7 @@ const TOPICS = [
     match: [/open\s*search|وديني\s*(على\s*)?البحث|روح\s*البحث/i],
     replies: {
       en: 'Opening Search…',
-      ar: 'فتح البحث…',
+      ar: 'بفتح البحث دلوقتي…',
     },
     action: 'goto_search',
     chips: ['how_search'],
@@ -207,7 +207,7 @@ const TOPICS = [
     match: [/open\s*feedback|وديني\s*(على\s*)?الملاحظات/i],
     replies: {
       en: 'Opening Feedback…',
-      ar: 'فتح الملاحظات…',
+      ar: 'بفتح الملاحظات دلوقتي…',
     },
     action: 'goto_feedback',
     chips: ['feedback'],
@@ -217,7 +217,7 @@ const TOPICS = [
     match: [/open\s*survey|وديني\s*(على\s*)?الاستبيان/i],
     replies: {
       en: 'Opening the Academy survey…',
-      ar: 'فتح استبيان الأكاديمية…',
+      ar: 'بفتح استبيان الأكاديمية دلوقتي…',
     },
     action: 'goto_survey',
     chips: ['survey'],
@@ -227,7 +227,7 @@ const TOPICS = [
     match: [/thanks|thank\s*you|شكرا|merci/i, /تمام|اوك|ok\b|cool/i],
     replies: {
       en: "You're so welcome! Happy I could help. Anything else about SCORA, TCS, or PQA?",
-      ar: 'العفو جدًا! فرحت إني قدرت أساعد. في حاجة تانية عن SCORA أو TCS أو PQA؟',
+      ar: 'العفو جداً! فرحت إني قدرت أساعد. في حاجة تانية عن SCORA أو TCS أو PQA؟',
     },
     chips: ['what_scora', 'what_tcs'],
   },
@@ -239,7 +239,7 @@ const TOPICS = [
       en:
         'Fawzy Maher is a Technical Support Engineer at Samsung Egypt — MX Tech under Mahmoud Hassan in Service Operation. He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
       ar:
-        'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation. هو اللي بنى SCORA عشان التميز يكون عادل وواضح لكل عائلة خدمة العملاء (TCS وPQA والبحث والملاحظات وأكتر). تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
+        'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation. هو اللي بنى SCORA عشان التميز يبقى عادل وواضح لكل عائلة خدمة العملاء (TCS وPQA والبحث والملاحظات وأكتر). تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
     },
     chips: ['what_scora', 'what_tcs', 'goal_scora'],
   },
@@ -259,7 +259,7 @@ const TOPICS = [
     match: [/goal|purpose|why\s*scora|هدف|ليش|لماذا|الغرض/i],
     replies: {
       en: 'The goal is to make excellence visible and fair — clear KPIs, earned recognition, and one trusted home for TCS, PQA, feedback, and learning.',
-      ar: 'الهدف إن التميز يكون واضح وعادل — مؤشرات واضحة، تقدير مستحق، ومكان واحد موثوق لـ TCS وPQA والملاحظات والتعلم.',
+      ar: 'الهدف إن التميز يبقى واضح وعادل — مؤشرات واضحة، تقدير مستحق، ومكان واحد موثوق لـ TCS وPQA والملاحظات والتعلم.',
     },
     chips: ['what_scora', 'ranks_tiers', 'mx_kpis'],
   },
@@ -268,7 +268,7 @@ const TOPICS = [
     match: [/mx\s*kpi|kpi.*mx|ssr|iqc\s*skip|rrr90|rrr30|مؤشر.*mx|مؤشرات\s*mx/i],
     replies: {
       en: 'MX KPIs include SSR (same-symptom return), RRR30/RRR90 (return repair ratio in 30/90 days), IQC Skip, Core Parts, MPU/Multi Parts, Training, DRNPS, Exam, Maintenance Mode, OQC, and Final Result. Ask any acronym and I’ll define it — live scores stay in Search/Dashboard.',
-      ar: 'مؤشرات MX تشمل SSR (عودة بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسأل عن أي اختصار أعرّفه — الدرجات الحية في البحث أو اللوحة.',
+      ar: 'مؤشرات MX تشمل SSR (رجوع بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسأل عن أي اختصار وهعرّفهولك — الدرجات الحية في البحث أو اللوحة.',
     },
     chips: ['da_av_kpis', 'ranks_tiers', 'what_tcs'],
   },
@@ -277,7 +277,7 @@ const TOPICS = [
     match: [/da\s*kpi|av\s*kpi|rnps|chatbot|hass|linkage|مؤشر.*(da|av)|مؤشرات\s*(da|av)/i],
     replies: {
       en: 'DA and AV may share one template for CE engineers who cover both products, but KPIs differ. DA can include HASS; AV does not. Common shared ideas: SSR, REDO, Chatbot, Core Parts, Training, Linkage, RNPS, ST Con, MJ %, Complete Repair, Kahoot, Repair Volume, Final Result. Ask a name and I’ll define it.',
-      ar: 'DA وAV قد يشتركان في قالب واحد لمهندسي CE، لكن المؤشرات تختلف. DA قد يشمل HASS بينما AV لا. أفكار مشتركة: SSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح والنتيجة النهائية. اسأل عن اسم وأعرّفه.',
+      ar: 'DA وAV ممكن يشتركوا في قالب واحد لمهندسي CE، بس المؤشرات بتختلف. DA ممكن يشمل HASS وAV لأ. أفكار مشتركة: SSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح والنتيجة النهائية. قول اسم وأعرّفهولك.',
     },
     chips: ['mx_kpis', 'what_tcs', 'goto_tcs'],
   },
@@ -306,7 +306,7 @@ const TOPICS = [
     match: [/rank|tier|masters|title|لقب|مستوى|شارة/i],
     replies: {
       en: 'Ranks show order for a period. Tiers/titles are recognition levels from evaluation. Open Dashboard or Search for live lists — I won’t paste private scoreboards here.',
-      ar: 'الترتيب لفترة معينة. المستويات والألقاب شارات تقدير من التقييم. افتح اللوحة أو البحث للقوائم الحية — ولن أعرض درجات خاصة هنا.',
+      ar: 'الترتيب بيوضح ترتيب الأفراد أو المراكز لفترة معينة. المستويات والألقاب شارات تقدير من التقييم. افتح اللوحة أو البحث للقوائم الحية — ومش هعرض درجات خاصة هنا.',
     },
     chips: ['what_tcs', 'how_search', 'goal_scora'],
   },
@@ -335,9 +335,9 @@ export const GOGO_CHIP_LABELS = {
     samsung_positive: 'Samsung highlights',
   },
   ar: {
-    what_scora: 'ما هو SCORA؟',
-    what_tcs: 'ما هو TCS؟',
-    what_pqa: 'ما هو PQA؟',
+    what_scora: 'إيه هو SCORA؟',
+    what_tcs: 'إيه هو TCS؟',
+    what_pqa: 'إيه هو PQA؟',
     how_search: 'طريقة البحث',
     feedback: 'الملاحظات',
     survey: 'استبيان الأكاديمية',
@@ -347,8 +347,8 @@ export const GOGO_CHIP_LABELS = {
     goto_feedback: 'افتح الملاحظات',
     goto_survey: 'افتح الاستبيان',
     lang_toggle: 'English',
-    welcome: 'مرحبا',
-    goal_scora: 'ما الهدف؟',
+    welcome: 'قول أهلاً',
+    goal_scora: 'إيه الهدف؟',
     mx_kpis: 'مؤشرات MX',
     da_av_kpis: 'مؤشرات DA/AV',
     ranks_tiers: 'الترتيب والمستويات',
@@ -359,7 +359,7 @@ export const GOGO_CHIP_LABELS = {
 
 const FALLBACK = {
   en: "Happy to help! Ask me about SCORA, TCS, PQA, or Search — or tap a guided chip. I'm GoGo, your AI assistant.",
-  ar: 'فرحان أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا GoGo، مساعدك الذكي.',
+  ar: 'فرحت أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا GoGo، مساعدك الذكي.',
 };
 
 const DEFAULT_CHIPS = ['what_scora', 'what_tcs', 'how_search', 'goal_scora'];
