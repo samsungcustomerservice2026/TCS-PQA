@@ -33,7 +33,7 @@ export const GOGO_SEED_CULTURE = [
     body_en:
       'Journey: TCS for engineers → PQA for centers → Arabic feedback & Academy survey → Scora Challenge → more roles across MX / DA / AV.',
     body_ar:
-      'الرحلة: TCS للمهندسين ← PQA للمراكز ← الملاحظات واستبيان الأكاديمية ← Scora Challenge ← أدوار أكتر عبر MX وDA وAV.',
+      'الرحلة: تي سي اس للمهندسين ← بي كيو اي للمراكز ← الملاحظات واستبيان الأكاديمية ← Scora Challenge ← أدوار أكتر عبر الموبايل والأجهزة المنزلية والشاشات.',
     tags: ['history', 'journey'],
   },
 ];
@@ -47,7 +47,7 @@ export const GOGO_SEED_QA = [
     answer_en:
       'I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools.',
     answer_ar:
-      'أنا GoGo، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية.',
+      'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية.',
     category: 'identity',
   },
   {
@@ -58,7 +58,7 @@ export const GOGO_SEED_QA = [
     answer_en:
       'SCORA is Samsung Egypt’s service performance hub. Visitors use TCS, PQA, Feedback, Academy Survey, and Scora Challenge. Ask GoGo anytime!',
     answer_ar:
-      'SCORA ده مركز أداء خدمة سامسونج مصر. الزوار بيستخدموا TCS وPQA والملاحظات واستبيان الأكاديمية وScora Challenge. اسأل GoGo في أي وقت!',
+      'SCORA ده مركز أداء خدمة سامسونج مصر. الزوار بيستخدموا TCS وPQA والملاحظات واستبيان الأكاديمية وScora Challenge. اسأل جوجو في أي وقت!',
     category: 'overview',
   },
   {
@@ -69,7 +69,7 @@ export const GOGO_SEED_QA = [
     answer_en:
       'TCS (Technical Capability Score) tracks engineer performance by division: MX, DA, and AV. Use Dashboard for winners and Search by engineer code.',
     answer_ar:
-      'TCS (درجة القدرة التقنية) بيتابع أداء المهندسين حسب القسم: MX وDA وAV. استخدم لوحة الترتيب للفائزين، أو ابحث بكود المهندس.',
+      'تي سي اس (درجة القدرة التقنية) بيتابع أداء المهندسين على ٣ أقسام: الموبايل، والأجهزة المنزلية، والشاشات. استخدم لوحة الترتيب للفائزين، أو ابحث بكود المهندس.',
     category: 'tcs',
   },
   {
@@ -87,22 +87,22 @@ export const GOGO_SEED_QA = [
     id: 'mx_kpis',
     keywords: ['kpi', 'mx', 'ssr', 'iqc', 'rrr', 'rrr30', 'rrr90', 'مؤشر'],
     question_en: 'What KPIs does MX TCS use?',
-    question_ar: 'إيه مؤشرات MX في TCS؟',
+    question_ar: 'إيه مؤشرات الموبايل في تي سي اس؟',
     answer_en:
       'MX looks at repair-quality and process KPIs such as SSR (same-symptom return), RRR30/RRR90 (return repair ratio in 30/90 days), IQC Skip, Core Parts, MPU/Multi Parts, Training, DRNPS, Exam, Maintenance Mode, OQC, and Final Result. Ask me any acronym and I’ll define it. Live scores stay in Search/Dashboard.',
     answer_ar:
-      'MX بيبص على مؤشرات جودة الإصلاح والشغل زي SSR (رجوع بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسألني عن أي اختصار وهشرحهولك. الدرجات الحية في البحث أو اللوحة.',
+      'الموبايل بيبص على مؤشرات جودة الإصلاح والشغل زي SSR (رجوع بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسألني عن أي اختصار وهشرحهولك. الدرجات الحية في البحث أو اللوحة.',
     category: 'kpi',
   },
   {
     id: 'da_av_kpis',
     keywords: ['da', 'av', 'rnps', 'chatbot', 'hass', 'redo'],
     question_en: 'What KPIs do DA / AV use?',
-    question_ar: 'إيه مؤشرات DA و AV؟',
+    question_ar: 'إيه مؤشرات الأجهزة المنزلية والشاشات؟',
     answer_en:
       'DA and AV may share one template when CE engineers cover both products, but KPI sets differ. DA can include HASS; AV does not. Shared ideas often include Final Result, SSR, REDO, Chatbot, Acc Core Parts, Training, Linkage, RNPS, ST Con, MJ %, Complete Repair, Kahoot, and Repair Volume. Ask any name and I’ll define it.',
     answer_ar:
-      'DA وAV ممكن يشتركوا في قالب واحد لما مهندسي CE يغطوا الخطين، بس مجموعات المؤشرات بتختلف. DA ممكن يشمل HASS وAV لأ. أفكار مشتركة غالباً: النتيجة النهائية وSSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح. قول أي اسم وهعرّفهولك.',
+      'الأجهزة المنزلية والشاشات ممكن يشتركوا في قالب واحد لما مهندسي CE يغطوا الخطين، بس المؤشرات بتختلف. الأجهزة المنزلية ممكن تشمل HASS؛ الشاشات لأ. أفكار مشتركة غالباً: النتيجة النهائية وSSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح. قول أي اسم وأعرّفهولك.',
     category: 'kpi',
   },
   {
@@ -154,9 +154,9 @@ export const GOGO_SEED_QA = [
     question_en: 'What is the Customer Service Head Office structure?',
     question_ar: 'إيه هيكل مكتب خدمة العملاء؟',
     answer_en:
-      'Samsung Egypt CS Head Office is led by Bishoy Adib (HOD) and Donald Jung (KBM). Five pillars: Service Operation (Mostafa Rady), Parts Operation (Ahmed Khalifa), Operation Support (Mohamed Farid), Customer Experience (Emad Ibrahim), Customer Support (Ahmed Abdelhady). Ask “hierarchy” or tap CS Head Office structure and GoGo lists every team and name from the verified org chart.',
+      'Samsung Egypt CS Head Office is led by HOD Bishoy Adib and KBM Donald Jung (senior business management — not a Part Leader). Five parts: Service Operation (Mostafa Rady), Parts Operation (Ahmed Khalifa), Operation Support (Mohamed Farid), Customer Experience (Emad Ibrahim), Customer Support (Ahmed Abdelhady). Ask by name, or ask who someone’s Team Leader / Part Leader is.',
     answer_ar:
-      'مكتب خدمة العملاء بقيادة بيشوي أديب (HOD) ودونالد جونغ (KBM). خمسة محاور: Service Operation (مصطفى راضي)، Parts Operation (أحمد خليفة)، Operation Support (محمد فريد)، Customer Experience (عماد إبراهيم)، Customer Support (أحمد عبدالهادي). اسأل عن «الهيكل» أو عن أي حد بالاسم وهقولك التفاصيل المحفوظة.',
+      'مكتب خدمة العملاء بقيادة رئيس القسم بيشوي أديب ومسؤول إدارة الأعمال دونالد جونغ (مش قائد قطاع). خمسة قطاعات: عمليات الخدمة (مصطفى راضي)، عمليات قطع الغيار (أحمد خليفة)، دعم العمليات (محمد فريد)، تجربة العملاء (عماد إبراهيم)، دعم العملاء (أحمد عبدالهادي). اسأل بالاسم، أو مين قائد فريق / قائد قطاع فلان.',
     category: 'org',
   },
   {
@@ -176,9 +176,9 @@ export const GOGO_SEED_QA = [
     question_en: 'Who built this?',
     question_ar: 'مين بنى التطبيق ده؟',
     answer_en:
-      'Fawzy Maher is a Technical Support Engineer at Samsung Egypt — MX Tech under Mahmoud Hassan in Service Operation. He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
+      'Fawzy Maher is MX Tech (Mobile technical support) under Team Leader Mahmoud Hassan in Service Operation (Part Leader Mostafa Rady). He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
     answer_ar:
-      'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation. هو اللي بنى SCORA عشان التميز يبقى عادل وواضح لكل عائلة خدمة العملاء (TCS وPQA والبحث والملاحظات وأكتر). تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
+      'فوزي ماهر مهندس صيانة قطاع الأجهزة المحمولة تحت قائد الفريق محمود حسن ضمن عمليات الخدمة بقيادة مصطفى راضي. هو اللي بنى سكورا عشان التميز يبقى عادل وواضح لكل عائلة خدمة العملاء. تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
     category: 'culture',
   },
   {

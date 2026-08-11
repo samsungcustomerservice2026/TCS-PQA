@@ -600,6 +600,7 @@ export async function upsertGoGoLearnedAnswer({
   lang = 'en',
   preferredStates = [],
   visitorId = '',
+  spoken = '',
 } = {}) {
   const q = String(question || '').trim();
   const a = String(answer || '').trim();
@@ -613,7 +614,9 @@ export async function upsertGoGoLearnedAnswer({
   const localRows = readLocalLearned();
   const prevLocal = localRows.find((r) => r.id === id) || null;
   const upvotes = Number(prevLocal?.upvotes || 0) + 1;
-  const qualityScore = Math.min(100, Math.max(Number(prevLocal?.qualityScore || 0), upvotes >= 2 ? 100 : 85));
+  // One thumbs-up promotes into traditional instant memory (quality 100).
+  const qualityScore = Math.min(100, Math.max(Number(prevLocal?.qualityScore || 0), upvotes >= 1 ? 100 : 85));
+  const speech = String(spoken || prevLocal?.spoken || '').trim();
   const next = {
     id,
     question: q,
@@ -623,6 +626,10 @@ export async function upsertGoGoLearnedAnswer({
     answer: a,
     answer_en: L === 'en' ? a : prevLocal?.answer_en || a,
     answer_ar: L === 'ar' ? a : prevLocal?.answer_ar || '',
+    answer_speech: speech || a,
+    answer_speech_en: L === 'en' ? speech || a : prevLocal?.answer_speech_en || '',
+    answer_speech_ar: L === 'ar' ? speech || a : prevLocal?.answer_speech_ar || '',
+    spoken: speech || a,
     keywords: norm.split(' ').filter((t) => t.length >= 3).slice(0, 12),
     upvotes,
     downvotes: Number(prevLocal?.downvotes || 0),
@@ -633,6 +640,7 @@ export async function upsertGoGoLearnedAnswer({
     expressionHint: preferredStates[0] || prevLocal?.expressionHint || 'explaining',
     status: 'active',
     source: 'visitor_validated',
+    mode: 'traditional_learned',
     lastValidator: String(visitorId || '').slice(0, 80),
     updatedAt: now,
     createdAt: prevLocal?.createdAt || now,
@@ -651,7 +659,7 @@ export async function upsertGoGoLearnedAnswer({
     if (snap.exists()) {
       const prev = snap.data() || {};
       const cloudUp = Number(prev.upvotes || 0) + 1;
-      const cloudQuality = Math.min(100, Math.max(Number(prev.qualityScore || 0), cloudUp >= 2 ? 100 : 85));
+      const cloudQuality = Math.min(100, Math.max(Number(prev.qualityScore || 0), cloudUp >= 1 ? 100 : 85));
       await updateDoc(ref, {
         ...next,
         upvotes: cloudUp,
@@ -743,6 +751,7 @@ export async function recordGoGoPositiveFeedback({
   lang = 'en',
   expressionUsed = '',
   visitorId = '',
+  spoken = '',
 } = {}) {
   const learned = await upsertGoGoLearnedAnswer({
     question,
@@ -750,6 +759,7 @@ export async function recordGoGoPositiveFeedback({
     lang,
     preferredStates: expressionUsed ? [expressionUsed, 'success'] : ['explaining', 'success'],
     visitorId,
+    spoken,
   });
   await quietCloud(async () => {
     await ensureWorkspaceRoot();

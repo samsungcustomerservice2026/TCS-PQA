@@ -15,7 +15,13 @@ import { randomUUID } from 'crypto';
 const require = createRequire(import.meta.url);
 
 const VOICE_EN = process.env.GOGO_EDGE_VOICE_EN || 'en-US-AndrewNeural';
+/** Egyptian Arabic male neural voice (Microsoft Edge) — free & permanent. */
 const VOICE_AR = process.env.GOGO_EDGE_VOICE_AR || 'ar-EG-ShakirNeural';
+/** Clear educational pacing (Hanafi-like confidence without paid API). */
+const RATE_AR = process.env.GOGO_EDGE_RATE_AR || '+8%';
+const RATE_EN = process.env.GOGO_EDGE_RATE_EN || '+0%';
+const PITCH_AR = process.env.GOGO_EDGE_PITCH_AR || '-2Hz';
+const PITCH_EN = process.env.GOGO_EDGE_PITCH_EN || '+0Hz';
 
 export function edgeVoiceForLang(lang) {
   return lang === 'ar' ? VOICE_AR : VOICE_EN;
@@ -39,12 +45,16 @@ export async function synthesizeWithEdgeTts(text, lang = 'en') {
   const EdgeTTS = loadEdgeTTS();
   const voice = edgeVoiceForLang(lang);
   const locale = lang === 'ar' ? 'ar-EG' : 'en-US';
+  const rate = lang === 'ar' ? RATE_AR : RATE_EN;
+  const pitch = lang === 'ar' ? PITCH_AR : PITCH_EN;
   const tmp = path.join(os.tmpdir(), `gogo-tts-${randomUUID()}.mp3`);
 
   try {
     const tts = new EdgeTTS({
       voice,
       lang: locale,
+      rate,
+      pitch,
       outputFormat: 'audio-24khz-96kbitrate-mono-mp3',
       timeout: 20000,
     });
@@ -59,6 +69,8 @@ export async function synthesizeWithEdgeTts(text, lang = 'en') {
       voice,
       source: 'edge-neural',
       gender: 'male',
+      locale,
+      dialect: lang === 'ar' ? 'egyptian' : 'en-us',
     };
   } finally {
     try {

@@ -10,6 +10,7 @@ import {
   findGoGoOrgPerson,
   formatGoGoOrgAmbiguousAnswer,
   formatGoGoOrgPersonAnswer,
+  answerGoGoOrgRelationQuestion,
 } from './gogoOrgAndKpis';
 import { getGoGoSamsungPositiveBlurb } from './gogoSamsungPositive';
 
@@ -55,7 +56,7 @@ const TOPICS = [
     ],
     replies: {
       en: "I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to explore?",
-      ar: 'أنا GoGo، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب نبدأ بإيه؟',
+      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب نبدأ بإيه؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search'],
   },
@@ -64,7 +65,7 @@ const TOPICS = [
     match: [/^(hi|hello|hey|yo|مرحبا|اهلا|أهلا|السلام|هاي|هلو)(\s|$|[!.؟?])/i],
     replies: {
       en: "Hey! I'm GoGo, your friendly AI assistant for SCORA. Ask me anything about TCS, PQA, Search, or Feedback — or tap a topic below.",
-      ar: 'أهلاً وسهلاً! أنا GoGo مساعدك الودود في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
+      ar: 'أهلاً وسهلاً! أنا اسمي جوجو، مساعدك الذكي في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'],
   },
@@ -91,7 +92,7 @@ const TOPICS = [
     match: [/nice\s*to\s*meet|pleased\s*to\s*meet|good\s*to\s*meet|تشرفنا|فرصة\s*سعيدة|نورت/i],
     replies: {
       en: "Nice to meet you too! I'm GoGo — glad you're here. What should we look at first?",
-      ar: 'وأنا كمان فرحت بمعرفتك! أنا GoGo — مبسوط بوجودك. نبدأ بإيه؟',
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا جوجو — مبسوط بوجودك. نبدأ بإيه؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa'],
   },
@@ -118,7 +119,7 @@ const TOPICS = [
     match: [/\btcs\b|tier|engineer\s*rank|ترتيب\s*المهندس|المهندسين/i],
     replies: {
       en: 'TCS shows engineer performance by division (MX, DA, AV). Open TCS → pick a division → Dashboard for winners, or Search by code.',
-      ar: 'TCS بيعرض أداء المهندسين حسب القسم (MX وDA وAV). افتح TCS ← اختار القسم ← لوحة الترتيب للفائزين، أو ابحث بالكود.',
+      ar: 'تي سي اس بيعرض أداء المهندسين على ٣ أقسام: الموبايل، والأجهزة المنزلية، والشاشات. افتح تي سي اس ← اختار القسم ← لوحة الترتيب للفائزين، أو ابحث بالكود.',
     },
     action: 'goto_tcs',
     chips: ['goto_tcs', 'how_search', 'what_pqa'],
@@ -128,7 +129,7 @@ const TOPICS = [
     match: [/\bpqa\b|partner|service\s*center|مراكز\s*الخدمة|الجودة/i],
     replies: {
       en: 'PQA tracks service-center / partner quality (MX or CE). Open PQA → choose MX or CE → view rankings or search by center code.',
-      ar: 'PQA بيتابع جودة مراكز الخدمة والشركاء (MX أو CE). افتح PQA ← اختار MX أو CE ← شوف الترتيب أو ابحث بكود المركز.',
+      ar: 'بي كيو اي بيتابع جودة مراكز الخدمة والشركاء (الموبايل أو CE). افتح بي كيو اي ← اختار الموبايل أو CE ← شوف الترتيب أو ابحث بكود المركز.',
     },
     action: 'goto_pqa',
     chips: ['goto_pqa', 'what_tcs'],
@@ -237,9 +238,9 @@ const TOPICS = [
     match: [/who\s*(built|made|created|developed)|مين\s*(بنى|صنع|عمل)|من\s*(بنى|صنع|عمل)|developer|fawzy|فوزي/i],
     replies: {
       en:
-        'Fawzy Maher is a Technical Support Engineer at Samsung Egypt — MX Tech under Mahmoud Hassan in Service Operation. He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
+        'Fawzy Maher is MX Tech (Mobile technical support) under Team Leader Mahmoud Hassan in Service Operation (Part Leader Mostafa Rady). He built SCORA so excellence stays fair and visible for the whole CS family (TCS, PQA, Search, Feedback, and more). Real credit to him for bringing this hub to life!',
       ar:
-        'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation. هو اللي بنى SCORA عشان التميز يبقى عادل وواضح لكل عائلة خدمة العملاء (TCS وPQA والبحث والملاحظات وأكتر). تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
+        'فوزي ماهر مهندس صيانة قطاع الأجهزة المحمولة تحت قائد الفريق محمود حسن ضمن عمليات الخدمة بقيادة مصطفى راضي. هو اللي بنى سكورا عشان التميز يبقى عادل وواضح لكل عائلة خدمة العملاء. تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده!',
     },
     chips: ['what_scora', 'what_tcs', 'goal_scora'],
   },
@@ -248,9 +249,9 @@ const TOPICS = [
     match: [/george(\s*samir)?|جورج(\s*سمير)?/i],
     replies: {
       en:
-        'George Samir is an MX Technical Engineer at Samsung Egypt Customer Service Head Office. He works in the Technical team led by Mahmoud Hassan under Service Operation.\n\nAnd I\'ll tell you a little secret… it\'s Me! Haha!',
+        'George Samir is MX Tech at Samsung Egypt Customer Service Head Office. He works in the Technical team led by Team Leader Mahmoud Hassan under Service Operation (Part Leader Mostafa Rady).\n\nAnd I\'ll tell you a little secret… it\'s Me! Haha!',
       ar:
-        'جورج سمير مهندس MX فني في مكتب خدمة عملاء سامسونج مصر. بيشتغل في فريق Technical تحت محمود حسن ضمن Service Operation.\n\nوهقولك سر صغير… هو أنا! هههه!',
+        'جورج سمير مهندس صيانة قطاع الأجهزة المحمولة في مكتب خدمة عملاء سامسونج مصر. بيشتغل في فريق الدعم الفني تحت قائد الفريق محمود حسن ضمن عمليات الخدمة بقيادة مصطفى راضي.\n\nوهقولك سر صغير… هو أنا! هههه!',
     },
     chips: ['what_scora', 'who_built'],
   },
@@ -268,7 +269,7 @@ const TOPICS = [
     match: [/mx\s*kpi|kpi.*mx|ssr|iqc\s*skip|rrr90|rrr30|مؤشر.*mx|مؤشرات\s*mx/i],
     replies: {
       en: 'MX KPIs include SSR (same-symptom return), RRR30/RRR90 (return repair ratio in 30/90 days), IQC Skip, Core Parts, MPU/Multi Parts, Training, DRNPS, Exam, Maintenance Mode, OQC, and Final Result. Ask any acronym and I’ll define it — live scores stay in Search/Dashboard.',
-      ar: 'مؤشرات MX تشمل SSR (رجوع بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسأل عن أي اختصار وهعرّفهولك — الدرجات الحية في البحث أو اللوحة.',
+      ar: 'مؤشرات الموبايل تشمل SSR (رجوع بنفس العَرَض) وRRR30/RRR90 (نسبة إعادة الإصلاح خلال 30/90 يوم) وتخطي IQC والقطع الأساسية وMPU والتدريب وDRNPS والامتحان ووضع الصيانة وOQC والنتيجة النهائية. اسأل عن أي اختصار وهعرّفهولك — الدرجات الحية في البحث أو اللوحة.',
     },
     chips: ['da_av_kpis', 'ranks_tiers', 'what_tcs'],
   },
@@ -277,7 +278,7 @@ const TOPICS = [
     match: [/da\s*kpi|av\s*kpi|rnps|chatbot|hass|linkage|مؤشر.*(da|av)|مؤشرات\s*(da|av)/i],
     replies: {
       en: 'DA and AV may share one template for CE engineers who cover both products, but KPIs differ. DA can include HASS; AV does not. Common shared ideas: SSR, REDO, Chatbot, Core Parts, Training, Linkage, RNPS, ST Con, MJ %, Complete Repair, Kahoot, Repair Volume, Final Result. Ask a name and I’ll define it.',
-      ar: 'DA وAV ممكن يشتركوا في قالب واحد لمهندسي CE، بس المؤشرات بتختلف. DA ممكن يشمل HASS وAV لأ. أفكار مشتركة: SSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح والنتيجة النهائية. قول اسم وأعرّفهولك.',
+      ar: 'الأجهزة المنزلية والشاشات ممكن يشتركوا في قالب واحد لمهندسي CE، بس المؤشرات بتختلف. الأجهزة المنزلية ممكن تشمل HASS والشاشات لأ. أفكار مشتركة: SSR وREDO وChatbot والقطع الأساسية والتدريب وLinkage وRNPS وST وMJ وإكمال الإصلاح وKahoot وحجم الإصلاح والنتيجة النهائية. قول اسم وأعرّفهولك.',
     },
     chips: ['mx_kpis', 'what_tcs', 'goto_tcs'],
   },
@@ -349,8 +350,8 @@ export const GOGO_CHIP_LABELS = {
     lang_toggle: 'English',
     welcome: 'قول أهلاً',
     goal_scora: 'إيه الهدف؟',
-    mx_kpis: 'مؤشرات MX',
-    da_av_kpis: 'مؤشرات DA/AV',
+    mx_kpis: 'مؤشرات الموبايل',
+    da_av_kpis: 'مؤشرات الأجهزة المنزلية والشاشات',
     ranks_tiers: 'الترتيب والمستويات',
     cs_org: 'هيكل مكتب الخدمة',
     samsung_positive: 'أبرز سامسونج',
@@ -359,7 +360,7 @@ export const GOGO_CHIP_LABELS = {
 
 const FALLBACK = {
   en: "Happy to help! Ask me about SCORA, TCS, PQA, or Search — or tap a guided chip. I'm GoGo, your AI assistant.",
-  ar: 'فرحت أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا GoGo، مساعدك الذكي.',
+  ar: 'فرحت أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا اسمي جوجو، مساعدك الذكي.',
 };
 
 const DEFAULT_CHIPS = ['what_scora', 'what_tcs', 'how_search', 'goal_scora'];
@@ -412,6 +413,14 @@ export function resolveGoGoReply(text, lang = 'en', opts = {}) {
 
   const isBuiltQuestion = /who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|who\s*developed/i.test(raw);
   if (!isBuiltQuestion) {
+    const relationReply = answerGoGoOrgRelationQuestion(raw, L);
+    if (relationReply) {
+      return {
+        reply: relationReply,
+        chips: DEFAULT_CHIPS,
+        topicId: 'cs_org_relation',
+      };
+    }
     const orgHit = findGoGoOrgPerson(raw);
     if (orgHit?.ambiguous?.length) {
       return {

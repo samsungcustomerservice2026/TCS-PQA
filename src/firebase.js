@@ -2,10 +2,8 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   initializeFirestore,
   getFirestore,
-  enableNetwork,
   setLogLevel,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
@@ -20,13 +18,84 @@ const firebaseConfig = {
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
 const isBrowser = typeof window !== "undefined";
 
-// Quiet SDK transport noise in Next.js overlay (still recoverable offline mode).
+let firestorePoisoned = false;
+
+/** True after Firestore hard-asserts (client unusable until full page reload). */
+export function isFirestorePoisoned() {
+  return firestorePoisoned;
+}
+
+export function markFirestorePoisoned(err) {
+  const msg = String(err?.message || err || "");
+  if (/INTERNAL ASSERTION FAILED|Unexpected state \(ID: (b815|ca9)\)/i.test(msg)) {
+    firestorePoisoned = true;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Firestore 12.x can throw an uncaught hardAssert (ca9 → b815) that poisons the
+ * client and floods the Next.js overlay. Also swallow non-Error promise
+ * rejections that are raw Event objects (shows up as "[object Event]").
+ */
+function installFirestoreAssertGuard() {
+  if (!isBrowser || window.__gogoFirestoreAssertGuard) return;
+  window.__gogoFirestoreAssertGuard = true;
+
+  const isAssert = (value) =>
+    /FIRESTORE|INTERNAL ASSERTION FAILED|Unexpected state \(ID: (b815|ca9)\)/i.test(
+      String(value?.message || value || ""),
+    );
+
+  const isEventRejection = (reason) => {
+    if (reason == null) return false;
+    if (typeof Event !== "undefined" && reason instanceof Event) return true;
+    // Serialized / cross-realm Event often only exposes isTrusted.
+    if (
+      typeof reason === "object" &&
+      !(reason instanceof Error) &&
+      Object.prototype.hasOwnProperty.call(reason, "isTrusted") &&
+      !reason.message
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  window.addEventListener(
+    "error",
+    (event) => {
+      if (!isAssert(event.error) && !isAssert(event.message)) return;
+      firestorePoisoned = true;
+      event.preventDefault();
+    },
+    true,
+  );
+
+  window.addEventListener(
+    "unhandledrejection",
+    (event) => {
+      const reason = event.reason;
+      if (isAssert(reason)) {
+        firestorePoisoned = true;
+        event.preventDefault();
+        return;
+      }
+      if (isEventRejection(reason)) {
+        event.preventDefault();
+      }
+    },
+    true,
+  );
+}
+
 if (isBrowser) {
+  installFirestoreAssertGuard();
   try {
-    setLogLevel("error");
+    setLogLevel("silent");
   } catch {
     /* ignore */
   }
@@ -49,36 +118,21 @@ if (isBrowser && !appCheckInitialized) {
 }
 
 /**
- * Why clients go "offline":
- * Firestore opens a streaming WebChannel to Google. If that channel is blocked
- * (VPN, antivirus, proxy, flaky Wi‑Fi) or does not respond within ~10s, the SDK
- * marks itself offline. Later getDoc/getDocs then fail with
- * "Failed to get document because the client is offline."
- *
- * Mitigations: force long-polling (proxy-friendly), persistent cache, and
- * enableNetwork() retries when the browser is back online.
+ * Keep Firestore settings minimal.
+ * Do NOT call enableNetwork()/disableNetwork() — that triggers ca9/b815 in firebase@12.9.
+ * Do NOT force long-polling.
  */
 function createFirestore() {
   const settings = {
     ignoreUndefinedProperties: true,
   };
-
   if (isBrowser) {
-    // Force long-polling — cannot be used in Node; only set in the browser.
-    settings.experimentalForceLongPolling = true;
-    settings.experimentalLongPollingOptions = {
-      // Keep long-poll requests open longer on slow networks (valid range ~5–30).
-      timeoutSeconds: 25,
-    };
     try {
-      settings.localCache = persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      });
+      settings.localCache = memoryLocalCache();
     } catch {
-      // IndexedDB unavailable (private mode / blocked storage) — memory cache is fine.
+      /* private mode */
     }
   }
-
   try {
     return initializeFirestore(app, settings);
   } catch {
@@ -88,32 +142,13 @@ function createFirestore() {
 
 export const db = createFirestore();
 
-let reconnectInFlight = null;
-
-/** Nudge Firestore out of offline mode when the browser reports online. */
+/**
+ * No-op reconnect helper kept for call-site compatibility.
+ * Intentionally does NOT call enableNetwork (SDK assertion trigger).
+ */
 export async function ensureFirestoreNetwork() {
-  if (!isBrowser) return false;
-  if (navigator.onLine === false) return false;
-  if (reconnectInFlight) return reconnectInFlight;
-  reconnectInFlight = enableNetwork(db)
-    .then(() => true)
-    .catch(() => false)
-    .finally(() => {
-      reconnectInFlight = null;
-    });
-  return reconnectInFlight;
-}
-
-if (isBrowser) {
-  const resume = () => {
-    void ensureFirestoreNetwork();
-  };
-  window.addEventListener("online", resume);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") resume();
-  });
-  // First paint: try to leave offline mode ASAP.
-  resume();
+  if (!isBrowser || firestorePoisoned) return false;
+  return navigator.onLine !== false;
 }
 
 export const storage = getStorage(app);

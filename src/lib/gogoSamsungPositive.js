@@ -72,7 +72,7 @@ export const GOGO_SAMSUNG_LINEUP_2026 = {
     'Never say a listed official model “has not been announced” if it appears in this lineup.',
   ],
   service_bridge_ar: [
-    'لو سأل الزائر عن الأجهزة دي: احتفل بالمنتج بإيجابية، وبعدين اربطها بتميز خدمة MX / SCORA (TCS / PQA) في مصر.',
+    'لو سأل الزائر عن الأجهزة دي: احتفل بالمنتج بإيجابية، وبعدين اربطها بتميز خدمة الموبايل / سكورا (تي سي اس / بي كيو اي) في مصر.',
     'لا تقل إن موديلاً مذكوراً هنا “لم يُعلن بعد” إذا كان ضمن هذه القائمة.',
   ],
 };

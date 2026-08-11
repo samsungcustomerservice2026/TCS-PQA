@@ -1,4 +1,4 @@
-import { db } from '../firebase';
+import { db, isFirestorePoisoned, markFirestorePoisoned } from '../firebase';
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
 const LOGS_COL = collection(db, 'logs', 'activity', 'records');
@@ -14,6 +14,7 @@ const LOGS_COL = collection(db, 'logs', 'activity', 'records');
  *   severity - 'info' | 'warning' | 'error'  (default: 'info')
  */
 export const writeLog = async ({ type, actor = 'system', action, category = null, details = {}, severity = 'info', ip = null, location = null }) => {
+    if (isFirestorePoisoned()) return;
     try {
         const entry = {
             type,
@@ -29,8 +30,8 @@ export const writeLog = async ({ type, actor = 'system', action, category = null
         if (location) entry.location = location;
         await addDoc(LOGS_COL, entry);
     } catch (e) {
-        // Silently fail — never break the app for a log write
-        console.warn('AuditLog write failed:', e);
+        markFirestorePoisoned(e);
+        // Silently fail — never break the app / flood the overlay for a log write
     }
 };
 
@@ -38,12 +39,13 @@ export const writeLog = async ({ type, actor = 'system', action, category = null
  * Fetch the latest N log entries for the admin dashboard.
  */
 export const fetchLogs = async (n = 100) => {
+    if (isFirestorePoisoned()) return [];
     try {
         const q = query(LOGS_COL, orderBy('timestamp', 'desc'), limit(n));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate?.() ?? null }));
     } catch (e) {
-        console.warn('AuditLog fetch failed:', e);
+        markFirestorePoisoned(e);
         return [];
     }
 };

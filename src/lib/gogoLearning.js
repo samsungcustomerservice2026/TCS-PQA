@@ -47,7 +47,7 @@ export function scoreQuestionOverlap(a, b) {
 
 /**
  * Pick best learned entry for a question.
- * Instant recall only when qualityScore >= 100 (fully validated).
+ * Instant traditional recall when visitor-validated (qualityScore >= 90).
  */
 export function matchLearnedAnswer(entries, question, lang = 'en') {
   const list = Array.isArray(entries) ? entries : [];
@@ -85,13 +85,21 @@ export function matchLearnedAnswer(entries, question, lang = 'en') {
       : String(best.answer_en || best.answer || best.answer_ar || '').trim();
   if (!answer) return null;
 
+  const spoken =
+    L === 'ar'
+      ? String(best.answer_speech_ar || best.answer_speech || best.spoken || '').trim()
+      : String(best.answer_speech_en || best.answer_speech || best.spoken || '').trim();
+
+  // One thumbs-up (quality >= 90) promotes into traditional instant memory.
   const instant =
     best.status !== 'needs_improve' &&
-    Number(best.qualityScore || 0) >= 100 &&
-    bestScore >= 0.62;
+    Number(best.qualityScore || 0) >= 90 &&
+    bestScore >= 0.6 &&
+    Number(best.upvotes || 0) >= 1;
   return {
     entry: best,
     answer,
+    spoken,
     matchScore: bestScore,
     instant,
     preferredStates: Array.isArray(best.preferredStates) ? best.preferredStates : [],

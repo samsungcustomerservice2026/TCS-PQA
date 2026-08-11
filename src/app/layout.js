@@ -1,5 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { SCORA_MAIN_ORIGIN } from "../constants/scoraDomains";
+import FirestoreClientGuard from "../components/FirestoreClientGuard";
+import { GOGO_BOOT_ERROR_GUARD } from "../lib/gogoBootErrorGuard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -55,10 +57,17 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          // Must run before React/Firebase so Next never paints "[object Event]".
+          dangerouslySetInnerHTML={{ __html: GOGO_BOOT_ERROR_GUARD }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-dvh min-w-0 overflow-x-clip`}
         suppressHydrationWarning
       >
+        <FirestoreClientGuard />
         {children}
       </body>
     </html>

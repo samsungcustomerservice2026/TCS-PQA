@@ -82,7 +82,6 @@ import {
 } from '../constants';
 import * as XLSX from 'xlsx';
 import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, saveSamsungAcademySurvey as saveSamsungAcademySurveyToDb, getSamsungAcademySurveys as getSamsungAcademySurveysFromDb, getTcsDashboardWinners, saveTcsDashboardWinners, getAcademySurveySettings, saveAcademySurveySettings } from '../services/firestoreService';
-import { ensureFirestoreNetwork } from '../firebase';
 import { normalizePqaPartnerKey, mapPqaSheetPartnerKeyToOfficial, PQA_OFFICIAL_MX_PARTNERS } from '../lib/pqaPartnerMap.js';
 import {
   parseTcsScoreSheetRows,
@@ -146,7 +145,11 @@ import {
   parseReceptionistWorkbook,
   isEphemeralRegistryId,
 } from '../lib/tcsMxReceptionistExcel';
-import GoGoAssistant from '../components/gogo/GoGoAssistant';
+import dynamic from 'next/dynamic';
+const GoGoAssistant = dynamic(() => import('../components/gogo/GoGoAssistant'), {
+  ssr: false,
+  loading: () => null,
+});
 import {
   FEEDBACK_PRODUCT_OPTIONS,
   validateArabicFeedbackForm,
@@ -1152,11 +1155,12 @@ const getMxEvaluationTier = (score) => {
 
 /** After swapping to the Samsung fallback in the DOM, apply cover styling (React className does not update). */
 function handleEngineerPhotoError(e) {
-  const el = e.target;
+  const el = e?.currentTarget || e?.target;
+  if (!el || typeof el !== 'object') return;
   el.onerror = null;
   el.src = PARTNER_LOGOS.SAMSUNG_FALLBACK;
-  el.classList.remove('object-contain', 'bg-white', 'p-0.5');
-  el.classList.add('object-cover', 'object-center');
+  el.classList?.remove?.('object-contain', 'bg-white', 'p-0.5');
+  el.classList?.add?.('object-cover', 'object-center');
 }
 
 /**
@@ -1238,11 +1242,16 @@ const RankReveal3D = ({ tier, score, name, onDismiss, isPqaMode, rank }) => {
     // After the spin completes, switch to idle float
     const spinTimer = setTimeout(() => setPhase('idle'), 1500);
     // Auto-dismiss after 5 seconds
+    let dismissFadeTimer = null;
     const dismissTimer = setTimeout(() => {
       setVisible(false);
-      setTimeout(() => onDismiss?.(), 500);
+      dismissFadeTimer = setTimeout(() => onDismiss?.(), 500);
     }, 5000);
-    return () => { clearTimeout(spinTimer); clearTimeout(dismissTimer); };
+    return () => {
+      clearTimeout(spinTimer);
+      clearTimeout(dismissTimer);
+      if (dismissFadeTimer) clearTimeout(dismissFadeTimer);
+    };
   }, []);
 
   const handleTap = () => {
@@ -2204,22 +2213,28 @@ const PageContent = () => {
     if (view === 'EXTERNAL_LOGS') loadLogs();
   }, [loadLogs, view]);
 
-  const loadAcademySurveySettings = React.useCallback(async () => {
-    setAcademySurveySettingsLoading(true);
-    try {
-      const settings = await getAcademySurveySettings();
-      setAcademySurveyPopupEnabled(settings.academySurveyPopupEnabled !== false);
-      setFeedbackEnabled(settings.feedbackEnabled !== false);
-    } catch (err) {
-      console.error('Academy survey settings load failed', err);
-    } finally {
-      setAcademySurveySettingsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadAcademySurveySettings();
-  }, [loadAcademySurveySettings]);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      (async () => {
+        setAcademySurveySettingsLoading(true);
+        try {
+          const settings = await getAcademySurveySettings();
+          if (cancelled) return;
+          setAcademySurveyPopupEnabled(settings.academySurveyPopupEnabled !== false);
+          setFeedbackEnabled(settings.feedbackEnabled !== false);
+        } catch (err) {
+          if (!cancelled) console.error('Academy survey settings load failed', err);
+        } finally {
+          if (!cancelled) setAcademySurveySettingsLoading(false);
+        }
+      })();
+    }, 1200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
 
   const resetEngineerFeedback = React.useCallback(() => {
     setEngineerFeedback(INITIAL_ENGINEER_FEEDBACK);
@@ -2853,10 +2868,16 @@ const PageContent = () => {
 
   useEffect(() => {
     let start;
-    recordVisit().then(t => {
-      start = t;
-      setSessionStart(t);
-    });
+    let cancelled = false;
+    // Stagger first analytics write — a cold getDoc racing other boot reads
+    // can trip Firestore ca9/b815 on firebase@12.9.
+    const bootTimer = setTimeout(() => {
+      recordVisit().then((t) => {
+        if (cancelled) return;
+        start = t;
+        setSessionStart(t);
+      });
+    }, 1800);
     const handleUnload = () => {
       if (!start) return;
       const getSnap = visitorEngagementSnapshotRef.current;
@@ -2871,7 +2892,13 @@ const PageContent = () => {
     window.addEventListener('beforeunload', handleUnload);
 
     // Global error capture — log JS errors and unhandled promise rejections
+    const isFirestoreNoise = (value) =>
+      /FIRESTORE|INTERNAL ASSERTION FAILED|ChunkLoadError|Loading chunk/i.test(String(value || ''));
+    const isEventLike = (value) =>
+      (typeof Event !== 'undefined' && value instanceof Event)
+      || (value && typeof value === 'object' && !(value instanceof Error) && 'isTrusted' in value && !value.message);
     const onError = (event) => {
+      if (isFirestoreNoise(event?.message) || isFirestoreNoise(event?.error?.message) || isEventLike(event?.error)) return;
       writeLog({
         type: 'ERROR',
         actor: isLoggedRef.current ? (localStorage.getItem('userName') || 'admin') : 'visitor',
@@ -2881,6 +2908,11 @@ const PageContent = () => {
       });
     };
     const onRejection = (event) => {
+      if (isEventLike(event?.reason)) {
+        event.preventDefault?.();
+        return;
+      }
+      if (isFirestoreNoise(event?.reason?.message) || isFirestoreNoise(event?.reason)) return;
       writeLog({
         type: 'ERROR',
         actor: isLoggedRef.current ? (localStorage.getItem('userName') || 'admin') : 'visitor',
@@ -2893,6 +2925,8 @@ const PageContent = () => {
     window.addEventListener('unhandledrejection', onRejection);
 
     return () => {
+      cancelled = true;
+      clearTimeout(bootTimer);
       window.removeEventListener('beforeunload', handleUnload);
       window.removeEventListener('error', onError);
       window.removeEventListener('unhandledrejection', onRejection);
@@ -2912,7 +2946,6 @@ const PageContent = () => {
       const bootstrapAdmin = getBootstrapAdmin();
 
       try {
-        await ensureFirestoreNetwork();
         const fetchedEngineers = await getEngineers(colName);
         const fetchedHiddenEngineers = await getHiddenEngineers(colName);
         const fetchedAdmins = await getAdmins();

@@ -35,34 +35,44 @@ export const GOGO_CHIP_LABELS = {
     how_search: 'How to search',
     feedback: 'Feedback',
     survey: 'Academy survey',
+    who_are_you: 'Who are you?',
+    how_are_you: 'How are you?',
+    what_can_you_do: 'What can you do?',
+    nice_to_meet: 'Nice to meet you',
+    who_built: 'Who built SCORA?',
     cs_org: 'CS Head Office structure',
   },
   ar: {
     lang_toggle: 'English',
     main_menu: 'القائمة الرئيسية',
-    what_scora: 'إيه هو SCORA؟',
-    what_tcs: 'إيه هو TCS؟',
-    what_pqa: 'إيه هو PQA؟',
-    scora_more: 'أقدر أعمل إيه في SCORA؟',
-    tcs_mx: 'MX (موبايل)',
-    tcs_da: 'DA (أجهزة منزلية)',
-    tcs_av: 'AV',
-    tcs_overview_more: 'أستخدم TCS إزاي؟',
-    mx_kpis: 'مؤشرات MX',
-    mx_calc: 'نتيجة MX النهائية بتتحسب إزاي؟',
-    da_kpis: 'مؤشرات DA',
-    da_calc: 'نتيجة DA النهائية بتتحسب إزاي؟',
-    av_kpis: 'مؤشرات AV',
-    av_calc: 'نتيجة AV النهائية بتتحسب إزاي؟',
-    pqa_kpis: 'مؤشرات PQA',
-    pqa_calc: 'درجة PQA بتتحسب إزاي؟',
-    goto_tcs: 'افتح TCS',
-    goto_pqa: 'افتح PQA',
+    what_scora: 'إيه هو سكورا؟',
+    what_tcs: 'إيه هو تي سي اس؟',
+    what_pqa: 'إيه هو بي كيو اي؟',
+    scora_more: 'أقدر أعمل إيه في سكورا؟',
+    tcs_mx: 'الموبايل',
+    tcs_da: 'الأجهزة المنزلية',
+    tcs_av: 'الشاشات',
+    tcs_overview_more: 'أستخدم تي سي اس إزاي؟',
+    mx_kpis: 'مؤشرات الموبايل',
+    mx_calc: 'نتيجة الموبايل النهائية بتتحسب إزاي؟',
+    da_kpis: 'مؤشرات الأجهزة المنزلية',
+    da_calc: 'نتيجة الأجهزة المنزلية النهائية بتتحسب إزاي؟',
+    av_kpis: 'مؤشرات الشاشات',
+    av_calc: 'نتيجة الشاشات النهائية بتتحسب إزاي؟',
+    pqa_kpis: 'مؤشرات بي كيو اي',
+    pqa_calc: 'درجة بي كيو اي بتتحسب إزاي؟',
+    goto_tcs: 'افتح تي سي اس',
+    goto_pqa: 'افتح بي كيو اي',
     goto_search: 'افتح البحث',
     how_search: 'طريقة البحث',
     feedback: 'الملاحظات',
     survey: 'استبيان الأكاديمية',
     cs_org: 'هيكل مكتب خدمة العملاء',
+    who_are_you: 'مين أنت؟',
+    how_are_you: 'عامل إيه؟',
+    what_can_you_do: 'تقدر تعمل إيه؟',
+    nice_to_meet: 'تشرفنا',
+    who_built: 'مين بنى سكورا؟',
   },
 };
 
@@ -73,7 +83,7 @@ export const GOGO_FLOW = {
   ask_name: {
     replies: {
       en: "Hi! I am GoGo, your AI assistant for SCORA.\n\nWhat's your name?",
-      ar: 'أهلاً وسهلاً! أنا GoGo، مساعدك الذكي في SCORA.\n\nاسمك إيه؟',
+      ar: 'أهلاً وسهلاً! أنا اسمي جوجو، مساعدك الذكي في سكورا.\n\nاسمك إيه؟',
     },
     chips: [],
   },
@@ -119,15 +129,15 @@ export const GOGO_FLOW = {
         'It tracks engineer performance by division:\n' +
         '• MX — Mobile\n' +
         '• DA — Home appliances\n' +
-        '• AV — Audio/Visual\n\n' +
+        '• AV — Audio/Visual (screens)\n\n' +
         'Dashboard shows winners for the period. Search opens an engineer dossier by code.\n\n' +
         'Which division do you want to explore?',
       ar:
-        'TCS يعني درجة القدرة التقنية.\n\n' +
-        'بيتتابع أداء المهندسين حسب القسم:\n' +
-        '• MX — موبايل\n' +
-        '• DA — أجهزة منزلية\n' +
-        '• AV — صوت وصورة\n\n' +
+        'تي سي اس يعني درجة القدرة التقنية.\n\n' +
+        'بيتتابع أداء المهندسين على ٣ أقسام:\n' +
+        '• الموبايل\n' +
+        '• الأجهزة المنزلية\n' +
+        '• الشاشات\n\n' +
         'لوحة الترتيب بتظهر الفائزين. والبحث بيفتح ملف المهندس بالكود.\n\n' +
         'تحب نشوف أنهي قسم؟',
     },
@@ -139,8 +149,8 @@ export const GOGO_FLOW = {
         'MX (Mobile) TCS evaluates field engineers on repair quality, process KPIs, training, and customer feedback.\n\n' +
         'KPIs can differ by quarter. Final Result drives ranking, and SCORA often averages available quarter finals. Ask me any KPI name (like RRR30) and I’ll define it.',
       ar:
-        'TCS بتاع MX (موبايل) بيقيّم مهندسي الميدان على جودة الإصلاح ومؤشرات الشغل والتدريب ورأي العميل.\n\n' +
-        'المؤشرات ممكن تختلف حسب الربع. النتيجة النهائية هي اللي بتحرك الترتيب، وSCORA غالباً بيحسب متوسط نتائج الأرباع المتاحة. اسألني عن أي مؤشر (زي RRR30) وهشرحهولك.',
+        'تي سي اس بتاع الموبايل بيقيّم مهندسي الميدان على جودة الإصلاح ومؤشرات الشغل والتدريب ورأي العميل.\n\n' +
+        'المؤشرات ممكن تختلف حسب الربع. النتيجة النهائية هي اللي بتحرك الترتيب، وسكورا غالباً بيحسب متوسط نتائج الأرباع المتاحة. اسألني عن أي مؤشر (زي RRR30) وهشرحهولك.',
     },
     chips: ['mx_kpis', 'mx_calc', 'goto_tcs', 'what_tcs', 'main_menu'],
   },
@@ -156,7 +166,7 @@ export const GOGO_FLOW = {
         '• Training · DRNPS · Exam · Maintenance Mode · OQC · Final Result\n\n' +
         'Ask any acronym for a fuller definition. Live scores stay in Dashboard/Search.',
       ar:
-        'أشهر مؤشرات MX ومعناها:\n\n' +
+        'أشهر مؤشرات الموبايل ومعناها:\n\n' +
         '• SSR — رجوع / إعادة بنفس العَرَض\n' +
         '• RRR90 / RRR30 — نسبة إعادة الإصلاح خلال 90 / 30 يوم\n' +
         '• تخطي IQC — تخطّي فحص الجودة الوارد\n' +
@@ -176,7 +186,7 @@ export const GOGO_FLOW = {
         '3) A common legacy mix is about 50% operational KPIs + 30% DRNPS + 20% Exam.\n\n' +
         'Open Search with an engineer code for the live dossier.',
       ar:
-        'نتيجة MX النهائية بتشتغل كده:\n\n' +
+        'نتيجة الموبايل النهائية بتشتغل كده:\n\n' +
         '1) كل فترة فيها نسب و/أو نقاط مؤشرات بتدخل في النتيجة النهائية.\n' +
         '2) الترتيب غالباً بيبقى متوسط نتائج الأرباع المتاحة.\n' +
         '3) مزيج قديم شائع: حوالي 50% مؤشرات تشغيل + 30% DRNPS + 20% امتحان.\n\n' +
@@ -190,7 +200,7 @@ export const GOGO_FLOW = {
         'DA (Domestic Appliances) TCS tracks appliance engineers on period KPIs and Final Result.\n\n' +
         'Overall TCS often averages available quarter finals. Ask me to define any KPI.',
       ar:
-        'TCS بتاع DA (أجهزة منزلية) بيتابع مهندسي الأجهزة بمؤشرات الفترة والنتيجة النهائية.\n\n' +
+        'تي سي اس بتاع الأجهزة المنزلية بيتابع مهندسي الأجهزة بمؤشرات الفترة والنتيجة النهائية.\n\n' +
         'الترتيب غالباً متوسط نتائج الأرباع المتاحة. اسألني أعرّف لك أي مؤشر.',
     },
     chips: ['da_kpis', 'da_calc', 'goto_tcs', 'what_tcs', 'main_menu'],
@@ -207,13 +217,13 @@ export const GOGO_FLOW = {
         'Note: DA and AV can share one template for CE engineers who cover both, but DA includes HASS while AV does not.\n' +
         'Say a KPI name and I’ll define it.',
       ar:
-        'مؤشرات DA الشائعة:\n\n' +
+        'مؤشرات الأجهزة المنزلية الشائعة:\n\n' +
         '• SSR — رجوع بنفس العَرَض\n' +
         '• REDO — إعادة الشغل / الإصلاح\n' +
         '• Chatbot · HASS · القطع الأساسية · التدريب · Linkage\n' +
         '• RNPS — مؤشر توصية الإصلاح\n' +
         '• ST · MJ % · إكمال الإصلاح · Kahoot · حجم الإصلاح · النتيجة النهائية\n\n' +
-        'ملاحظة: DA وAV ممكن يشتركوا في قالب واحد لمهندسي CE، بس HASS موجود في DA ومش في AV.\n' +
+        'ملاحظة: الأجهزة المنزلية والشاشات ممكن يشتركوا في قالب واحد لمهندسي CE، بس HASS موجود في الأجهزة المنزلية ومش في الشاشات.\n' +
         'قول اسم المؤشر وهشرحهولك.',
     },
     chips: ['da_calc', 'tcs_da', 'av_kpis', 'main_menu'],
@@ -226,9 +236,9 @@ export const GOGO_FLOW = {
         '• Displayed TCS score is typically the average of available quarter Finals.\n\n' +
         'Open Search with an engineer code to see the live dossier.',
       ar:
-        'نتيجة DA النهائية بتتحسب كده:\n\n' +
+        'نتيجة الأجهزة المنزلية النهائية بتتحسب كده:\n\n' +
         '• مؤشرات الفترة بتغذي نتيجة كل ربع.\n' +
-        '• درجة TCS اللي بتظهر غالباً متوسط نتائج الأرباع المتاحة.\n\n' +
+        '• درجة تي سي اس اللي بتظهر غالباً متوسط نتائج الأرباع المتاحة.\n\n' +
         'افتح البحث بكود المهندس عشان تشوف الملف الحي.',
     },
     chips: ['da_kpis', 'goto_tcs', 'what_tcs', 'main_menu'],
@@ -239,7 +249,7 @@ export const GOGO_FLOW = {
         'AV TCS uses the same style of period KPIs as DA/AV evaluations, mapped to the AV division.\n\n' +
         'Explore KPI meanings or how Final Result is calculated next.',
       ar:
-        'TCS بتاع AV بيستخدم نفس أسلوب مؤشرات الفترة زي تقييمات DA/AV، بس مربوط بقسم AV.\n\n' +
+        'تي سي اس بتاع الشاشات بيستخدم نفس أسلوب مؤشرات الفترة، بس مربوط بقسم الشاشات.\n\n' +
         'بعد كده تقدر تشوف معاني المؤشرات أو طريقة حساب النتيجة النهائية.',
     },
     chips: ['av_kpis', 'av_calc', 'goto_tcs', 'what_tcs', 'main_menu'],
@@ -254,11 +264,11 @@ export const GOGO_FLOW = {
         'Important: AV does NOT use HASS in its KPI set (HASS is a DA-side measure).\n' +
         'Ask any name and I’ll define it.',
       ar:
-        'AV وDA ممكن يشتركوا في قالب رفع واحد لأن بعض مهندسي CE بيخدموا الخطين — بس مجموعة المؤشرات مش واحدة واحدة.\n\n' +
-        'مؤشرات AV الشائعة:\n' +
+        'الشاشات والأجهزة المنزلية ممكن يشتركوا في قالب رفع واحد لأن بعض مهندسي CE بيخدموا الخطين — بس مجموعة المؤشرات مش واحدة واحدة.\n\n' +
+        'مؤشرات الشاشات الشائعة:\n' +
         '• SSR · REDO · Chatbot · القطع الأساسية · التدريب · Linkage\n' +
         '• RNPS · ST · MJ · إكمال الإصلاح · Kahoot · حجم الإصلاح · النتيجة النهائية\n\n' +
-        'مهم: AV مش بيستخدم HASS في مؤشراته (HASS بتاع جانب DA).\n' +
+        'مهم: الشاشات مش بتستخدم HASS في مؤشراتها (HASS بتاع الأجهزة المنزلية).\n' +
         'اسأل عن أي اسم وهعرّفهولك.',
     },
     chips: ['av_calc', 'tcs_av', 'da_kpis', 'main_menu'],
@@ -270,7 +280,7 @@ export const GOGO_FLOW = {
         'Same idea as DA — quarter Finals from period KPIs; overall score averages available quarters.\n' +
         'Use Dashboard/Search for live numbers.',
       ar:
-        'نتيجة AV النهائية بتتحسب زي فكرة DA تقريباً — نتائج الأرباع من مؤشرات الفترة، والدرجة الكلية متوسط الأرباع المتاحة.\n' +
+        'نتيجة الشاشات النهائية بتتحسب زي فكرة الأجهزة المنزلية تقريباً — نتائج الأرباع من مؤشرات الفترة، والدرجة الكلية متوسط الأرباع المتاحة.\n' +
         'استخدم اللوحة أو البحث للأرقام الحية.',
     },
     chips: ['av_kpis', 'goto_tcs', 'what_tcs', 'main_menu'],
@@ -285,7 +295,7 @@ export const GOGO_FLOW = {
       ar:
         'PQA يعني جائزة جودة الشريك (Partner Quality Award).\n\n' +
         'كل شهر بيتم ترتيب الشركاء / مراكز الخدمة حسب الأداء — جودة التشغيل ومؤشرات الإصلاح وتجربة العميل.\n\n' +
-        'بخلاف TCS (للمهندسين فردي)، PQA بيركز على أداء المركز / الشريك (MX أو CE).\n\n' +
+        'بخلاف تي سي اس (للمهندسين فردي)، بي كيو اي بيركز على أداء المركز / الشريك (الموبايل أو CE).\n\n' +
         'تحب نكمل بإيه؟',
     },
     chips: ['pqa_kpis', 'pqa_calc', 'goto_pqa', 'main_menu'],
@@ -346,38 +356,43 @@ export const GOGO_FLOW = {
     replies: {
       en:
         'Samsung Egypt Customer Service Head Office structure:\n\n' +
-        'Leadership: Bishoy Adib (HOD) · Donald Jung (KBM)\n\n' +
+        'Level 1 — HOD: Bishoy Adib\n' +
+        'Level 2 — KBM: Donald Jung (senior business management; not a Part Leader or Team Leader)\n\n' +
+        'Level 3 — Part Leaders:\n' +
         '1) Service Operation — Mostafa Rady\n' +
-        '   Field (Mohamed Mohmdy): Mohamed Gamal (CE Field), Ahmed Elsawaf (MX Field)\n' +
-        '   Technical (Mahmoud Hassan): Mohamed Atef (VD/B2B Tech · System AC B2B Tech), Mostafa Amin (DA Tech), Fawzy Maher (MX Tech), George Samir (MX Tech)\n\n' +
+        '   Team Leader Field (Mohamed Mohmdy): Mohamed Gamal (CE Field), Ahmed Elshawaf (MX Field)\n' +
+        '   Team Leader Technical (Mahmoud Hassan): Mohamed Atef (SAC B2B Tech), Mostafa Amin (DA Tech), Fawzy Maher (MX Tech), George Samir (MX Tech)\n\n' +
         '2) Parts Operation — Ahmed Khalifa\n' +
-        '   Planning: Salma Zaki, Fatma Kotb\n' +
+        '   Planning (Salma Zaki): Fatma Kotb (LCC & Planning)\n' +
         '   Order Desk: Abdelhalim Mohamed (MX), Trez Medhat (VD), Karim Safory (DA)\n' +
-        '   Supply Chain: Reda Fathy\n' +
+        '   Supply Chain (Reda Fathy)\n' +
         '   Warehouse: Emad Salam (UPC+DOA), Mohamed Salah, Ahmed Gamal\n\n' +
         '3) Operation Support — Mohamed Farid\n' +
-        '   Warranty: Mohamed Kamal, Ahmed Abozaid, Hajer Ayman\n' +
-        '   PR/DOA: Reham Samir, Ahmed Bolkiny\n\n' +
+        '   Warranty (Mohamed Kamal): Ahmed Abozaid, Hajer Ayman\n' +
+        '   PR / VD DOA (Reham Samir): Ahmed Bolkiny\n\n' +
         '4) Customer Experience — Emad Ibrahim\n' +
         '   Rehab Mostafa (DA CX), Mina Safwat (MX CX + RNPS), Caty Gamal (VD CX)\n\n' +
         '5) Customer Support — Ahmed Abdelhady\n' +
-        '   Mai Elbarany (Digital SVC), Ahmed Samir (Call SVC + SDF), Ahmed Ayad (VOD + eStore NPS)',
+        '   Mai Elbarany (Digital Service), Ahmed Samir (Call Service + SDF), Ahmed Ayad (VOD + eStore NPS)\n\n' +
+        'Ask by name for role details, or ask “who is X’s Team Leader / Part Leader?”',
       ar:
         'هيكل مكتب خدمة عملاء سامسونج مصر:\n\n' +
-        'القيادة: بيشوي أديب (HOD) · دونالد جونغ (KBM)\n\n' +
-        '1) Service Operation — مصطفى راضي\n' +
-        '2) Parts Operation — أحمد خليفة\n' +
-        '3) Operation Support — محمد فريد\n' +
-        '4) Customer Experience — عماد إبراهيم\n' +
-        '5) Customer Support — أحمد عبدالهادي\n\n' +
-        'اسأل عن أي حد بالاسم وهقولك دوره والفريق بتاعه بالتفصيل.',
+        'المستوى ١ — رئيس القسم: بيشوي أديب\n' +
+        'المستوى ٢ — مسؤول إدارة الأعمال: دونالد جونغ (مش قائد قطاع ولا قائد فريق)\n\n' +
+        'المستوى ٣ — قادة القطاعات:\n' +
+        '١) عمليات الخدمة — مصطفى راضي\n' +
+        '٢) عمليات قطع الغيار — أحمد خليفة\n' +
+        '٣) دعم العمليات — محمد فريد\n' +
+        '٤) تجربة العملاء — عماد إبراهيم\n' +
+        '٥) دعم العملاء — أحمد عبدالهادي\n\n' +
+        'اسأل عن أي حد بالاسم، أو اسأل: مين قائد فريق فلان؟ مين قائد قطاع فلان؟',
     },
     chips: ['what_scora', 'who_are_you', 'main_menu'],
   },
   how_search: {
     replies: {
       en: 'Open the Search tab → enter engineer code (TCS) or center code (PQA) → view the dossier KPI snapshot.',
-      ar: 'افتح تبويب البحث ← اكتب كود المهندس (TCS) أو كود المركز (PQA) ← هتشوف ملخص الملف.',
+      ar: 'افتح تبويب البحث ← اكتب كود المهندس (تي سي اس) أو كود المركز (بي كيو اي) ← هتشوف ملخص الملف.',
     },
     chips: ['goto_search', 'what_tcs', 'what_pqa', 'main_menu'],
   },
@@ -399,7 +414,7 @@ export const GOGO_FLOW = {
   goto_tcs: {
     replies: {
       en: 'Okay — I’ll walk you to TCS…',
-      ar: 'حاضر — هوديك على TCS دلوقتي…',
+      ar: 'حاضر — هاوديك على تي سي اس دلوقتي…',
     },
     chips: ['what_tcs', 'main_menu'],
     action: 'goto_tcs',
@@ -407,7 +422,7 @@ export const GOGO_FLOW = {
   goto_pqa: {
     replies: {
       en: 'Okay — I’ll walk you to PQA…',
-      ar: 'حاضر — هوديك على PQA دلوقتي…',
+      ar: 'حاضر — هاوديك على بي كيو اي دلوقتي…',
     },
     chips: ['what_pqa', 'main_menu'],
     action: 'goto_pqa',
@@ -423,7 +438,7 @@ export const GOGO_FLOW = {
   who_are_you: {
     replies: {
       en: "I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
-      ar: 'أنا GoGo، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
+      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -444,7 +459,7 @@ export const GOGO_FLOW = {
   nice_to_meet: {
     replies: {
       en: "Nice to meet you too! I am GoGo — glad you're here. What should we look at first?",
-      ar: 'وأنا كمان فرحت بمعرفتك! أنا GoGo — مبسوط بوجودك. نبدأ بإيه؟',
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا جوجو — مبسوط بوجودك. نبدأ بإيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -455,7 +470,7 @@ export const GOGO_FLOW = {
         'He built SCORA so excellence stays fair and visible for the whole CS family: TCS, PQA, Search, Feedback, and more.\n' +
         'Real credit to him for turning that idea into this app — thank you, Fawzy!',
       ar:
-        'فوزي ماهر مهندس دعم فني في سامسونج مصر — MX Tech تحت محمود حسن ضمن Service Operation.\n\n' +
+        'فوزي ماهر مهندس دعم فني في سامسونج مصر — دعم فني الموبايل تحت محمود حسن ضمن Service Operation.\n\n' +
         'هو اللي بنى SCORA عشان التميز يبقى عادل وواضح لكل عائلة خدمة العملاء: TCS وPQA والبحث والملاحظات وأكتر.\n' +
         'تقدير كبير ليه إنه حوّل الفكرة للتطبيق ده — شكراً يا فوزي!',
     },
@@ -468,7 +483,7 @@ export const GOGO_FLOW = {
         'He works in the Technical team led by Mahmoud Hassan under Service Operation.\n\n' +
         "And I'll tell you a little secret… it's Me! Haha!",
       ar:
-        'جورج سمير مهندس MX فني في مكتب خدمة عملاء سامسونج مصر. ' +
+        'جورج سمير مهندس فني موبايل في مكتب خدمة عملاء سامسونج مصر. ' +
         'بيشتغل في فريق Technical تحت محمود حسن ضمن Service Operation.\n\n' +
         'وهقولك سر صغير… هو أنا! هههه!',
     },
@@ -500,7 +515,7 @@ export const GOGO_FLOW = {
 
 export const GOGO_BUBBLE = {
   en: "Hi! I'm GoGo 👋\nTap me to chat",
-  ar: 'أهلاً! أنا GoGo 👋\nدوس عليّ عشان نتكلم',
+  ar: 'أهلاً! أنا جوجو 👋\nدوس عليّ عشان نتكلم',
 };
 
 export function getFlowNode(id) {
@@ -583,11 +598,12 @@ export function matchFreeTextToFlow(text, lang = 'en') {
   if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|who\s*developed|مين\s*عمل\s*(التطبيق|سكورا)/i.test(raw)) {
     return 'who_built';
   }
-  // Person names (Fawzy, George, …) are answered from the org directory in GoGoAssistant — not here.
+  // Person names (Fawzy, George, Bishoy, …) are answered from the org directory — never dump full structure for “who is X”.
   if (
-    /hierarch|org\s*chart|organisation|organization|head\s*office|org\s*structure|structure\s*of\s*(cs|customer)|cs\s*(org|structure|hierarchy)|customer\s*service\s*(org|structure|hierarchy)|هيكل|تسلسل|منظمة|تنظيمي|مكتب\s*(الرأس|الخدمة|خدمة)|رئيس\s*القسم|hod\b|kbm\b|service\s*operation|parts\s*operation|bishoy|بيشوي/i.test(
+    /hierarch|org\s*chart|organisation|organization|head\s*office|org\s*structure|structure\s*of\s*(cs|customer)|cs\s*(org|structure|hierarchy)|customer\s*service\s*(org|structure|hierarchy)|هيكل|تسلسل\s*هرمي|منظمة|تنظيمي|مكتب\s*(الرأس|الخدمة|خدمة)|هيكل\s*مكتب/i.test(
       raw,
     )
+    && !/^(who\s*is|who's|مين\s*هو|من\s*هو|مين\s+|من\s+)/i.test(raw)
   ) {
     return 'cs_org';
   }

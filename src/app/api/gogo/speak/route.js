@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { textForSpeech } from '../../../../lib/gogoSpeechText';
 import { synthesizeWithEdgeTts } from '../../../../lib/gogoEdgeTts';
+import { isElevenLabsConfigured, synthesizeWithElevenLabs } from '../../../../lib/gogoElevenTts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,7 +75,13 @@ function voiceForLang(lang) {
 
 function buildSpeakPrompt(text, lang) {
   if (lang === 'ar') {
-    return `Speak naturally in clear Egyptian Arabic with a warm adult male voice. Say: ${text}`;
+    return [
+      'You are GoGo, a friendly Egyptian man from Cairo working at Samsung Egypt.',
+      'Speak ONLY Egyptian colloquial Arabic (عامية مصرية) — never formal MSA, never Gulf/Levantine.',
+      'Natural Cairo tone: warm, clear, adult male. Phrases like: أهلاً، ازيك، تمام، هقولك، دلوقتي، كده، شوف.',
+      'Do not translate. Read this Egyptian Arabic aloud exactly:',
+      text,
+    ].join(' ');
   }
   return `Speak naturally in clear American English with a warm adult male voice. Say: ${text}`;
 }
@@ -149,7 +156,8 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Empty text' }, { status: 400 });
   }
 
-  // Primary: Microsoft neural male voices (EN Andrew / AR Shakir) — works without Gemini quota.
+  // Permanent free path: Microsoft Edge Egyptian male (ar-EG-ShakirNeural).
+  // No API key / no subscription — works offline-capable via Edge neural service.
   try {
     const audio = await synthesizeWithEdgeTts(text, lang);
     return NextResponse.json({
@@ -159,6 +167,21 @@ export async function POST(request) {
     });
   } catch (edgeErr) {
     console.warn('GoGo Edge TTS failed:', edgeErr?.message || edgeErr);
+  }
+
+  // Optional paid: ElevenLabs Hanafi — only when explicitly enabled (free plan cannot use library voices).
+  const elevenEnabled = process.env.ELEVENLABS_ENABLED === '1' || process.env.ELEVENLABS_ENABLED === 'true';
+  if (elevenEnabled && lang === 'ar' && isElevenLabsConfigured('ar')) {
+    try {
+      const audio = await synthesizeWithElevenLabs(text, 'ar');
+      return NextResponse.json({
+        ...audio,
+        lang,
+        text,
+      });
+    } catch (elevenErr) {
+      console.warn('GoGo ElevenLabs Hanafi TTS failed:', elevenErr?.message || elevenErr);
+    }
   }
 
   // Secondary: Gemini TTS only if key exists and quota allows

@@ -10,16 +10,15 @@ import {
   normalizeGoGoName,
   loadGoGoVisitorName,
   saveGoGoVisitorName,
-  matchFreeTextToFlow,
   getFlowNode,
 } from '../../lib/gogoGuideFlow';
-import { getGoGoSoftRedirectReply, isGoGoDeniedMessage, resolveGoGoReply } from '../../lib/gogoKnowledge';
 import { GOGO_SMART_CHIPS } from '../../lib/gogoGeminiContext';
+import { prepareGoGoReplyPair } from '../../lib/gogoSpeechText';
 import {
-  findGoGoOrgPerson,
-  formatGoGoOrgAmbiguousAnswer,
-  formatGoGoOrgPersonAnswer,
-} from '../../lib/gogoOrgAndKpis';
+  resolveGoGoTraditionalTurn,
+  resolveGoGoLearnedTurn,
+  resolveGoGoSafeFallback,
+} from '../../lib/gogoRouter';
 import {
   createGoGoRecognizer,
   ensureMicrophonePermission,
@@ -41,7 +40,6 @@ import {
 } from '../../lib/gogoStateTags';
 import {
   buildLearningPromptHints,
-  matchLearnedAnswer,
 } from '../../lib/gogoLearning';
 import {
   getOrCreateGoGoVisitorId,
@@ -75,7 +73,11 @@ const SPRITE_BY_POSE = {
   celebrate: '/gogo/celebrate.png?v=gogo4',
 };
 const SPRITE_FALLBACK = '/gogo/idle.png?v=gogo4';
-const ASSISTANT_NAME = 'GoGo';
+const ASSISTANT_NAME_EN = 'GoGo';
+const ASSISTANT_NAME_AR = 'جوجو';
+function assistantDisplayName(lang) {
+  return lang === 'ar' ? ASSISTANT_NAME_AR : ASSISTANT_NAME_EN;
+}
 const STORAGE_LANG = 'gogo_lang';
 
 const ACTION_TARGET = {
@@ -89,11 +91,11 @@ const ACTION_TARGET = {
 const GUIDE_LINES = {
   goto_pqa: {
     en: { think: 'Thinking… walking you to PQA.', point: 'Point here — tap PQA.' },
-    ar: { think: 'ثواني… هوديك لـ PQA.', point: 'هنا — دوس على PQA.' },
+    ar: { think: 'ثواني… هاوديك لـ بي كيو اي.', point: 'هنا — اضغط على بي كيو اي.' },
   },
   goto_tcs: {
     en: { think: 'Thinking… guiding you to TCS.', point: 'Point here — tap TCS.' },
-    ar: { think: 'ثواني… هوديك لـ TCS.', point: 'هنا — دوس على TCS.' },
+    ar: { think: 'ثواني… هاوديك لـ تي سي اس.', point: 'هنا — اضغط على تي سي اس.' },
   },
   goto_search: {
     en: { think: 'Opening Search…', point: 'Point here — Search tab.' },
@@ -102,7 +104,12 @@ const GUIDE_LINES = {
 };
 
 function stamp(role, text, extra = {}) {
-  return { role, text, at: new Date().toISOString(), ...extra };
+  let t = String(text || '');
+  if (role === 'gogo' && /[\u0600-\u06FF]/.test(t)) {
+    t = prepareGoGoReplyPair(t, 'ar').display;
+  }
+  const spoken = extra.spoken != null ? String(extra.spoken) : undefined;
+  return { role, text: t, at: new Date().toISOString(), ...extra, ...(spoken != null ? { spoken } : {}) };
 }
 
 async function askGoGoGemini({ message, lang, visitorName, history, visitorId, learningHint = '' }) {
@@ -171,6 +178,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const messagesRef = useRef(messages);
   const langRef = useRef(lang);
   const nameRef = useRef('');
+  const mountedRef = useRef(false);
 
   messagesRef.current = messages;
   langRef.current = lang;
@@ -182,7 +190,10 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   };
 
   const schedule = (fn, ms) => {
-    const id = setTimeout(fn, ms);
+    const id = setTimeout(() => {
+      if (!mountedRef.current) return;
+      fn();
+    }, ms);
     guideTimersRef.current.push(id);
     return id;
   };
@@ -206,6 +217,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     gesture = 'speak',
     segments: segmentsOverride = null,
     initialState = null,
+    spoken: spokenOverride = null,
   } = {}) => {
     const parsed = segmentsOverride
       ? {
@@ -214,7 +226,14 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         segments: segmentsOverride,
       }
       : parseGoGoStateTaggedText(text);
-    const clean = parsed.displayText || stripGoGoStateTags(text);
+    const speakLangEarly = langOverride || langRef.current;
+    const rawClean = spokenOverride
+      || parsed.segments?.[0]?.spoken
+      || parsed.displayText
+      || stripGoGoStateTags(text);
+    const clean = speakLangEarly === 'ar'
+      ? prepareGoGoReplyPair(rawClean, 'ar').spoken
+      : String(rawClean || '');
     const startPose = initialState
       ? poseFromGoGoState(initialState)
       : (parsed.segments?.length
@@ -234,6 +253,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     };
 
     if (!force && voiceMuted && !voiceAskRef.current) {
+      if (!mountedRef.current) return;
       setPose(startPose);
       runPoseTimeline();
       const last = timeline[timeline.length - 1];
@@ -247,11 +267,13 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       lang: speakLang,
       muted,
       onStart: () => {
+        if (!mountedRef.current) return;
         setSpeaking(true);
         setPose(startPose);
         runPoseTimeline();
       },
       onEnd: () => {
+        if (!mountedRef.current) return;
         setSpeaking(false);
         setPose('idle');
         voiceAskRef.current = false;
@@ -260,12 +282,20 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   }, [voiceMuted]);
 
   const playGesture = useCallback((nextPose, holdMs) => {
+    if (!mountedRef.current) return;
     setPose(nextPose);
     const ms = holdMs ?? GOGO_POSE_HOLD_MS[nextPose];
     if (!ms) return;
     schedule(() => {
       setPose((current) => (current === nextPose ? 'idle' : current));
     }, ms);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -405,7 +435,9 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       setGuideHint(null);
       setDock('left');
     }, 9000);
-    return undefined;
+    return () => {
+      clearGuideTimers();
+    };
   }, [currentView, placeSpotlightOnTarget]);
 
   const rtl = lang === 'ar';
@@ -494,44 +526,45 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     const result = resolveFlowReply(nodeId, L, name);
     const expression = result.expression || null;
     const isGeorge = nodeId === 'george_samir';
+    const pair = prepareGoGoReplyPair(result.reply, L);
     setMessages((prev) => {
       const next = [
         ...prev,
         ...(userLabel ? [stamp('user', userLabel)] : []),
-        stamp('gogo', result.reply, {
+        stamp('gogo', pair.display, {
           expression: expression || undefined,
           learnable: !isGeorge,
           question: userLabel || null,
+          spoken: pair.spoken,
+          source: 'guide',
+          mode: 'traditional',
         }),
       ];
       persistChat(next, L, name);
       return next;
     });
-    setChips((result.chips || []).filter((id) => id !== 'lang_toggle'));
-    if (isGeorge) {
-      setPose('explaining');
-      schedule(() => setPose('celebrate'), 1200);
-      schedule(() => setPose((p) => (p === 'celebrate' ? 'idle' : p)), 2800);
-      const parts = String(result.reply || '').split(/\n\n+/);
-      const segments = parts.length > 1
-        ? [
-            { state: 'explaining', text: parts[0] },
-            { state: 'celebrate', text: parts.slice(1).join('\n\n') },
-          ]
-        : [{ state: 'celebrate', text: result.reply }];
-      void speakReply(result.reply, {
-        initialState: 'explaining',
-        segments,
+    setChips(result.chips || []);
+    setPhase(nodeId === 'ask_name' ? 'ask_name' : 'chatting');
+    if (expression) {
+      setPose(poseFromGoGoState(expression) || 'speak');
+      void speakReply(pair.display, {
+        gesture: expression === 'wave' ? 'wave' : 'speak',
+        spoken: pair.spoken,
+        initialState: expression,
       });
     } else {
-      setPose('think');
-      schedule(() => {
-        setPose((p) => (p === 'think' ? 'nod' : p));
-        schedule(() => setPose((p) => (p === 'nod' ? 'idle' : p)), 800);
-      }, 650);
-      void speakReply(result.reply);
+      void speakReply(pair.display, { spoken: pair.spoken });
     }
     if (result.action) runGuidedAction(result.action);
+  };
+
+  const applyClientActions = (actions) => {
+    if (!Array.isArray(actions) || !actions.length) return;
+    for (const item of actions) {
+      if (item?.type === 'navigate' && item.action) {
+        runGuidedAction(item.action);
+      }
+    }
   };
 
   const sendSmartMessage = async (text, { fromVoice = false } = {}) => {
@@ -541,98 +574,62 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       return;
     }
 
-    if (isGoGoDeniedMessage(text)) {
-      const soft = getGoGoSoftRedirectReply(lang);
-      const denied = resolveFlowReply('denied', lang);
+    const traditional = resolveGoGoTraditionalTurn(text, lang);
+    if (traditional) {
+      if (traditional.flowNodeId) {
+        appendFlow(traditional.flowNodeId, text);
+        return;
+      }
       setMessages((prev) => {
-        const next = [...prev, stamp('user', text), stamp('gogo', soft || denied.reply, { denied: true })];
+        const next = [
+          ...prev,
+          stamp('user', text),
+          stamp('gogo', traditional.reply, {
+            denied: !!traditional.denied,
+            source: traditional.source,
+            mode: traditional.mode,
+            learnable: !!traditional.learnable,
+            question: traditional.question || text,
+            expression: traditional.expression,
+            spoken: traditional.spoken,
+          }),
+        ];
         persistChat(next, lang, nameRef.current);
         return next;
       });
-      setChips(denied.chips);
-      void speakReply(soft || denied.reply, {
+      setChips(traditional.chips || GOGO_SMART_CHIPS);
+      if (traditional.expression) setPose(poseFromGoGoState(traditional.expression) || 'idle');
+      void speakReply(traditional.reply, {
         force: fromVoice,
-        initialState: 'empathetic',
-        segments: [{ state: 'empathetic', text: soft || denied.reply }],
+        initialState: traditional.expression || null,
+        spoken: traditional.spoken,
+        segments: traditional.expression
+          ? [{ state: traditional.expression, text: traditional.reply, spoken: traditional.spoken }]
+          : null,
       });
       return;
     }
 
-    if (isGsmArenaSourceQuestion(text)) {
-      const reply = getGsmArenaConfirmReply(lang);
-      setMessages((prev) => {
-        const next = [...prev, stamp('user', text), stamp('gogo', reply, { source: 'samsung_source_confirm' })];
-        persistChat(next, lang, nameRef.current);
-        return next;
-      });
-      setChips(GOGO_SMART_CHIPS);
-      setPose('success');
-      void speakReply(reply, { force: fromVoice, initialState: 'success' });
-      return;
-    }
-
-    // Org directory: answer with the saved role/team for named CS Head Office people.
-    const isBuiltQuestion = /who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|who\s*developed/i.test(text);
-    if (!isBuiltQuestion) {
-      const orgHit = findGoGoOrgPerson(text);
-      if (orgHit?.person || orgHit?.ambiguous) {
-        const reply = orgHit.ambiguous
-          ? formatGoGoOrgAmbiguousAnswer(orgHit.ambiguous, lang)
-          : formatGoGoOrgPersonAnswer(orgHit.person, lang);
-        setMessages((prev) => {
-          const next = [
-            ...prev,
-            stamp('user', text),
-            stamp('gogo', reply, {
-              source: 'cs_org_person',
-              learnable: false,
-              question: text,
-              expression: 'explaining',
-            }),
-          ];
-          persistChat(next, lang, nameRef.current);
-          return next;
-        });
-        setChips(GOGO_SMART_CHIPS);
-        setPose('explaining');
-        schedule(() => setPose('success'), 900);
-        void speakReply(reply, { force: fromVoice, initialState: 'explaining' });
-        return;
-      }
-    }
-
-    // Structured chip keywords still use guided tree first (include cs_org hierarchy)
-    const matched = matchFreeTextToFlow(text, lang);
-    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_|george_|cs_org)/.test(matched)) {
-      const looksOpen =
-        text.split(/\s+/).length > 8 ||
-        /why|how come|explain|compare|difference|ليه|ازاي|اشرح|فرق/i.test(text);
-      // Hierarchy / org chart must always use the verified tree — never skip for Gemini.
-      if (!looksOpen || matched === 'cs_org') {
-        appendFlow(matched, text);
-        return;
-      }
-    }
-
-    // Samsung Product KB (verified structured data) — never invent when KB is empty/miss.
     try {
       setBusy(true);
       setPose('think');
       const { retrieveFromSamsungKb } = await import('../../services/samsungProductKbService');
       const kb = await retrieveFromSamsungKb(text, { lang });
       if (kb?.hit && kb.answer) {
-        const reply = kb.answer;
+        const pair = prepareGoGoReplyPair(kb.answer, lang);
         setMessages((prev) => {
           const next = [
             ...prev,
             stamp('user', text),
-            stamp('gogo', reply, {
+            stamp('gogo', pair.display, {
               source: 'samsung_kb',
+              mode: 'traditional',
               learnable: false,
               question: text,
               productName: kb.product?.marketing_name || null,
               expression: 'explaining',
               dataStatus: kb.product?.DATA_STATUS || null,
+              spoken: pair.spoken,
             }),
           ];
           persistChat(next, lang, nameRef.current);
@@ -641,25 +638,26 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         setChips(GOGO_SMART_CHIPS);
         setPose('explaining');
         schedule(() => setPose('success'), 900);
-        void speakReply(reply, {
+        void speakReply(pair.display, {
           force: fromVoice,
           initialState: 'explaining',
-          segments: [{ state: 'explaining', text: reply }],
+          spoken: pair.spoken,
         });
         return;
       }
-      // If KB has catalog but no verified match for an explicit model number, refuse hallucination.
       if (kb?.reason === 'unverified_record' || kb?.reason === 'record_without_specs') {
-        const reply = kb.unavailable_message;
+        const pair = prepareGoGoReplyPair(kb.unavailable_message, lang);
         setMessages((prev) => {
           const next = [
             ...prev,
             stamp('user', text),
-            stamp('gogo', reply, {
+            stamp('gogo', pair.display, {
               source: 'samsung_kb_unavailable',
+              mode: 'traditional',
               learnable: false,
               question: text,
               expression: 'thinking',
+              spoken: pair.spoken,
             }),
           ];
           persistChat(next, lang, nameRef.current);
@@ -667,16 +665,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         });
         setChips(GOGO_SMART_CHIPS);
         setPose('think');
-        void speakReply(reply, { force: fromVoice, initialState: 'thinking' });
+        void speakReply(pair.display, { force: fromVoice, initialState: 'thinking', spoken: pair.spoken });
         return;
       }
     } catch {
-      /* KB optional until Firestore rules / import exist */
+      /* KB optional */
     } finally {
       setBusy(false);
     }
 
-    // Legacy GoGo product memory (pre-KB). Prefer KB once verified dataset is imported.
     try {
       setBusy(true);
       setPose('think');
@@ -684,17 +681,19 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         history: messagesRef.current,
       });
       if (productHit?.answer) {
-        const reply = productHit.answer;
+        const pair = prepareGoGoReplyPair(productHit.answer, lang);
         setMessages((prev) => {
           const next = [
             ...prev,
             stamp('user', text),
-            stamp('gogo', reply, {
+            stamp('gogo', pair.display, {
               source: productHit.source || 'products_memory',
+              mode: 'traditional',
               learnable: !productHit.unknown,
               question: text,
               productName: productHit.product?.name_en || null,
               expression: productHit.unknown ? 'thinking' : 'explaining',
+              spoken: pair.spoken,
             }),
           ];
           persistChat(next, lang, nameRef.current);
@@ -703,15 +702,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         setChips(GOGO_SMART_CHIPS);
         setPose(productHit.unknown ? 'think' : 'explaining');
         if (!productHit.unknown) schedule(() => setPose('success'), 900);
-        void speakReply(reply, {
+        void speakReply(pair.display, {
           force: fromVoice,
           initialState: productHit.unknown ? 'thinking' : 'explaining',
-          segments: [{ state: productHit.unknown ? 'thinking' : 'explaining', text: reply }],
+          spoken: pair.spoken,
         });
         return;
       }
     } catch {
-      /* fall through to learned / Gemini */
+      /* fall through */
     } finally {
       setBusy(false);
     }
@@ -726,29 +725,29 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     });
 
     try {
-      const learnedMatch = matchLearnedAnswer(learnedEntries, text, lang);
-      if (learnedMatch?.instant && learnedMatch.answer) {
-        const reply = learnedMatch.answer;
-        const preferred = learnedMatch.preferredStates?.[0] || 'success';
+      const learnedTurn = resolveGoGoLearnedTurn(text, lang, learnedEntries);
+      if (learnedTurn.mode === 'learned') {
         setMessages((prev) => {
           const next = [
             ...prev,
-            stamp('gogo', reply, {
+            stamp('gogo', learnedTurn.reply, {
               source: 'learned',
+              mode: 'traditional_learned',
               learnable: true,
               question: text,
-              expression: preferred,
+              expression: learnedTurn.expression,
+              spoken: learnedTurn.spoken,
             }),
           ];
           persistChat(next, lang, nameRef.current);
           return next;
         });
         setChips(GOGO_SMART_CHIPS);
-        setPose(poseFromGoGoState(preferred) || 'success');
-        void speakReply(reply, {
+        setPose(poseFromGoGoState(learnedTurn.expression) || 'success');
+        void speakReply(learnedTurn.reply, {
           force: fromVoice,
-          initialState: preferred,
-          segments: [{ state: preferred, text: reply }],
+          initialState: learnedTurn.expression,
+          spoken: learnedTurn.spoken,
         });
         return;
       }
@@ -759,9 +758,10 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         visitorName: nameRef.current,
         history: historySnapshot,
         visitorId,
-        learningHint: buildLearningPromptHints(learnedMatch),
+        learningHint: learnedTurn.learningHint || buildLearningPromptHints(learnedTurn.learnedMatch),
       });
       const reply = String(data.reply || '').trim();
+      const spoken = String(data.spoken || prepareGoGoReplyPair(reply, lang).spoken);
       const animation = data.animation || null;
       const segments = Array.isArray(animation?.segments) ? animation.segments : null;
       const expression = animation?.initialState || segments?.[0]?.state || null;
@@ -771,9 +771,12 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           stamp('gogo', reply, {
             denied: !!data.denied,
             source: data.source,
+            mode: data.mode || (data.source === 'agentic' ? 'agentic' : 'generative'),
             learnable: !!data.learnable && !data.denied,
             question: text,
             expression,
+            spoken,
+            toolsUsed: data.toolsUsed || [],
           }),
         ];
         persistChat(next, lang, nameRef.current);
@@ -786,12 +789,13 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         setPose('idle');
       }
       if (fromVoice) voiceAskRef.current = true;
-      void speakReply(data.spoken || reply, {
+      void speakReply(spoken || reply, {
         force: fromVoice,
         segments,
         initialState: animation?.initialState || null,
+        spoken,
       });
-      // Remember product facts in Firebase for faster next answers
+      applyClientActions(data.clientActions);
       const product = findGoGoProduct(text);
       if (product && reply) {
         void upsertGoGoProductFact({
@@ -802,51 +806,37 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         });
       }
     } catch {
-      const matchedNode = matchFreeTextToFlow(text, lang);
-      if (matchedNode) {
-        const result = resolveFlowReply(matchedNode, lang, nameRef.current);
+      const fallback = resolveGoGoSafeFallback(text, lang, nameRef.current);
+      if (fallback.extraReply) {
         setMessages((prev) => {
-          const next = [...prev, stamp('gogo', result.reply, { learnable: true, question: text })];
+          const next = [
+            ...prev,
+            stamp('gogo', fallback.reply, { spoken: fallback.spoken, source: fallback.source, mode: 'fallback' }),
+            stamp('gogo', fallback.extraReply, { source: 'menu_fallback', mode: 'fallback' }),
+          ];
           persistChat(next, lang, nameRef.current);
           return next;
         });
-        setChips(result.chips || GOGO_SMART_CHIPS);
-        void speakReply(result.reply, { force: fromVoice });
-        if (result.action) runGuidedAction(result.action);
       } else {
-        const knowledge = resolveGoGoReply(text, lang);
-        const reply = String(knowledge?.reply || '').trim();
-        const menu = resolveFlowReply('main_menu', lang, nameRef.current);
-        if (reply && knowledge?.topicId !== 'welcome') {
-          setMessages((prev) => {
-            const next = [
-              ...prev,
-              stamp('gogo', reply, {
-                learnable: !knowledge?.denied,
-                denied: !!knowledge?.denied,
-                question: text,
-              }),
-            ];
-            persistChat(next, lang, nameRef.current);
-            return next;
-          });
-          setChips(knowledge.chips || menu.chips || GOGO_SMART_CHIPS);
-          void speakReply(reply, { force: fromVoice });
-          if (knowledge.action) runGuidedAction(knowledge.action);
-        } else {
-          const tip =
-            lang === 'ar'
-              ? 'خلّينا نكمل بالأزرار دي — اختار موضوع وأنا أرشدك.'
-              : 'Let’s use the buttons below — pick a topic and I’ll guide you.';
-          setMessages((prev) => {
-            const next = [...prev, stamp('gogo', tip), stamp('gogo', menu.reply)];
-            persistChat(next, lang, nameRef.current);
-            return next;
-          });
-          setChips(menu.chips);
-          void speakReply(tip, { force: fromVoice });
-        }
+        setMessages((prev) => {
+          const next = [
+            ...prev,
+            stamp('gogo', fallback.reply, {
+              learnable: !!fallback.learnable,
+              denied: !!fallback.denied,
+              question: text,
+              spoken: fallback.spoken,
+              source: fallback.source,
+              mode: 'fallback',
+            }),
+          ];
+          persistChat(next, lang, nameRef.current);
+          return next;
+        });
       }
+      setChips(fallback.chips || GOGO_SMART_CHIPS);
+      void speakReply(fallback.reply, { force: fromVoice, spoken: fallback.spoken });
+      if (fallback.action) runGuidedAction(fallback.action);
       setPose('idle');
     } finally {
       setBusy(false);
@@ -876,6 +866,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           lang: langRef.current,
           expressionUsed: msg.expression || '',
           visitorId,
+          spoken: msg.spoken || prepareGoGoReplyPair(msg.text, langRef.current).spoken,
         });
         const product = findGoGoProduct(question);
         if (product) {
@@ -1159,7 +1150,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             ? 'لحظة…'
             : 'One moment…'
           : rtl
-            ? 'اكتب أو كلّم GoGo…'
+            ? 'اكتب أو كلّم جوجو…'
             : 'Type or talk to GoGo…';
 
   return (
@@ -1204,7 +1195,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           <div className="w-full sm:w-[min(100vw-1.5rem,21rem)] max-h-[min(68dvh,32rem)] sm:max-h-[min(70vh,36rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 bg-gradient-to-r from-blue-600/25 to-transparent shrink-0">
               <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-widest text-white truncate">{ASSISTANT_NAME}</p>
+                <p className={`text-[11px] font-black text-white truncate ${rtl ? 'tracking-normal' : 'uppercase tracking-widest'}`}>{assistantDisplayName(lang)}</p>
                 <p className="text-[9px] text-zinc-500 font-bold truncate">
                   {listening
                     ? rtl
@@ -1345,7 +1336,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               {busy && (
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500 mr-4 px-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  {rtl ? `${ASSISTANT_NAME} بيفكر…` : `${ASSISTANT_NAME} is thinking…`}
+                  {rtl ? `${assistantDisplayName('ar')} بيفكر…` : `${assistantDisplayName('en')} is thinking…`}
                 </div>
               )}
             </div>

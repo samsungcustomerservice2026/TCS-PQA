@@ -16,7 +16,7 @@ export { textForSpeech };
 const VOICE_MUTE_KEY = 'gogo_voice_muted';
 const PINNED_VOICE_KEY = {
   en: 'gogo_pinned_voice_en_v4_male',
-  ar: 'gogo_pinned_voice_ar_v4_male',
+  ar: 'gogo_pinned_voice_ar_v5_eg_male',
 };
 
 /** Incremented on every stop/cancel so in-flight speak loops abort. */
@@ -254,10 +254,11 @@ function scoreMaleVoice(voice, lang) {
     if (/google.*english.*male|microsoft.*(guy|david|mark|ryan)/.test(name)) score += 35;
     if (/natural|neural|online|premium/.test(name)) score += 25;
   } else {
-    // Arabic: adult male including Hamed/Naayf beats any female default
-    if (/hamed|naayf|naayef|maged|farid|male/.test(name)) score += 60;
-    if (vLang.includes('eg') || /egypt|مصر/.test(name)) score += 35;
-    else if (vLang.includes('sa') || vLang.includes('xa')) score += 10;
+    // Arabic: hard-prefer Egyptian male (ar-EG / مصر)
+    if (/hamed|naayf|naayef|maged|farid|male|shakir/.test(name)) score += 60;
+    if (vLang.includes('eg') || /egypt|مصر|cairo|مصري/.test(name)) score += 80;
+    else if (vLang.includes('sa') || vLang.includes('xa')) score -= 20;
+    else if (vLang.startsWith('ar')) score += 5;
     if (/natural|neural|online|premium/.test(name)) score += 30;
   }
 

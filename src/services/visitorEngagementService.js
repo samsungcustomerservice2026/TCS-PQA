@@ -1,4 +1,4 @@
-import { db } from '../firebase';
+import { db, isFirestorePoisoned } from '../firebase';
 import {
   doc, getDoc, setDoc, updateDoc, increment,
   collection, addDoc, serverTimestamp,
@@ -171,7 +171,7 @@ export async function recordConnectivitySignal(type, meta = {}) {
   const day = todayKey();
   // Never call Firestore while the browser/SDK is already offline — that is what
   // produces "Failed to get document because the client is offline" overlays.
-  if (!isBrowserOnline()) return;
+  if (!isBrowserOnline() || isFirestorePoisoned()) return;
   if (type === 'offline') return;
   try {
     await ensureEngagementSchema();
