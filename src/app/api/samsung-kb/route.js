@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { SAMSUNG_PRODUCT_JSON_SCHEMA, emptyCatalogMeta } from '../../../../lib/samsungKb/schema';
+import { SAMSUNG_PRODUCT_JSON_SCHEMA, emptyCatalogMeta } from '../../../lib/samsungKb/schema';
 import {
   DATA_STATUS,
   SAMSUNG_KB_CATEGORIES,
   SAMSUNG_KB_CATEGORY_LABELS,
   SAMSUNG_KB_DATE_WINDOW,
   SAMSUNG_KB_PRODUCTION_READY,
-} from '../../../../lib/samsungKb/constants';
+} from '../../../lib/samsungKb/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
