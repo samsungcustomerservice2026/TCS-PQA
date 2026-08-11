@@ -3,6 +3,7 @@ import {
   doc, getDoc, setDoc, updateDoc, increment,
   collection, addDoc, serverTimestamp,
 } from 'firebase/firestore';
+import { isBrowserOnline, softFirestore, withFirestoreRetry } from '../lib/firestoreSafe';
 
 const SUMMARY_REF = doc(db, 'analytics', 'summary');
 const EVENTS_COL = collection(db, 'analytics', 'engagement', 'events');
@@ -56,7 +57,9 @@ function funnelField(funnel, step) {
 }
 
 async function ensureSummaryExists() {
-  const snap = await getDoc(SUMMARY_REF);
+  if (!isBrowserOnline()) return;
+  const snap = await softFirestore(() => withFirestoreRetry(() => getDoc(SUMMARY_REF)), null);
+  if (!snap) return;
   if (snap.exists()) return;
   await setDoc(SUMMARY_REF, {
     totalHits: 0,
@@ -84,7 +87,9 @@ async function ensureSummaryExists() {
 
 /** Ensure nested engagement/funnel fields exist on older summary documents. */
 export async function ensureEngagementSchema() {
-  const snap = await getDoc(SUMMARY_REF);
+  if (!isBrowserOnline()) return;
+  const snap = await softFirestore(() => withFirestoreRetry(() => getDoc(SUMMARY_REF)), null);
+  if (!snap) return;
   if (!snap.exists()) {
     await ensureSummaryExists();
     return;
@@ -116,6 +121,7 @@ export async function ensureEngagementSchema() {
  */
 export async function recordClickBatch(clicks, meta = {}) {
   if (!clicks || clicks < 1) return;
+  if (!isBrowserOnline()) return;
   const day = todayKey();
   try {
     await ensureEngagementSchema();
@@ -125,7 +131,7 @@ export async function recordClickBatch(clicks, meta = {}) {
       [`dailyEngagement.${day}.clicks`]: increment(clicks),
     });
   } catch (e) {
-    console.warn('Engagement: recordClickBatch failed', e);
+    /* offline — ignore */
   }
 }
 
@@ -135,6 +141,7 @@ export async function recordClickBatch(clicks, meta = {}) {
 export async function recordFunnelStep(funnel, step, meta = {}) {
   const field = funnelField(funnel, step);
   if (!field) return;
+  if (!isBrowserOnline()) return;
   const day = todayKey();
   try {
     await ensureEngagementSchema();
@@ -153,7 +160,7 @@ export async function recordFunnelStep(funnel, step, meta = {}) {
       timestamp: serverTimestamp(),
     });
   } catch (e) {
-    console.warn('Engagement: recordFunnelStep failed', e);
+    /* offline — ignore */
   }
 }
 
@@ -162,20 +169,21 @@ export async function recordFunnelStep(funnel, step, meta = {}) {
  */
 export async function recordConnectivitySignal(type, meta = {}) {
   const day = todayKey();
+  // Never call Firestore while the browser/SDK is already offline — that is what
+  // produces "Failed to get document because the client is offline" overlays.
+  if (!isBrowserOnline()) return;
+  if (type === 'offline') return;
   try {
     await ensureEngagementSchema();
     const updates = {};
-    if (type === 'offline') {
-      updates['visitorEngagement.offlineEvents'] = increment(1);
-      updates[`dailyEngagement.${day}.offline`] = increment(1);
-    } else if (type === 'lag') {
+    if (type === 'lag') {
       updates['visitorEngagement.lagEvents'] = increment(1);
       updates[`dailyEngagement.${day}.lag`] = increment(1);
     }
     if (Object.keys(updates).length > 0) {
       await updateDoc(SUMMARY_REF, updates);
     }
-    if (type === 'offline' || type === 'lag') {
+    if (type === 'lag') {
       await addDoc(EVENTS_COL, {
         kind: 'connectivity',
         type,
@@ -186,6 +194,6 @@ export async function recordConnectivitySignal(type, meta = {}) {
       });
     }
   } catch (e) {
-    console.warn('Engagement: recordConnectivitySignal failed', e);
+    /* offline — ignore */
   }
 }

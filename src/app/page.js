@@ -82,6 +82,7 @@ import {
 } from '../constants';
 import * as XLSX from 'xlsx';
 import { getEngineers, getHiddenEngineers, saveEngineer as saveEngineerToDb, archiveEngineer, deleteEngineerPermanent, getAdmins, saveAdmin as saveAdminToDb, deleteAdmin as deleteAdminFromDb, saveFeedback as saveFeedbackToDb, saveSamsungAcademySurvey as saveSamsungAcademySurveyToDb, getSamsungAcademySurveys as getSamsungAcademySurveysFromDb, getTcsDashboardWinners, saveTcsDashboardWinners, getAcademySurveySettings, saveAcademySurveySettings } from '../services/firestoreService';
+import { ensureFirestoreNetwork } from '../firebase';
 import { normalizePqaPartnerKey, mapPqaSheetPartnerKeyToOfficial, PQA_OFFICIAL_MX_PARTNERS } from '../lib/pqaPartnerMap.js';
 import {
   parseTcsScoreSheetRows,
@@ -2911,6 +2912,7 @@ const PageContent = () => {
       const bootstrapAdmin = getBootstrapAdmin();
 
       try {
+        await ensureFirestoreNetwork();
         const fetchedEngineers = await getEngineers(colName);
         const fetchedHiddenEngineers = await getHiddenEngineers(colName);
         const fetchedAdmins = await getAdmins();

@@ -4,6 +4,7 @@ import {
     collection, addDoc, serverTimestamp
 } from 'firebase/firestore';
 import { ensureEngagementSchema, normalizeAnalyticsSummary } from './visitorEngagementService';
+import { isBrowserOnline, softFirestore, withFirestoreRetry } from '../lib/firestoreSafe';
 
 const SUMMARY_REF = doc(db, 'analytics', 'summary');
 
@@ -16,6 +17,10 @@ function sanitizeAppMode(mode) {
     return m;
 }
 
+async function readSummarySnap() {
+    return softFirestore(() => withFirestoreRetry(() => getDoc(SUMMARY_REF)), null);
+}
+
 /**
  * Called on every app load.
  * Tracks visitor hits (public / engineer users only — NOT admin logins).
@@ -23,8 +28,10 @@ function sanitizeAppMode(mode) {
  */
 export const recordVisit = async () => {
     const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+    if (!isBrowserOnline()) return Date.now();
     try {
-        const snap = await getDoc(SUMMARY_REF);
+        const snap = await readSummarySnap();
+        if (!snap) return Date.now();
         if (snap.exists()) {
             const data = snap.data();
             const dailyVisitorHits = data.dailyVisitorHits || {};
@@ -55,7 +62,7 @@ export const recordVisit = async () => {
             });
         }
     } catch (e) {
-        console.warn('Analytics: recordVisit failed', e);
+        // Offline / unreachable — skip quietly (do not trip Next overlay).
     }
     return Date.now();
 };
@@ -66,10 +73,12 @@ export const recordVisit = async () => {
 export const recordVisitorModeSegment = async (appMode) => {
     const mode = sanitizeAppMode(appMode);
     if (!mode) return;
+    if (!isBrowserOnline()) return;
     const familyField = mode.startsWith('PQA') ? 'visitorHitsPQA' : 'visitorHitsTCS';
     const modeKey = `modeHits.${mode}`;
     try {
-        const snap = await getDoc(SUMMARY_REF);
+        const snap = await readSummarySnap();
+        if (!snap) return;
         if (snap.exists()) {
             await updateDoc(SUMMARY_REF, {
                 [familyField]: increment(1),
@@ -96,7 +105,7 @@ export const recordVisitorModeSegment = async (appMode) => {
             });
         }
     } catch (e) {
-        console.warn('Analytics: recordVisitorModeSegment failed', e);
+        /* offline — ignore */
     }
 };
 
@@ -106,19 +115,19 @@ export const recordVisitorModeSegment = async (appMode) => {
  */
 export const recordAdminLogin = async () => {
     const today = new Date().toISOString().slice(0, 10);
+    if (!isBrowserOnline()) return;
     try {
-        const snap = await getDoc(SUMMARY_REF);
-        if (snap.exists()) {
-            const data = snap.data();
-            const dailyAdminLogins = data.dailyAdminLogins || {};
-            dailyAdminLogins[today] = (dailyAdminLogins[today] || 0) + 1;
-            await updateDoc(SUMMARY_REF, {
-                adminLogins: increment(1),
-                dailyAdminLogins,
-            });
-        }
+        const snap = await readSummarySnap();
+        if (!snap || !snap.exists()) return;
+        const data = snap.data();
+        const dailyAdminLogins = data.dailyAdminLogins || {};
+        dailyAdminLogins[today] = (dailyAdminLogins[today] || 0) + 1;
+        await updateDoc(SUMMARY_REF, {
+            adminLogins: increment(1),
+            dailyAdminLogins,
+        });
     } catch (e) {
-        console.warn('Analytics: recordAdminLogin failed', e);
+        /* offline — ignore */
     }
 };
 
@@ -138,6 +147,7 @@ export const recordSessionEnd = async (
     const clicks = Number(engagement.clicks) || 0;
     const pendingClicks = Number(engagement.pendingClicks ?? engagement.clicks) || 0;
     if (durationMs < 3000 && !pendingClicks && !clicks) return;
+    if (!isBrowserOnline()) return;
 
     const mode = sanitizeAppMode(appMode);
     const activeMs = Number(engagement.activeMs) || 0;
@@ -158,8 +168,8 @@ export const recordSessionEnd = async (
             sessionId: engagement.sessionId || undefined,
         });
 
-        const snap = await getDoc(SUMMARY_REF);
-        if (snap.exists()) {
+        const snap = await readSummarySnap();
+        if (snap && snap.exists()) {
             const data = snap.data();
             const updates = {
                 totalSessions: increment(1),
@@ -192,7 +202,7 @@ export const recordSessionEnd = async (
             });
         }
     } catch (e) {
-        console.warn('Analytics: recordSessionEnd failed', e);
+        /* offline — ignore */
     }
 };
 
@@ -201,11 +211,12 @@ export const recordSessionEnd = async (
  */
 export const getAnalyticsSummary = async () => {
     try {
+        if (!isBrowserOnline()) return null;
         await ensureEngagementSchema();
-        const snap = await getDoc(SUMMARY_REF);
-        if (snap.exists()) return normalizeAnalyticsSummary(snap.data());
+        const snap = await readSummarySnap();
+        if (snap && snap.exists()) return normalizeAnalyticsSummary(snap.data());
     } catch (e) {
-        console.warn('Analytics: getAnalyticsSummary failed', e);
+        /* offline — ignore */
     }
     return null;
 };

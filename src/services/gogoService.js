@@ -160,6 +160,8 @@ function withTimeout(promise, ms = CLOUD_TIMEOUT_MS) {
 async function quietCloud(fn) {
   if (!canAttemptCloud()) return null;
   try {
+    const { ensureFirestoreNetwork } = await import('../firebase');
+    await ensureFirestoreNetwork();
     return await withTimeout(fn());
   } catch (err) {
     if (isOfflineishError(err)) markCloudUnreachable();

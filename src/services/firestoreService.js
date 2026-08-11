@@ -1,6 +1,7 @@
 import { db } from '../firebase';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { validateTcsWinnersCodes } from '../lib/tcsWinnersConfig';
+import { softFirestore, withFirestoreRetry } from '../lib/firestoreSafe';
 
 const ENGINEERS_COLLECTION = 'engineers';
 const ADMINS_COLLECTION = 'admins';
@@ -17,23 +18,22 @@ const ALLOWED_ENGINEER_COLLECTIONS = new Set([
   'pqa_ce_centers',
 ]);
 
+async function readCollection(collectionName) {
+  return withFirestoreRetry(async () => {
+    const snapshot = await getDocs(collection(db, collectionName));
+    return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+  });
+}
+
 // Engineers
 export const getEngineers = async (collectionName = ENGINEERS_COLLECTION) => {
-    const snapshot = await getDocs(collection(db, collectionName));
-    // Filter out soft-deleted items (where hidden === true)
-    // We do this in JS to handle legacy docs that might not have the 'hidden' field at all.
-    return snapshot.docs
-        .map(doc => ({ ...doc.data(), id: doc.id }))
-        .filter(eng => !eng.hidden);
+    const rows = await softFirestore(() => readCollection(collectionName), []);
+    return rows.filter((eng) => !eng.hidden);
 };
 
 export const getHiddenEngineers = async (collectionName = ENGINEERS_COLLECTION) => {
-    const snapshot = await getDocs(collection(db, collectionName));
-    // Filter out soft-deleted items (where hidden === true)
-    // We do this in JS to handle legacy docs that might not have the 'hidden' field at all.
-    return snapshot.docs
-        .map(doc => ({ ...doc.data(), id: doc.id }))
-        .filter(eng => eng.hidden);
+    const rows = await softFirestore(() => readCollection(collectionName), []);
+    return rows.filter((eng) => eng.hidden);
 };
 
 export const saveEngineer = async (engineer, collectionName = ENGINEERS_COLLECTION) => {
@@ -68,8 +68,7 @@ export const deleteEngineerPermanent = async (id, collectionName = ENGINEERS_COL
 
 // Admins
 export const getAdmins = async () => {
-    const snapshot = await getDocs(collection(db, ADMINS_COLLECTION));
-    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    return softFirestore(() => readCollection(ADMINS_COLLECTION), []);
 };
 
 export const saveAdmin = async (admin) => {
@@ -89,8 +88,7 @@ export const deleteAdmin = async (id) => {
 
 // TCS Dashboard Winners (Top 6 by quarter/product)
 export const getTcsDashboardWinners = async () => {
-    const snapshot = await getDocs(collection(db, TCS_DASHBOARD_WINNERS_COLLECTION));
-    return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+    return softFirestore(() => readCollection(TCS_DASHBOARD_WINNERS_COLLECTION), []);
 };
 
 export const saveTcsDashboardWinners = async (payload) => {
@@ -150,16 +148,17 @@ export const saveFeedback = async (feedbackData) => {
 };
 
 export const getFeedbacks = async () => {
-    const snapshot = await getDocs(collection(db, FEEDBACK_COLLECTION));
-    return snapshot.docs
-        .map((item) => ({ ...item.data(), id: item.id }))
-        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    const rows = await softFirestore(() => readCollection(FEEDBACK_COLLECTION), []);
+    return rows.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 };
 
 /** Whether the floating Samsung Academy survey shortcut is shown on the TCS portal (default: on). */
 export const getAcademySurveySettings = async () => {
-    const snap = await getDoc(doc(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC));
-    if (!snap.exists()) {
+    const snap = await softFirestore(
+      () => withFirestoreRetry(() => getDoc(doc(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC))),
+      null,
+    );
+    if (!snap || !snap.exists()) {
         return { academySurveyPopupEnabled: true, feedbackEnabled: true };
     }
     const data = snap.data() || {};
@@ -199,7 +198,12 @@ export const saveSamsungAcademySurvey = async (surveyData) => {
 };
 
 export const getSamsungAcademySurveys = async () => {
-    const snapshot = await getDocs(collection(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC, SAMSUNG_ACADEMY_SURVEYS_SUBCOLLECTION));
-    return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+    return softFirestore(
+      () => withFirestoreRetry(async () => {
+        const snapshot = await getDocs(collection(db, SAMSUNG_ACADEMY_SURVEY_ROOT, SAMSUNG_ACADEMY_SURVEY_DOC, SAMSUNG_ACADEMY_SURVEYS_SUBCOLLECTION));
+        return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+      }),
+      [],
+    );
 };
 
