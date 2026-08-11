@@ -346,6 +346,154 @@ export const GOGO_CS_ORG = {
   ],
 };
 
+/** Short EN/AR briefs keyed by exact org name (source of truth for person replies). */
+export const GOGO_ORG_PERSON_BRIEFS = Object.freeze({
+  'Bishoy Adib': {
+    en: 'Head of Department for Samsung Egypt Customer Service. Leads CS Head Office strategy and the five service pillars.',
+    ar: 'رئيس قسم خدمة عملاء سامسونج مصر. يقود استراتيجية مكتب الخدمة والمحاور الخمسة.',
+  },
+  'Donald Jung': {
+    en: 'KBM for Customer Service. Supports CS leadership with Korea Business Management alignment and Head Office direction.',
+    ar: 'KBM لخدمة العملاء. يدعم قيادة الخدمة بالتنسيق مع الإدارة الكورية وتوجيه مكتب الخدمة.',
+  },
+  'Mostafa Rady': {
+    en: 'Head of Service Operation. Owns field and technical delivery across CE, MX, DA, and VD service lines.',
+    ar: 'رئيس Service Operation. مسؤول عن التسليم الميداني والفني عبر خطوط CE وMX وDA وVD.',
+  },
+  'Mohamed Mohmdy': {
+    en: 'Field team lead under Service Operation. Coordinates CE and MX field engineers and on-ground service execution.',
+    ar: 'قائد فريق Field تحت Service Operation. ينسق مهندسي CE وMX الميدانيين وتنفيذ الخدمة على الأرض.',
+  },
+  'Mohamed Gamal': {
+    en: 'CE Field engineer. Supports Consumer Electronics field service operations and partner/center field issues.',
+    ar: 'مهندس CE Field. يدعم عمليات الخدمة الميدانية للإلكترونيات الاستهلاكية ومشاكل الشركاء/المراكز.',
+  },
+  'Ahmed Elsawaf': {
+    en: 'MX Field engineer. Handles Mobile Experience field support and field-service coordination for MX.',
+    ar: 'مهندس MX Field. يتابع دعم ميدان تجربة الموبايل وتنسيق الخدمة الميدانية لـ MX.',
+  },
+  'Mahmoud Hassan': {
+    en: 'Technical team lead under Service Operation. Guides MX, DA, and VD/B2B technical support engineers.',
+    ar: 'قائد الفريق الفني تحت Service Operation. يشرف على مهندسي الدعم الفني لـ MX وDA وVD/B2B.',
+  },
+  'Mohamed Atef': {
+    en: 'VD / B2B and System AC B2B technical engineer. Covers visual display and B2B air-conditioning technical support.',
+    ar: 'مهندس فني VD/B2B وتكييف System AC B2B. يغطي الدعم الفني للعرض المرئي والتكييف المؤسسي.',
+  },
+  'Mostafa Amin': {
+    en: 'DA Tech engineer. Provides technical support for Digital Appliances products and repair guidance.',
+    ar: 'مهندس DA Tech. يقدم الدعم الفني لمنتجات الأجهزة المنزلية وإرشاد الإصلاح.',
+  },
+  'Fawzy Maher': {
+    en: 'MX Tech engineer under Mahmoud Hassan. Also built SCORA so CS excellence stays fair and visible across TCS, PQA, and more.',
+    ar: 'مهندس MX Tech تحت محمود حسن. وهو أيضاً من بنى SCORA عشان تميز خدمة العملاء يكون واضح وعادل عبر TCS وPQA والمزيد.',
+  },
+  'George Samir': {
+    en: 'MX Tech engineer under Mahmoud Hassan. Supports Mobile Experience technical guidance and engineer enablement.',
+    ar: 'مهندس MX Tech تحت محمود حسن. يدعم الإرشاد الفني لتجربة الموبايل وتمكين المهندسين.',
+  },
+  'Ahmed Khalifa': {
+    en: 'Head of Parts Operation. Owns planning, order desk, supply chain, and warehouse parts flow for CS.',
+    ar: 'رئيس Parts Operation. مسؤول عن التخطيط وأوردر ديسك وسلاسل الإمداد والمستودعات لتدفق قطع الخدمة.',
+  },
+  'Salma Zaki': {
+    en: 'LCC & Planning. Works on parts planning and logistics control center activities for service parts readiness.',
+    ar: 'LCC والتخطيط. تعمل على تخطيط القطع وأنشطة مركز التحكم اللوجستي لجاهزية قطع الخدمة.',
+  },
+  'Fatma Kotb': {
+    en: 'LCC & Planning. Supports parts planning and logistics control to keep service parts available on time.',
+    ar: 'LCC والتخطيط. تدعم تخطيط القطع والتحكم اللوجستي للحفاظ على توافر قطع الخدمة في الوقت المناسب.',
+  },
+  'Abdelhalim Mohamed': {
+    en: 'MX Order Desk. Processes and follows Mobile Experience parts orders for centers and service needs.',
+    ar: 'MX Order Desk. يتابع طلبات قطع الموبايل للمراكز واحتياجات الخدمة.',
+  },
+  'Trez Medhat': {
+    en: 'VD Order Desk. Handles Visual Display parts ordering and order-desk follow-up for VD service.',
+    ar: 'VD Order Desk. تدير طلبات قطع العرض المرئي ومتابعة الأوردر ديسك لخدمة VD.',
+  },
+  'Karim Safory': {
+    en: 'DA Order Desk. Manages Digital Appliances parts orders and order-desk coordination for DA.',
+    ar: 'DA Order Desk. يدير طلبات قطع الأجهزة المنزلية وتنسيق الأوردر ديسك لـ DA.',
+  },
+  'Reda Fathy': {
+    en: 'Supply Chain. Coordinates inbound/outbound parts supply so warehouses and desks stay stocked for service.',
+    ar: 'سلاسل الإمداد. ينسق توريد القطع دخولاً وخروجاً للحفاظ على مخزون المستودعات والمكاتب لخدمة العملاء.',
+  },
+  'Emad Salam': {
+    en: 'UPC + DOA warehouse. Manages UPC and DOA warehouse handling for returned and controlled parts flow.',
+    ar: 'مستودع UPC + DOA. يدير مناولة مستودع UPC وDOA لتدفق القطع المرتجعة والمراقبة.',
+  },
+  'Mohamed Salah': {
+    en: 'Main warehouse. Supports main warehouse operations for receiving, storing, and issuing service parts.',
+    ar: 'المستودع الرئيسي. يدعم عمليات الاستلام والتخزين وصرف قطع الخدمة.',
+  },
+  'Ahmed Gamal': {
+    en: 'Main warehouse. Works main warehouse logistics to keep service parts moving accurately and on time.',
+    ar: 'المستودع الرئيسي. يعمل على لوجستيات المستودع الرئيسي للحفاظ على حركة قطع الخدمة بدقة وفي الوقت.',
+  },
+  'Mohamed Farid': {
+    en: 'Head of Operation Support. Leads warranty and PR/DOA support processes that back service delivery.',
+    ar: 'رئيس Operation Support. يقود عمليات الضمان وPR/DOA التي تدعم تسليم الخدمة.',
+  },
+  'Mohamed Kamal': {
+    en: 'Warranty. Handles warranty cases and warranty-process support for Customer Service operations.',
+    ar: 'الضمان. يتابع حالات الضمان ودعم إجراءات الضمان لعمليات خدمة العملاء.',
+  },
+  'Ahmed Abozaid': {
+    en: 'Warranty. Supports warranty handling and follow-up so warranty decisions stay clear and timely.',
+    ar: 'الضمان. يدعم معالجة ومتابعة الضمان للحفاظ على قرارات واضحة وفي وقتها.',
+  },
+  'Hajer Ayman': {
+    en: 'Warranty. Assists warranty operations and case follow-through for CS Operation Support.',
+    ar: 'الضمان. تساعد في عمليات الضمان ومتابعة الحالات ضمن Operation Support.',
+  },
+  'Reham Samir': {
+    en: 'PR + VD DOA. Covers product return / DOA topics with focus on VD DOA and PR operation support.',
+    ar: 'PR + VD DOA. تغطي موضوعات الإرجاع/DOA مع التركيز على VD DOA ودعم تشغيل PR.',
+  },
+  'Ahmed Bolkiny': {
+    en: 'PR Operation. Runs product-return operation support and PR process coordination for CS.',
+    ar: 'تشغيل PR. يدير دعم تشغيل إرجاع المنتج وتنسيق إجراءات PR لخدمة العملاء.',
+  },
+  'Emad Ibrahim': {
+    en: 'Head of Customer Experience. Owns CX across DA, MX, and VD, including repair NPS-related experience work.',
+    ar: 'رئيس Customer Experience. مسؤول عن تجربة العملاء عبر DA وMX وVD بما فيها أعمال تجربة مرتبطة بـ RNPS.',
+  },
+  'Rehab Mostafa': {
+    en: 'DA CX. Improves Digital Appliances customer experience and follows DA CX quality signals.',
+    ar: 'DA CX. تحسّن تجربة عملاء الأجهزة المنزلية وتتابع مؤشرات جودة تجربة DA.',
+  },
+  'Mina Safwat': {
+    en: 'MX CX + RNPS. Drives Mobile Experience customer experience and RNPS-related CX follow-up.',
+    ar: 'MX CX + RNPS. يقود تجربة عملاء الموبايل ومتابعة CX المرتبطة بـ RNPS.',
+  },
+  'Caty Gamal': {
+    en: 'VD CX. Focuses on Visual Display customer experience and VD CX improvement actions.',
+    ar: 'VD CX. تركز على تجربة عملاء العرض المرئي وإجراءات تحسين VD CX.',
+  },
+  'Ahmed Abdelhady': {
+    en: 'Head of Customer Support. Leads digital service, call service/SDF, and VOD/eStore NPS support channels.',
+    ar: 'رئيس Customer Support. يقود قنوات الدعم الرقمي وخدمة الاتصال/SDF ودعم VOD وeStore NPS.',
+  },
+  'Mai Elbarany': {
+    en: 'Digital SVC. Supports digital customer-service channels and digital service operations.',
+    ar: 'Digital SVC. تدعم قنوات خدمة العملاء الرقمية وتشغيل الخدمة الرقمية.',
+  },
+  'Ahmed Samir': {
+    en: 'Call SVC + SDF. Handles call-center service support and SDF-related customer support operations.',
+    ar: 'Call SVC + SDF. يتابع دعم خدمة الاتصال وعمليات دعم العملاء المرتبطة بـ SDF.',
+  },
+  'Ahmed Ayad': {
+    en: 'VOD + eStore NPS. Covers VOD and eStore NPS customer-support topics for CS support channels.',
+    ar: 'VOD + eStore NPS. يغطي موضوعات دعم العملاء لـ VOD وeStore NPS ضمن قنوات الدعم.',
+  },
+});
+
+function briefForName(name) {
+  return GOGO_ORG_PERSON_BRIEFS[name] || null;
+}
+
 export function findGoGoKpiDefinition(query) {
   const q = String(query || '').toLowerCase().trim();
   if (!q) return null;
@@ -382,46 +530,54 @@ export function formatGoGoKpiAnswer(kpi, lang = 'en') {
 
 /** Flatten CS Head Office into searchable people records. */
 export function listGoGoOrgPeople() {
+  const withBrief = (person) => {
+    const brief = briefForName(person.name);
+    return {
+      ...person,
+      brief_en: brief?.en || '',
+      brief_ar: brief?.ar || '',
+    };
+  };
   const people = [];
   for (const leader of GOGO_CS_ORG.leaders) {
-    people.push({
+    people.push(withBrief({
       name: leader.name,
       role: leader.role,
       pillar: null,
       team: null,
       teamLead: null,
       kind: 'leader',
-    });
+    }));
   }
   for (const pillar of GOGO_CS_ORG.pillars) {
-    people.push({
+    people.push(withBrief({
       name: pillar.head,
       role: `Head of ${pillar.name}`,
       pillar: pillar.name,
       team: null,
       teamLead: null,
       kind: 'pillar_head',
-    });
+    }));
     for (const team of pillar.teams) {
       if (team.lead) {
-        people.push({
+        people.push(withBrief({
           name: team.lead,
           role: `${team.name} Lead`,
           pillar: pillar.name,
           team: team.name,
           teamLead: null,
           kind: 'team_lead',
-        });
+        }));
       }
       for (const member of team.members) {
-        people.push({
+        people.push(withBrief({
           name: member.name,
           role: member.role,
           pillar: pillar.name,
           team: team.name,
           teamLead: team.lead || null,
           kind: 'member',
-        });
+        }));
       }
     }
   }
@@ -531,8 +687,13 @@ export function findGoGoOrgPerson(query) {
 export function formatGoGoOrgPersonAnswer(person, lang = 'en') {
   if (!person) return '';
   const L = lang === 'ar' ? 'ar' : 'en';
+  const brief = L === 'ar'
+    ? (person.brief_ar || briefForName(person.name)?.ar || '')
+    : (person.brief_en || briefForName(person.name)?.en || '');
+
   if (L === 'ar') {
     const lines = [`${person.name} — ${person.role}`];
+    if (brief) lines.push(brief);
     if (person.kind === 'leader') {
       lines.push('القيادة: مكتب خدمة عملاء سامسونج مصر (Head Office).');
     } else {
@@ -546,6 +707,7 @@ export function formatGoGoOrgPersonAnswer(person, lang = 'en') {
   }
 
   const lines = [`${person.name} — ${person.role}`];
+  if (brief) lines.push(brief);
   if (person.kind === 'leader') {
     lines.push('Leadership — Samsung Egypt Customer Service Head Office.');
   } else {
@@ -599,10 +761,15 @@ export function buildGoGoKpiAndOrgContext() {
     '## Samsung Egypt Customer Service Head Office hierarchy',
     buildGoGoOrgPlainText('en'),
     '',
+    '## Person briefs (use when asked about a named employee)',
+    listGoGoOrgPeople()
+      .map((p) => `- ${p.name} (${p.role}): ${p.brief_en || 'See role/pillar/team only.'}`)
+      .join('\n'),
+    '',
     'Hard rules for wording:',
     '- NEVER mention Excel, spreadsheets, workbook/sheet file names, upload templates, or “compliance” documents.',
     '- NEVER invent org people who are not listed above.',
-    '- When the user asks about a named person from the hierarchy, answer ONLY with that person’s saved role, pillar, and team from the list above.',
+    '- When the user asks about a named person from the hierarchy, answer with their saved brief, role, pillar, and team only.',
     '- DA vs AV: same template possible for CE multi-product engineers, but different KPIs — AV does NOT include HASS.',
     '- When asked what a KPI means, give the plain-language definition first (example: RRR30 = Return Repair Ratio in 30 days).',
     '- Live numeric scores stay in Dashboard/Search — you explain meaning and structure only.',
