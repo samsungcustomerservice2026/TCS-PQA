@@ -330,13 +330,15 @@ export async function ensureGoGoKnowledgeSeeded() {
         ),
       );
     } else {
-      // Keep critical answers current (e.g. who_built) without wiping custom Q&A.
+      // Keep critical answers current without wiping custom Q&A.
+      // cs_org must upsert so live Firestore matches local hierarchy knowledge.
       const critical = GOGO_SEED_QA.filter(
         (item) =>
           item.id === 'who_built' ||
           item.id === 'what_is_scora' ||
           item.id === 'da_av_kpis' ||
-          item.id === 'samsung_highlights',
+          item.id === 'samsung_highlights' ||
+          item.id === 'cs_org',
       );
       await Promise.all(
         critical.map((item) =>

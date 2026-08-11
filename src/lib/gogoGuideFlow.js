@@ -3,6 +3,8 @@
  * Fixed chips first; free text only after name is captured.
  */
 
+import { buildGoGoOrgPlainText } from './gogoOrgAndKpis';
+
 /** @typedef {'en'|'ar'} GoGoLang */
 
 export const GOGO_NAME_KEY = 'gogo_visitor_name';
@@ -64,7 +66,7 @@ export const GOGO_CHIP_LABELS = {
   },
 };
 
-const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
+const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'cs_org', 'how_search'];
 
 /** @type {Record<string, { replies: Record<GoGoLang, string>, chips: string[], action?: string }>} */
 export const GOGO_FLOW = {
@@ -510,6 +512,16 @@ export function resolveFlowReply(nodeId, lang = 'en', name = '') {
   const L = lang === 'ar' ? 'ar' : 'en';
   const node = getFlowNode(nodeId);
   if (!node) return { reply: '', chips: MAIN_CHIPS };
+  // Always serve the canonical org tree (same on local + live once code is deployed).
+  if (nodeId === 'cs_org') {
+    return {
+      reply: buildGoGoOrgPlainText(L),
+      chips: node.chips || MAIN_CHIPS,
+      action: node.action,
+      nodeId,
+      expression: node.expression || null,
+    };
+  }
   const raw = node.replies[L];
   const reply = typeof raw === 'function' ? raw(name || (L === 'ar' ? 'صديقنا' : 'friend')) : raw;
   return {
@@ -571,7 +583,11 @@ export function matchFreeTextToFlow(text, lang = 'en') {
   }
   if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|fawzy|فوزي/i.test(raw)) return 'who_built';
   if (/george(\s*samir)?|جورج(\s*سمير)?/i.test(raw)) return 'george_samir';
-  if (/hierarch|org\s*chart|organisation|organization|head\s*office|هيكل|تسلسل|منظمة|مكتب\s*الرأس|hod\b|kbm\b|service\s*operation|parts\s*operation/i.test(raw)) {
+  if (
+    /hierarch|org\s*chart|organisation|organization|head\s*office|org\s*structure|structure\s*of\s*(cs|customer)|cs\s*(org|structure|hierarchy)|customer\s*service\s*(org|structure|hierarchy)|هيكل|تسلسل|منظمة|تنظيمي|مكتب\s*(الرأس|الخدمة|خدمة)|رئيس\s*القسم|hod\b|kbm\b|service\s*operation|parts\s*operation|bishoy|بيشوي/i.test(
+      raw,
+    )
+  ) {
     return 'cs_org';
   }
   if (/who\s*is\s*samsung|what\s*is\s*samsung|samsung\s*egypt|سامسونج/i.test(raw)) return 'what_scora';

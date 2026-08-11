@@ -153,9 +153,9 @@ export const GOGO_SEED_QA = [
     question_en: 'What is the Customer Service Head Office structure?',
     question_ar: 'ما هيكل مكتب خدمة العملاء؟',
     answer_en:
-      'Samsung Egypt CS Head Office is led by Bishoy Adib (HOD) and Donald Jung (KBM). Five pillars: Service Operation (Mostafa Rady), Parts Operation (Ahmed Khalifa), Operation Support (Mohamed Farid), Customer Experience (Emad Ibrahim), Customer Support (Ahmed Abdelhady). Ask about a pillar and I’ll list the teams.',
+      'Samsung Egypt CS Head Office is led by Bishoy Adib (HOD) and Donald Jung (KBM). Five pillars: Service Operation (Mostafa Rady), Parts Operation (Ahmed Khalifa), Operation Support (Mohamed Farid), Customer Experience (Emad Ibrahim), Customer Support (Ahmed Abdelhady). Ask “hierarchy” or tap CS Head Office structure and GoGo lists every team and name from the verified org chart.',
     answer_ar:
-      'مكتب خدمة العملاء بقيادة بيشوي أديب (HOD) ودونالد جونغ (KBM). خمسة محاور: Service Operation (مصطفى راضي)، Parts Operation (أحمد خليفة)، Operation Support (محمد فريد)، Customer Experience (عماد إبراهيم)، Customer Support (أحمد عبدالهادي). اسأل عن أي محور وأقولك الفرق.',
+      'مكتب خدمة العملاء بقيادة بيشوي أديب (HOD) ودونالد جونغ (KBM). خمسة محاور: Service Operation (مصطفى راضي)، Parts Operation (أحمد خليفة)، Operation Support (محمد فريد)، Customer Experience (عماد إبراهيم)، Customer Support (أحمد عبدالهادي). اسأل عن «الهيكل» أو اضغط هيكل مكتب خدمة العملاء وهعرض كل الفرق والأسماء من الهيكل المعتمد.',
     category: 'org',
   },
   {

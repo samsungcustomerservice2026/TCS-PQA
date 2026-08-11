@@ -126,4 +126,4 @@ export function buildGoGoSystemPrompt({ lang = 'en', visitorName = '', learningH
     .join('\n');
 }
 
-export const GOGO_SMART_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'main_menu'];
+export const GOGO_SMART_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'cs_org', 'how_search', 'main_menu'];

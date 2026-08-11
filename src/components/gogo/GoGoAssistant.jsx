@@ -566,13 +566,14 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       return;
     }
 
-    // Structured chip keywords still use guided tree first
+    // Structured chip keywords still use guided tree first (include cs_org hierarchy)
     const matched = matchFreeTextToFlow(text, lang);
-    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_|george_)/.test(matched)) {
+    if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_|george_|cs_org)/.test(matched)) {
       const looksOpen =
         text.split(/\s+/).length > 8 ||
         /why|how come|explain|compare|difference|ليه|ازاي|اشرح|فرق/i.test(text);
-      if (!looksOpen) {
+      // Hierarchy / org chart must always use the verified tree — never skip for Gemini.
+      if (!looksOpen || matched === 'cs_org') {
         appendFlow(matched, text);
         return;
       }
