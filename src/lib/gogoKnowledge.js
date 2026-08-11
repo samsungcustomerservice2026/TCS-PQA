@@ -7,6 +7,9 @@ import {
   findGoGoKpiDefinition,
   formatGoGoKpiAnswer,
   buildGoGoOrgPlainText,
+  findGoGoOrgPerson,
+  formatGoGoOrgAmbiguousAnswer,
+  formatGoGoOrgPersonAnswer,
 } from './gogoOrgAndKpis';
 import { getGoGoSamsungPositiveBlurb } from './gogoSamsungPositive';
 
@@ -405,6 +408,25 @@ export function resolveGoGoReply(text, lang = 'en', opts = {}) {
   }
   if (isGoGoDeniedMessage(raw)) {
     return { reply: getGoGoSoftRedirectReply(L), chips: ['what_scora', 'what_tcs', 'how_search'], denied: true };
+  }
+
+  const isBuiltQuestion = /who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|who\s*developed/i.test(raw);
+  if (!isBuiltQuestion) {
+    const orgHit = findGoGoOrgPerson(raw);
+    if (orgHit?.ambiguous?.length) {
+      return {
+        reply: formatGoGoOrgAmbiguousAnswer(orgHit.ambiguous, L),
+        chips: DEFAULT_CHIPS,
+        topicId: 'cs_org_person',
+      };
+    }
+    if (orgHit?.person) {
+      return {
+        reply: formatGoGoOrgPersonAnswer(orgHit.person, L),
+        chips: DEFAULT_CHIPS,
+        topicId: 'cs_org_person',
+      };
+    }
   }
 
   const byId = TOPICS.find((t) => t.id === raw);

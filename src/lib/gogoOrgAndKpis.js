@@ -380,6 +380,192 @@ export function formatGoGoKpiAnswer(kpi, lang = 'en') {
   return `${kpi.name_en}: ${kpi.def_en}`;
 }
 
+/** Flatten CS Head Office into searchable people records. */
+export function listGoGoOrgPeople() {
+  const people = [];
+  for (const leader of GOGO_CS_ORG.leaders) {
+    people.push({
+      name: leader.name,
+      role: leader.role,
+      pillar: null,
+      team: null,
+      teamLead: null,
+      kind: 'leader',
+    });
+  }
+  for (const pillar of GOGO_CS_ORG.pillars) {
+    people.push({
+      name: pillar.head,
+      role: `Head of ${pillar.name}`,
+      pillar: pillar.name,
+      team: null,
+      teamLead: null,
+      kind: 'pillar_head',
+    });
+    for (const team of pillar.teams) {
+      if (team.lead) {
+        people.push({
+          name: team.lead,
+          role: `${team.name} Lead`,
+          pillar: pillar.name,
+          team: team.name,
+          teamLead: null,
+          kind: 'team_lead',
+        });
+      }
+      for (const member of team.members) {
+        people.push({
+          name: member.name,
+          role: member.role,
+          pillar: pillar.name,
+          team: team.name,
+          teamLead: team.lead || null,
+          kind: 'member',
+        });
+      }
+    }
+  }
+  return people;
+}
+
+function normalizePersonQuery(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function personNameTokens(name) {
+  return normalizePersonQuery(name).split(' ').filter((t) => t.length >= 2);
+}
+
+/**
+ * Match a free-text question to someone in GOGO_CS_ORG.
+ * @returns {{ person: object } | { ambiguous: object[] } | null}
+ */
+export function findGoGoOrgPerson(query) {
+  const q = normalizePersonQuery(query);
+  if (!q || q.length < 3) return null;
+
+  // Skip pure hierarchy questions — those belong to the full org reply.
+  if (
+    /^(what|show|tell).*(hierarch|org chart|organisation|organization|structure|head office)/i.test(q)
+    || /^(ايه|ما|عرض).*(هيكل|تسلسل|منظمة)/i.test(query)
+  ) {
+    return null;
+  }
+
+  const people = listGoGoOrgPeople();
+
+  // Unique role shortcuts (e.g. "who is the HOD?")
+  const roleHints = [
+    { re: /\bhod\b|head\s*of\s*department/i, role: 'HOD' },
+    { re: /\bkbm\b/i, role: 'KBM' },
+  ];
+  for (const hint of roleHints) {
+    if (hint.re.test(query) && !/hierarch|org\s*chart|structure|هيكل|تسلسل/i.test(query)) {
+      const hit = people.find((p) => String(p.role).toUpperCase() === hint.role);
+      if (hit) return { person: hit };
+    }
+  }
+
+  const qTokens = q.split(' ').filter((t) => t.length >= 2);
+  const scored = [];
+
+  for (const person of people) {
+    const nameNorm = normalizePersonQuery(person.name);
+    const tokens = personNameTokens(person.name);
+    if (!tokens.length) continue;
+
+    let score = 0;
+    if (q === nameNorm) {
+      score = 100;
+    } else if (nameNorm.length >= 5 && q.includes(nameNorm)) {
+      // Query contains the full saved name (e.g. "Who is Fawzy Maher?")
+      score = 98;
+    } else {
+      const matched = tokens.filter((t) => qTokens.includes(t) || q.split(' ').includes(t));
+      if (matched.length === tokens.length && tokens.length >= 2) score = 95;
+      else if (matched.length >= 2) score = 85;
+      else if (matched.length === 1) {
+        const token = matched[0];
+        const sameFirst = people.filter((p) => personNameTokens(p.name)[0] === token);
+        const sameLast = people.filter((p) => {
+          const pt = personNameTokens(p.name);
+          return pt[pt.length - 1] === token;
+        });
+        if (token === tokens[tokens.length - 1] && sameLast.length === 1) score = 80;
+        else if (token === tokens[0] && sameFirst.length === 1) score = 70;
+        else if (token.length >= 5 && sameLast.length === 1) score = 65;
+        else if (token === tokens[0] && sameFirst.length > 1) {
+          // Ambiguous first name — collect later via low shared score band
+          score = 66;
+        } else score = 35;
+      }
+    }
+
+    if (score >= 65) scored.push({ person, score });
+  }
+
+  if (!scored.length) return null;
+  scored.sort((a, b) => b.score - a.score || a.person.name.localeCompare(b.person.name));
+  const top = scored[0];
+  // Ambiguous first-name hits (several Ahmed / Mohamed) or near ties
+  if (top.score <= 66) {
+    const firstToken = personNameTokens(top.person.name)[0];
+    const sameFirst = scored
+      .map((s) => s.person)
+      .filter((p) => personNameTokens(p.name)[0] === firstToken);
+    if (sameFirst.length > 1) return { ambiguous: sameFirst.slice(0, 8) };
+  }
+  const near = scored.filter((s) => s.score >= top.score - 10 && s.person.name !== top.person.name);
+  if (top.score < 85 && near.length) {
+    return { ambiguous: [top.person, ...near.map((s) => s.person)].slice(0, 6) };
+  }
+  return { person: top.person };
+}
+
+export function formatGoGoOrgPersonAnswer(person, lang = 'en') {
+  if (!person) return '';
+  const L = lang === 'ar' ? 'ar' : 'en';
+  if (L === 'ar') {
+    const lines = [`${person.name} — ${person.role}`];
+    if (person.kind === 'leader') {
+      lines.push('القيادة: مكتب خدمة عملاء سامسونج مصر (Head Office).');
+    } else {
+      if (person.pillar) lines.push(`المحور: ${person.pillar}`);
+      if (person.team) lines.push(`الفريق: ${person.team}`);
+      if (person.teamLead) lines.push(`قائد الفريق: ${person.teamLead}`);
+      if (person.kind === 'pillar_head') lines.push('المنصب: رئيس المحور.');
+      if (person.kind === 'team_lead') lines.push('المنصب: قائد فريق.');
+    }
+    return lines.join('\n');
+  }
+
+  const lines = [`${person.name} — ${person.role}`];
+  if (person.kind === 'leader') {
+    lines.push('Leadership — Samsung Egypt Customer Service Head Office.');
+  } else {
+    if (person.pillar) lines.push(`Pillar: ${person.pillar}`);
+    if (person.team) lines.push(`Team: ${person.team}`);
+    if (person.teamLead) lines.push(`Team lead: ${person.teamLead}`);
+    if (person.kind === 'pillar_head') lines.push('Position: Pillar head.');
+    if (person.kind === 'team_lead') lines.push('Position: Team lead.');
+  }
+  return lines.join('\n');
+}
+
+export function formatGoGoOrgAmbiguousAnswer(people, lang = 'en') {
+  const list = (people || []).map((p) => `• ${p.name} — ${p.role}${p.pillar ? ` (${p.pillar})` : ''}`).join('\n');
+  if (lang === 'ar') {
+    return `لقيت أكتر من شخص بنفس الاسم في هيكل مكتب الخدمة:\n${list}\n\nقولّي الاسم كامل عشان أحددلك المعلومة المحفوظة.`;
+  }
+  return `I found more than one person with that name in the CS Head Office structure:\n${list}\n\nPlease use the full name so I can share their saved details.`;
+}
+
 export function buildGoGoOrgPlainText(lang = 'en') {
   const L = lang === 'ar' ? 'ar' : 'en';
   const lines = [];
@@ -416,6 +602,7 @@ export function buildGoGoKpiAndOrgContext() {
     'Hard rules for wording:',
     '- NEVER mention Excel, spreadsheets, workbook/sheet file names, upload templates, or “compliance” documents.',
     '- NEVER invent org people who are not listed above.',
+    '- When the user asks about a named person from the hierarchy, answer ONLY with that person’s saved role, pillar, and team from the list above.',
     '- DA vs AV: same template possible for CE multi-product engineers, but different KPIs — AV does NOT include HASS.',
     '- When asked what a KPI means, give the plain-language definition first (example: RRR30 = Return Repair Ratio in 30 days).',
     '- Live numeric scores stay in Dashboard/Search — you explain meaning and structure only.',

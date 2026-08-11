@@ -66,7 +66,7 @@ export const GOGO_CHIP_LABELS = {
   },
 };
 
-const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'cs_org', 'how_search'];
+const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
 
 /** @type {Record<string, { replies: Record<GoGoLang, string>, chips: string[], action?: string }>} */
 export const GOGO_FLOW = {
@@ -581,8 +581,10 @@ export function matchFreeTextToFlow(text, lang = 'en') {
   if (/nice\s*to\s*meet|pleased\s*to\s*meet|تشرفنا|فرصة\s*سعيدة|نورت/i.test(raw)) {
     return 'nice_to_meet';
   }
-  if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|fawzy|فوزي/i.test(raw)) return 'who_built';
-  if (/george(\s*samir)?|جورج(\s*سمير)?/i.test(raw)) return 'george_samir';
+  if (/who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|who\s*developed|مين\s*عمل\s*(التطبيق|سكورا)/i.test(raw)) {
+    return 'who_built';
+  }
+  // Person names (Fawzy, George, …) are answered from the org directory in GoGoAssistant — not here.
   if (
     /hierarch|org\s*chart|organisation|organization|head\s*office|org\s*structure|structure\s*of\s*(cs|customer)|cs\s*(org|structure|hierarchy)|customer\s*service\s*(org|structure|hierarchy)|هيكل|تسلسل|منظمة|تنظيمي|مكتب\s*(الرأس|الخدمة|خدمة)|رئيس\s*القسم|hod\b|kbm\b|service\s*operation|parts\s*operation|bishoy|بيشوي/i.test(
       raw,

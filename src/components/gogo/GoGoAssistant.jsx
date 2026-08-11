@@ -16,6 +16,11 @@ import {
 import { getGoGoSoftRedirectReply, isGoGoDeniedMessage, resolveGoGoReply } from '../../lib/gogoKnowledge';
 import { GOGO_SMART_CHIPS } from '../../lib/gogoGeminiContext';
 import {
+  findGoGoOrgPerson,
+  formatGoGoOrgAmbiguousAnswer,
+  formatGoGoOrgPersonAnswer,
+} from '../../lib/gogoOrgAndKpis';
+import {
   createGoGoRecognizer,
   ensureMicrophonePermission,
   getGoGoVoiceMuted,
@@ -564,6 +569,36 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       setPose('success');
       void speakReply(reply, { force: fromVoice, initialState: 'success' });
       return;
+    }
+
+    // Org directory: answer with the saved role/team for named CS Head Office people.
+    const isBuiltQuestion = /who\s*(built|made|created)|مين\s*(بنى|صنع)|من\s*(بنى|صنع)|who\s*developed/i.test(text);
+    if (!isBuiltQuestion) {
+      const orgHit = findGoGoOrgPerson(text);
+      if (orgHit?.person || orgHit?.ambiguous) {
+        const reply = orgHit.ambiguous
+          ? formatGoGoOrgAmbiguousAnswer(orgHit.ambiguous, lang)
+          : formatGoGoOrgPersonAnswer(orgHit.person, lang);
+        setMessages((prev) => {
+          const next = [
+            ...prev,
+            stamp('user', text),
+            stamp('gogo', reply, {
+              source: 'cs_org_person',
+              learnable: false,
+              question: text,
+              expression: 'explaining',
+            }),
+          ];
+          persistChat(next, lang, nameRef.current);
+          return next;
+        });
+        setChips(GOGO_SMART_CHIPS);
+        setPose('explaining');
+        schedule(() => setPose('success'), 900);
+        void speakReply(reply, { force: fromVoice, initialState: 'explaining' });
+        return;
+      }
     }
 
     // Structured chip keywords still use guided tree first (include cs_org hierarchy)
