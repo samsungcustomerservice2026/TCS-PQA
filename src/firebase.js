@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { initializeFirestore, getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore, enableNetwork } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
@@ -33,11 +33,13 @@ if (typeof window !== "undefined" && !appCheckInitialized) {
   }
 }
 
-// Auto-detect long polling helps on networks that block Firestore WebChannel.
+// Force long-polling: WebChannel streams often fail behind VPN / antivirus / corporate proxies,
+// which surfaces as "Could not reach Cloud Firestore backend" + offline getDoc errors.
+// Do not combine with experimentalAutoDetectLongPolling (SDK rejects both together).
 function createFirestore() {
   try {
     return initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
     });
   } catch {
     return getFirestore(app);
@@ -45,6 +47,17 @@ function createFirestore() {
 }
 
 export const db = createFirestore();
+
+// When the browser comes back online, nudge Firestore out of offline mode.
+if (typeof window !== "undefined") {
+  const resume = () => {
+    enableNetwork(db).catch(() => {});
+  };
+  window.addEventListener("online", resume);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && navigator.onLine !== false) resume();
+  });
+}
 
 // Initialize Cloud Storage and get a reference to the service
 export const storage = getStorage(app);
