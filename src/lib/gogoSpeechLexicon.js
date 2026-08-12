@@ -1,5 +1,5 @@
 /**
- * TTS-safe Egyptian Arabic lexicon for Edge ar-EG voices.
+ * TTS-safe Modern Standard Arabic lexicon for Edge Arabic voices.
  * Display can stay natural; speech uses clearer, pronounceable forms.
  */
 
@@ -34,33 +34,33 @@ export const GOGO_SPEECH_LEXICON = [
   [/\bLinkage\b/gi, 'لينكيدج'],
   [/\bGalaxy\b/gi, 'جالاكسي'],
   [/\bSamsung\b/gi, 'سامسونج'],
+  [/\bGoGo\b/gi, 'عارف'],
+  [/جوجو/g, 'عارف'],
   [/\bFinal Result\b/gi, 'النتيجة النهائية'],
 
-  // Colloquial forms Edge often misreads → clearer Egyptian / near-MSA speech
-  [/عايزين/g, 'عاوزين'],
-  [/عايز/g, 'عاوز'],
-  [/هقولك/g, 'هاقول لك'],
-  [/هفتح/g, 'هافتح'],
-  [/هوديك/g, 'هاوديك'],
-  [/هشرحهولك/g, 'هاشرحه لك'],
-  [/هعرّفهولك|هعرفهولك/g, 'هاعرّفه لك'],
-  [/هوضحهولك/g, 'هاوضحه لك'],
-  [/دلوقتي/g, 'دلوقتي'],
-  [/ازيك/g, 'ازّيك'],
-  [/النهارده/g, 'النهاردة'],
-  [/إمتى|امتى/g, 'امتى'],
-  [/كتير/g, 'كثير'],
-  [/شوية/g, 'شويّة'],
-  [/كده/g, 'كده'],
+  // Dialect leftovers → Modern Standard Arabic for TTS
+  [/عايزين|عاوزين/g, 'نريد'],
+  [/عايز|عاوز/g, 'أريد'],
+  [/هقولك|هاقول لك/g, 'سأقول لك'],
+  [/هفتح|هافتح/g, 'سأفتح'],
+  [/هوديك|هاوديك/g, 'سأرافقك'],
+  [/دلوقتي/g, 'الآن'],
+  [/ازيك|ازّيك/g, 'كيف حالك'],
+  [/النهارده|النهاردة/g, 'اليوم'],
+  [/إمتى|امتى/g, 'متى'],
+  [/كتير/g, 'كثيراً'],
+  [/شوية|شويّة/g, 'قليلاً'],
+  [/كده/g, 'هكذا'],
   [/دوس هنا/g, 'اضغط هنا'],
   [/دوس على/g, 'اضغط على'],
-  [/تحب تعرف/g, 'تحب تعرف'],
-  [/بتاع/g, 'بتاع'],
-  [/بيتابع/g, 'بيتابع'],
-  [/بيتظبط/g, 'بيتظبط'],
-  [/مش واحده|مش واحدةة/g, 'مش واحدةة'],
-  [/٣ أقسام|3 أقسام/g, 'تلاتة أقسام'],
-  [/٣/g, 'تلاتة'],
+  [/تحب تعرف/g, 'هل تود أن تعرف'],
+  [/بتاع/g, ''],
+  [/بيتابع/g, 'يتابع'],
+  [/بيتظبط/g, 'يُضبط'],
+  [/مش واحده|مش واحدةة/g, 'ليست واحدة'],
+  [/٣ أقسام|3 أقسام|تلاتة أقسام/g, 'ثلاثة أقسام'],
+  [/تلاتة/g, 'ثلاثة'],
+  [/٣/g, 'ثلاثة'],
 ];
 
 /**
@@ -79,7 +79,8 @@ export function applyGoGoSpeechLexicon(text) {
  */
 export function polishEgyptianDisplay(text) {
   return String(text || '')
-    .replace(/\bGoGo\b/gi, 'جوجو')
+    .replace(/\bGoGo\b/gi, 'عارف')
+    .replace(/جوجو/g, 'عارف')
     // Collapse spaces/tabs only — never eat newlines (bullets must stay on their own lines)
     .replace(/[^\S\n]{2,}/g, ' ')
     .replace(/ *\n */g, '\n')

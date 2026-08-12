@@ -45,22 +45,22 @@ export const GOGO_CHIP_LABELS = {
   ar: {
     lang_toggle: 'English',
     main_menu: 'القائمة الرئيسية',
-    what_scora: 'إيه هو سكورا؟',
-    what_tcs: 'إيه هو تي سي اس؟',
-    what_pqa: 'إيه هو بي كيو اي؟',
-    scora_more: 'أقدر أعمل إيه في سكورا؟',
+    what_scora: 'ما هو سكورا؟',
+    what_tcs: 'ما هو تي سي اس؟',
+    what_pqa: 'ما هو بي كيو اي؟',
+    scora_more: 'ماذا يمكنني أن أفعل في سكورا؟',
     tcs_mx: 'الموبايل',
     tcs_da: 'الأجهزة المنزلية',
     tcs_av: 'الشاشات',
-    tcs_overview_more: 'أستخدم تي سي اس إزاي؟',
+    tcs_overview_more: 'كيف أستخدم تي سي اس؟',
     mx_kpis: 'مؤشرات الموبايل',
-    mx_calc: 'نتيجة الموبايل النهائية بتتحسب إزاي؟',
+    mx_calc: 'كيف تُحسب نتيجة الموبايل النهائية؟',
     da_kpis: 'مؤشرات الأجهزة المنزلية',
-    da_calc: 'نتيجة الأجهزة المنزلية النهائية بتتحسب إزاي؟',
+    da_calc: 'كيف تُحسب نتيجة الأجهزة المنزلية النهائية؟',
     av_kpis: 'مؤشرات الشاشات',
-    av_calc: 'نتيجة الشاشات النهائية بتتحسب إزاي؟',
+    av_calc: 'كيف تُحسب نتيجة الشاشات النهائية؟',
     pqa_kpis: 'مؤشرات بي كيو اي',
-    pqa_calc: 'درجة بي كيو اي بتتحسب إزاي؟',
+    pqa_calc: 'كيف تُحسب درجة بي كيو اي؟',
     goto_tcs: 'افتح تي سي اس',
     goto_pqa: 'افتح بي كيو اي',
     goto_search: 'افتح البحث',
@@ -68,11 +68,11 @@ export const GOGO_CHIP_LABELS = {
     feedback: 'الملاحظات',
     survey: 'استبيان الأكاديمية',
     cs_org: 'هيكل مكتب خدمة العملاء',
-    who_are_you: 'مين أنت؟',
-    how_are_you: 'عامل إيه؟',
-    what_can_you_do: 'تقدر تعمل إيه؟',
+    who_are_you: 'من أنت؟',
+    how_are_you: 'كيف حالك؟',
+    what_can_you_do: 'ماذا تستطيع أن تفعل؟',
     nice_to_meet: 'تشرفنا',
-    who_built: 'مين بنى سكورا؟',
+    who_built: 'من بنى سكورا؟',
   },
 };
 
@@ -82,8 +82,8 @@ const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
 export const GOGO_FLOW = {
   ask_name: {
     replies: {
-      en: "Hi! I am GoGo, your AI assistant for SCORA.\n\nWhat's your name?",
-      ar: 'أهلاً وسهلاً! أنا اسمي جوجو، مساعدك الذكي في سكورا.\n\nاسمك إيه؟',
+      en: "Hi! I am AREF, your AI assistant for SCORA.\n\nWhat's your name?",
+      ar: 'أهلاً وسهلاً! أنا اسمي عارف، مساعدك الذكي في سكورا.\n\nاسمك إيه؟',
     },
     chips: [],
   },
@@ -437,8 +437,8 @@ export const GOGO_FLOW = {
   },
   who_are_you: {
     replies: {
-      en: "I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
-      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
+      en: "I am AREF, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
+      ar: 'أنا اسمي عارف، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -458,8 +458,8 @@ export const GOGO_FLOW = {
   },
   nice_to_meet: {
     replies: {
-      en: "Nice to meet you too! I am GoGo — glad you're here. What should we look at first?",
-      ar: 'وأنا كمان فرحت بمعرفتك! أنا جوجو — مبسوط بوجودك. نبدأ بإيه؟',
+      en: "Nice to meet you too! I am AREF — glad you're here. What should we look at first?",
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا عارف — مبسوط بوجودك. نبدأ بإيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -514,8 +514,8 @@ export const GOGO_FLOW = {
 };
 
 export const GOGO_BUBBLE = {
-  en: "Hi! I'm GoGo 👋\nTap me to chat",
-  ar: 'أهلاً! أنا جوجو 👋\nدوس عليّ عشان نتكلم',
+  en: "Hi! I'm AREF 👋\nTap me to chat",
+  ar: 'أهلاً! أنا عارف 👋\nاضغط عليّ لنتحدث',
 };
 
 export function getFlowNode(id) {
@@ -583,7 +583,7 @@ export function saveGoGoVisitorName(name) {
 export function matchFreeTextToFlow(text, lang = 'en') {
   const raw = String(text || '').trim();
   const lower = raw.toLowerCase();
-  if (/who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|\bgogo\b/i.test(raw)) {
+  if (/who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|\bgogo\b|\baref\b|\b3aref\b|عارف/i.test(raw)) {
     return 'who_are_you';
   }
   if (/how\s*are\s*you|how'?s\s*it\s*going|عامل\s*ايه|ازيك|إزيك|أخبارك|اخبارك/i.test(raw)) {

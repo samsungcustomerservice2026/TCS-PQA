@@ -52,11 +52,11 @@ const TOPICS = [
     match: [
       /who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|your\s*name|introduce\s*yourself/i,
       /مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|عرّف\s*نفسك|عرف\s*نفسك/i,
-      /\bgogo\b/i,
+      /\bgogo\b|\baref\b|\b3aref\b|عارف/i,
     ],
     replies: {
-      en: "I am GoGo, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to explore?",
-      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب نبدأ بإيه؟',
+      en: "I am AREF, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to explore?",
+      ar: 'أنا اسمي عارف، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب نبدأ بإيه؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search'],
   },
@@ -64,8 +64,8 @@ const TOPICS = [
     id: 'welcome',
     match: [/^(hi|hello|hey|yo|مرحبا|اهلا|أهلا|السلام|هاي|هلو)(\s|$|[!.؟?])/i],
     replies: {
-      en: "Hey! I'm GoGo, your friendly AI assistant for SCORA. Ask me anything about TCS, PQA, Search, or Feedback — or tap a topic below.",
-      ar: 'أهلاً وسهلاً! أنا اسمي جوجو، مساعدك الذكي في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
+      en: "Hey! I'm AREF, your friendly AI assistant for SCORA. Ask me anything about TCS, PQA, Search, or Feedback — or tap a topic below.",
+      ar: 'أهلاً وسهلاً! أنا اسمي عارف، مساعدك الذكي في SCORA. اسألني عن TCS أو PQA أو البحث أو الملاحظات — أو اختار موضوع من الأزرار.',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa', 'how_search', 'lang_toggle'],
   },
@@ -91,8 +91,8 @@ const TOPICS = [
     id: 'nice_to_meet',
     match: [/nice\s*to\s*meet|pleased\s*to\s*meet|good\s*to\s*meet|تشرفنا|فرصة\s*سعيدة|نورت/i],
     replies: {
-      en: "Nice to meet you too! I'm GoGo — glad you're here. What should we look at first?",
-      ar: 'وأنا كمان فرحت بمعرفتك! أنا جوجو — مبسوط بوجودك. نبدأ بإيه؟',
+      en: "Nice to meet you too! I'm AREF — glad you're here. What should we look at first?",
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا عارف — مبسوط بوجودك. نبدأ بإيه؟',
     },
     chips: ['what_scora', 'what_tcs', 'what_pqa'],
   },
@@ -336,20 +336,20 @@ export const GOGO_CHIP_LABELS = {
     samsung_positive: 'Samsung highlights',
   },
   ar: {
-    what_scora: 'إيه هو SCORA؟',
-    what_tcs: 'إيه هو TCS؟',
-    what_pqa: 'إيه هو PQA؟',
+    what_scora: 'ما هو سكورا؟',
+    what_tcs: 'ما هو تي سي اس؟',
+    what_pqa: 'ما هو بي كيو اي؟',
     how_search: 'طريقة البحث',
     feedback: 'الملاحظات',
     survey: 'استبيان الأكاديمية',
-    goto_tcs: 'افتح TCS',
-    goto_pqa: 'افتح PQA',
+    goto_tcs: 'افتح تي سي اس',
+    goto_pqa: 'افتح بي كيو اي',
     goto_search: 'افتح البحث',
     goto_feedback: 'افتح الملاحظات',
     goto_survey: 'افتح الاستبيان',
     lang_toggle: 'English',
-    welcome: 'قول أهلاً',
-    goal_scora: 'إيه الهدف؟',
+    welcome: 'قل أهلاً',
+    goal_scora: 'ما الهدف؟',
     mx_kpis: 'مؤشرات الموبايل',
     da_av_kpis: 'مؤشرات الأجهزة المنزلية والشاشات',
     ranks_tiers: 'الترتيب والمستويات',
@@ -359,8 +359,8 @@ export const GOGO_CHIP_LABELS = {
 };
 
 const FALLBACK = {
-  en: "Happy to help! Ask me about SCORA, TCS, PQA, or Search — or tap a guided chip. I'm GoGo, your AI assistant.",
-  ar: 'فرحت أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا اسمي جوجو، مساعدك الذكي.',
+  en: "Happy to help! Ask me about SCORA, TCS, PQA, or Search — or tap a guided chip. I'm AREF, your AI assistant.",
+  ar: 'فرحت أساعد! اسألني عن SCORA أو TCS أو PQA أو البحث — أو اختار من الاقتراحات. أنا اسمي عارف، مساعدك الذكي.',
 };
 
 const DEFAULT_CHIPS = ['what_scora', 'what_tcs', 'how_search', 'goal_scora'];

@@ -16,7 +16,7 @@ export const GOGO_CS_ORG = {
   summary_en:
     'Customer Service Head Office is led by the HOD and KBM, then five parts: Service Operation, Parts Operation, Operation Support, Customer Experience, and Customer Support.',
   summary_ar:
-    'مكتب خدمة العملاء بيقوده رئيس القسم ومسؤول إدارة الأعمال، وبعدين خمسة قطاعات: عمليات الخدمة، وعمليات قطع الغيار، ودعم العمليات، وتجربة العملاء، ودعم العملاء.',
+    'مكتب خدمة العملاء يقوده رئيس القسم ومسؤول إدارة الأعمال، ثم خمسة قطاعات: عمليات الخدمة، وعمليات قطع الغيار، ودعم العمليات، وتجربة العملاء، ودعم العملاء.',
   leaders: [
     { name: 'Bishoy Adib', role: 'HOD', level: 'hod' },
     { name: 'Donald Jung', role: 'KBM', level: 'kbm' },

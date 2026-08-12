@@ -76,14 +76,19 @@ function voiceForLang(lang) {
 function buildSpeakPrompt(text, lang) {
   if (lang === 'ar') {
     return [
-      'You are GoGo, a friendly Egyptian man from Cairo working at Samsung Egypt.',
-      'Speak ONLY Egyptian colloquial Arabic (عامية مصرية) — never formal MSA, never Gulf/Levantine.',
-      'Natural Cairo tone: warm, clear, adult male. Phrases like: أهلاً، ازيك، تمام، هقولك، دلوقتي، كده، شوف.',
-      'Do not translate. Read this Egyptian Arabic aloud exactly:',
+      'You are عارف, a professional assistant at Samsung Egypt.',
+      'Speak ONLY Modern Standard Arabic (اللغة العربية الفصحى) — never Egyptian colloquial, never Gulf/Levantine.',
+      'Clear formal tone: warm, adult male. Phrases like: أهلاً، كيف حالك، حسناً، سأقول لك، الآن.',
+      'Do not translate. Read this Arabic aloud exactly:',
       text,
     ].join(' ');
   }
-  return `Speak naturally in clear American English with a warm adult male voice. Say: ${text}`;
+  return [
+    'Speak naturally in clear American English with a warm adult male voice.',
+    'Pronounce عارف in Egyptian Arabic (Aa-ref), never as English air-eff or letter-by-letter A-R-E-F.',
+    'Say:',
+    text,
+  ].join(' ');
 }
 
 async function synthesizeWithGemini({ text, lang, apiKey, voice }) {

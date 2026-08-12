@@ -307,7 +307,7 @@ async function ensureWorkspaceRoot() {
     workspaceRef(),
     {
       type: 'GOGO_ASSISTANT_WORKSPACE',
-      title: 'GoGo AI Assistant',
+      title: 'AREF',
       updatedAt: new Date().toISOString(),
     },
     { merge: true },

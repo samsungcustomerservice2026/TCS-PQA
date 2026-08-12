@@ -10,6 +10,7 @@
  */
 
 import { textForSpeech } from './gogoSpeechText';
+import { rewriteAssistantNameForBrowserEnglish } from './gogoIdentity';
 
 export { textForSpeech };
 
@@ -456,7 +457,8 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
   // Natural pacing — do not pitch-shift (sounds unnatural)
   const rate = 1;
   const pitch = 1;
-  const parts = clean
+  const spoken = lang === 'en' ? rewriteAssistantNameForBrowserEnglish(clean) : clean;
+  const parts = spoken
     .split(/(?<=[.!?؟])\s+/)
     .map((p) => p.trim())
     .filter(Boolean)

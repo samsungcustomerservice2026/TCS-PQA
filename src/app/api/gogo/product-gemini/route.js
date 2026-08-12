@@ -147,7 +147,7 @@ export async function POST(request) {
         code: 'unavailable',
         reply:
           lang === 'ar'
-            ? 'بحث المواصفات الذكي مش متاح دلوقتي (مفتاح Gemini).'
+            ? 'بحث المواصفات الذكي غير متاح حالياً (مفتاح Gemini).'
             : 'Smart product lookup is unavailable (missing Gemini key).',
       },
       { status: 503 },

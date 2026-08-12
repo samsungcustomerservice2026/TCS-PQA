@@ -3,6 +3,7 @@ import { getGoGoSoftRedirectReply, isGoGoDeniedMessage } from '../../../../lib/g
 import { buildGoGoSystemPrompt, GOGO_SMART_CHIPS } from '../../../../lib/gogoGeminiContext';
 import { ensureGoGoCompleteReply, parseGoGoStateTaggedText } from '../../../../lib/gogoStateTags';
 import { normalizeGoGoArabicName } from '../../../../lib/gogoEgyptianDialect';
+import { rewriteAssistantNameForDisplay } from '../../../../lib/gogoIdentity';
 import { prepareGoGoReplyPair } from '../../../../lib/gogoSpeechText';
 import {
   GOGO_AGENT_TOOL_DECLARATIONS,
@@ -27,7 +28,7 @@ const MODEL_FALLBACKS = [
 
 function needNameReply(lang) {
   return lang === 'ar'
-    ? 'قولّي اسمك الأول وبعدين نكمل.'
+    ? 'أخبرني باسمك الأول ثم نكمل.'
     : 'Tell me your name first, then we continue.';
 }
 
@@ -292,7 +293,7 @@ export async function POST(request) {
     const parsed = parseGoGoStateTaggedText(reply);
     const polish = (t) => {
       const done = ensureGoGoCompleteReply(t);
-      return lang === 'ar' ? normalizeGoGoArabicName(done) : done;
+      return lang === 'ar' ? normalizeGoGoArabicName(done) : rewriteAssistantNameForDisplay(done, 'en');
     };
     const clean = polish(parsed.displayText || reply);
     const pair = prepareGoGoReplyPair(clean, lang);

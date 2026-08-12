@@ -1,22 +1,25 @@
 /**
  * Clean reply text for spoken delivery (safe on server + client).
- * Arabic: جوجو + Egyptian + lexicon so Edge TTS reads words correctly.
+ * Arabic: عارف + Modern Standard Arabic (فصحى) + lexicon so Edge TTS reads words correctly.
  */
-import { toEgyptianSpeechText, normalizeGoGoArabicName } from './gogoEgyptianDialect';
+import { toFushaArabic } from './gogoEgyptianDialect';
 import {
   applyGoGoSpeechLexicon,
   polishEgyptianDisplay,
   arabizeGoGoLatinTerms,
 } from './gogoSpeechLexicon';
+import { rewriteAssistantNameForDisplay, rewriteAssistantNameForSpeech } from './gogoIdentity';
 
 export function textForSpeech(text, lang = 'en') {
   let s = String(text || '');
   const isAr = lang === 'ar';
 
   if (isAr) {
-    s = toEgyptianSpeechText(s);
+    s = toFushaArabic(s);
     s = applyGoGoSpeechLexicon(s);
   }
+
+  s = rewriteAssistantNameForSpeech(s);
 
   s = s
     .replace(/[👋👇💭👉✨🎯📌✅❌•·]/gu, ' ')
@@ -55,9 +58,10 @@ export function textForSpeech(text, lang = 'en') {
 export function prepareGoGoReplyPair(text, lang = 'en') {
   const raw = String(text || '');
   const isAr = lang === 'ar';
-  let display = raw;
+  let display = rewriteAssistantNameForDisplay(raw, isAr ? 'ar' : 'en');
   if (isAr) {
-    display = polishEgyptianDisplay(arabizeGoGoLatinTerms(normalizeGoGoArabicName(raw)));
+    display = polishEgyptianDisplay(arabizeGoGoLatinTerms(toFushaArabic(display)));
+    display = rewriteAssistantNameForDisplay(display, 'ar');
   }
   return {
     display,

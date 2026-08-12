@@ -138,7 +138,7 @@ export function executeGoGoAgentTool(name, args = {}, lang = 'en') {
       return {
         resultText:
           L === 'ar'
-            ? 'مش لاقي المؤشر ده في القائمة المعتمدة. قول الاسم تاني أو اسأله من زر المؤشرات.'
+            ? 'لم أجد هذا المؤشر في القائمة المعتمدة. أعد الاسم أو اسأله من زر المؤشرات.'
             : 'I could not find that KPI in the verified list. Try another name or use the KPI chips.',
         clientActions: [],
       };
@@ -162,7 +162,7 @@ export function executeGoGoAgentTool(name, args = {}, lang = 'en') {
     return {
       resultText:
         L === 'ar'
-          ? 'مش لاقي الاسم ده في هيكل مكتب خدمة العملاء. جرّب الاسم بالكامل.'
+          ? 'لم أجد هذا الاسم في هيكل مكتب خدمة العملاء. حاول استخدام الاسم بالكامل.'
           : 'I could not find that name in the CS Head Office directory. Try the full name.',
       clientActions: [],
     };
@@ -186,7 +186,7 @@ export function buildGoGoAgentToolPromptRules(lang = 'en') {
     'Prefer tools for navigation requests and verified KPI/org facts instead of guessing.',
     'After tool results arrive, write a short warm final answer (do not dump raw JSON).',
     L === 'ar'
-      ? 'Arabic final answers: Egyptian colloquial, TTS-friendly (clear words, avoid heavy slang the voice misreads). Never leave MX/DA/AV Latin codes.'
+      ? 'Arabic final answers: Modern Standard Arabic (فصحى), TTS-friendly, never Egyptian colloquial. Never leave MX/DA/AV Latin codes.'
       : 'English final answers: clear and friendly.',
     'If no tool is needed (greetings, soft chat), answer directly.',
   ].join('\n');

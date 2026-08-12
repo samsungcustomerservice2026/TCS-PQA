@@ -534,20 +534,20 @@ function buildOrgWhatTheyDo(person, { brief, role, pillar, team, female, lang })
   if (brief) return brief;
 
   if (lang === 'ar') {
-    const works = female ? 'بتشتغل' : 'بيشتغل';
-    const leads = female ? 'بتقود' : 'بيقود';
-    const heads = female ? 'بتدير' : 'بيدير';
+    const works = female ? 'تعمل' : 'يعمل';
+    const leads = female ? 'تقود' : 'يقود';
+    const heads = female ? 'تدير' : 'يدير';
     if (person.kind === 'leader') {
-      return `${female ? 'بتوجّه' : 'بيوجّه'} استراتيجية الخدمة على مستوى المكتب الرئيسي.`;
+      return `${female ? 'توجّه' : 'يوجّه'} استراتيجية الخدمة على مستوى المكتب الرئيسي.`;
     }
     if (person.kind === 'part_leader') {
-      return `${heads} شغل ${pillar || 'القطاع'} وبيتأكد إن الفرق ماشية صح.`
-        .replace('وبيتأكد', female ? 'وبتتأكد' : 'وبيتأكد');
+      return `${heads} أعمال ${pillar || 'القطاع'} وتضمن أن الفرق تعمل بانسجام.`
+        .replace('وتضمن', female ? 'وتضمن' : 'ويضمن');
     }
     if (person.kind === 'team_lead') {
-      return `${leads} فريق ${team || 'الشغل'} و${female ? 'بتتابع' : 'بيتابع'} التنفيذ اليومي.`;
+      return `${leads} فريق ${team || 'العمل'} و${female ? 'تتابع' : 'يتابع'} التنفيذ اليومي.`;
     }
-    return `${works} يوميًا على مهام ${role}${pillar ? ` ضمن ${pillar}` : ''} عشان خدمة العملاء تفضل مستقرة.`;
+    return `${works} يومياً على مهام ${role}${pillar ? ` ضمن ${pillar}` : ''} لضمان استقرار خدمة العملاء.`;
   }
 
   if (person.kind === 'leader') return 'They steer Customer Service strategy at Head Office.';
@@ -602,7 +602,7 @@ export function formatGoGoOrgAmbiguousAnswer(people, lang = 'en') {
         return `• ${name} — ${role}${pillar ? ` (${pillar})` : ''}`;
       })
       .join('\n');
-    return `لقيت أكتر من شخص بنفس الاسم في هيكل مكتب الخدمة:\n${list}\n\nقولّي الاسم كامل عشان أحددلك المعلومة المحفوظة.`;
+    return `وجدت أكثر من شخص بهذا الاسم في هيكل مكتب الخدمة:\n${list}\n\nيرجى ذكر الاسم كاملاً لأحدد المعلومة المحفوظة.`;
   }
   const list = (people || []).map((p) => `• ${p.name} — ${p.role}${p.pillar ? ` (${p.pillar})` : ''}`).join('\n');
   return `I found more than one person with that name in the CS Head Office structure:\n${list}\n\nPlease use the full name so I can share their saved details.`;
@@ -712,11 +712,11 @@ export function answerGoGoOrgRelationQuestion(query, lang = 'en') {
       if (person.partLeader) {
         const pl = L === 'ar' ? arabicDisplayNameFor(person.partLeader) : person.partLeader;
         return L === 'ar'
-          ? `${displayName} مفيش قائد فريق مخصص مسجل ليه/ليها؛ بيتبع قائد القطاع ${pl}${pillarLabel ? ` (${pillarLabel})` : ''}.`
+          ? `${displayName} لا يوجد قائد فريق مخصص مسجّل له/لها؛ ويتبع قائد القطاع ${pl}${pillarLabel ? ` (${pillarLabel})` : ''}.`
           : `${displayName} has no dedicated Team Leader recorded; they fall under Part Leader ${pl}${pillarLabel ? ` (${pillarLabel})` : ''}.`;
       }
       return L === 'ar'
-        ? `${displayName} مش مسجل تحت قائد فريق في الهيكل المحفوظ.`
+        ? `${displayName} غير مسجّل تحت قائد فريق في الهيكل المحفوظ.`
         : `${displayName} is not listed under a Team Leader in the saved hierarchy.`;
     }
     const tl = findPersonByNameKey(person.teamLead);
@@ -739,7 +739,7 @@ export function answerGoGoOrgRelationQuestion(query, lang = 'en') {
           : `${displayName}, Part Leader for ${pillarLabel || 'this part'}.`;
       }
       return L === 'ar'
-        ? `${displayName} مش مسجل تحت قائد قطاع في الهيكل المحفوظ.`
+        ? `${displayName} غير مسجّل تحت قائد قطاع في الهيكل المحفوظ.`
         : `${displayName} is not listed under a Part Leader in the saved hierarchy.`;
     }
     const plName = L === 'ar' ? arabicDisplayNameFor(person.partLeader) : person.partLeader;

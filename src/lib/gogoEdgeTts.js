@@ -14,7 +14,7 @@ import { randomUUID } from 'crypto';
 
 const require = createRequire(import.meta.url);
 
-const VOICE_EN = process.env.GOGO_EDGE_VOICE_EN || 'en-US-AndrewNeural';
+const VOICE_EN = process.env.GOGO_EDGE_VOICE_EN || 'en-US-AndrewMultilingualNeural';
 /** Egyptian Arabic male neural voice (Microsoft Edge) — free & permanent. */
 const VOICE_AR = process.env.GOGO_EDGE_VOICE_AR || 'ar-EG-ShakirNeural';
 /** Clear educational pacing (Hanafi-like confidence without paid API). */

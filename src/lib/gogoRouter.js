@@ -110,7 +110,7 @@ export function resolveGoGoTraditionalTurn(text, lang = 'en') {
     if (detectGoGoOrgRelationIntent(raw)) {
       const reply =
         L === 'ar'
-          ? 'قولّي اسم الشخص عشان أحدد قائد الفريق أو قائد القطاع من الهيكل المحفوظ.'
+          ? 'أخبرني باسم الشخص لأحدد قائد الفريق أو قائد القطاع من الهيكل المحفوظ.'
           : 'Tell me the person’s name so I can look up their Team Leader or Part Leader from the saved hierarchy.';
       const { display, spoken } = pair(reply, L);
       return {
@@ -146,7 +146,7 @@ export function resolveGoGoTraditionalTurn(text, lang = 'en') {
     if (/^(who\s*is|who's|مين\s*هو|من\s*هو|مين\s+|من\s+)/i.test(raw)) {
       const reply =
         L === 'ar'
-          ? 'مش لاقي الاسم ده في هيكل مكتب خدمة العملاء المحفوظ. جرّب الاسم بالكامل، أو اسأل عن الهيكل لو عايز الصورة الكاملة.'
+          ? 'لم أجد هذا الاسم في هيكل مكتب خدمة العملاء المحفوظ. جرّب الاسم بالكامل، أو اسأل عن الهيكل للصورة الكاملة.'
           : 'I could not find that name in the saved CS Head Office directory. Try the full name, or ask for the org structure for the full picture.';
       const { display, spoken } = pair(reply, L);
       return {

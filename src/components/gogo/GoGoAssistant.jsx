@@ -52,6 +52,7 @@ import {
   upsertGoGoProductFact,
 } from '../../services/gogoService';
 import { findGoGoProduct, getGsmArenaConfirmReply, isGsmArenaSourceQuestion } from '../../lib/gogoSamsungProducts';
+import { assistantDisplayName } from '../../lib/gogoIdentity';
 
 const SPRITE_BY_POSE = {
   idle: '/gogo/idle.png?v=gogo4',
@@ -73,11 +74,6 @@ const SPRITE_BY_POSE = {
   celebrate: '/gogo/celebrate.png?v=gogo4',
 };
 const SPRITE_FALLBACK = '/gogo/idle.png?v=gogo4';
-const ASSISTANT_NAME_EN = 'GoGo';
-const ASSISTANT_NAME_AR = 'جوجو';
-function assistantDisplayName(lang) {
-  return lang === 'ar' ? ASSISTANT_NAME_AR : ASSISTANT_NAME_EN;
-}
 const STORAGE_LANG = 'gogo_lang';
 
 const ACTION_TARGET = {
@@ -91,15 +87,15 @@ const ACTION_TARGET = {
 const GUIDE_LINES = {
   goto_pqa: {
     en: { think: 'Thinking… walking you to PQA.', point: 'Point here — tap PQA.' },
-    ar: { think: 'ثواني… هاوديك لـ بي كيو اي.', point: 'هنا — اضغط على بي كيو اي.' },
+    ar: { think: 'لحظة… سأرافقك إلى بي كيو اي.', point: 'هنا — اضغط على بي كيو اي.' },
   },
   goto_tcs: {
     en: { think: 'Thinking… guiding you to TCS.', point: 'Point here — tap TCS.' },
-    ar: { think: 'ثواني… هاوديك لـ تي سي اس.', point: 'هنا — اضغط على تي سي اس.' },
+    ar: { think: 'لحظة… سأرافقك إلى تي سي اس.', point: 'هنا — اضغط على تي سي اس.' },
   },
   goto_search: {
     en: { think: 'Opening Search…', point: 'Point here — Search tab.' },
-    ar: { think: 'بفتح البحث…', point: 'هنا — تبويب البحث.' },
+    ar: { think: 'أفتح البحث…', point: 'هنا — تبويب البحث.' },
   },
 };
 
@@ -1074,7 +1070,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       onStart: () => {
         setListening(true);
         setPose('think');
-        setMicHint(langRef.current === 'ar' ? 'بسمعك… تكلم دلوقتي' : 'Listening… go ahead');
+        setMicHint(langRef.current === 'ar' ? 'أسمعك… تفضل بالحديث' : 'Listening… go ahead');
       },
       onResult: ({ interim, final }) => {
         if (interim) setInput(interim);
@@ -1143,15 +1139,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         : 'Your name…'
       : listening
         ? rtl
-          ? 'بسمعك…'
+          ? 'أسمعك…'
           : 'Listening…'
         : busy
           ? rtl
             ? 'لحظة…'
             : 'One moment…'
           : rtl
-            ? 'اكتب أو كلّم جوجو…'
-            : 'Type or talk to GoGo…';
+            ? 'اكتب أو تحدّث إلى عارف…'
+            : 'Type or talk to AREF…';
 
   return (
     <>
@@ -1199,19 +1195,19 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 <p className="text-[9px] text-zinc-500 font-bold truncate">
                   {listening
                     ? rtl
-                      ? 'بسمعك…'
+                      ? 'أسمعك…'
                       : 'Listening…'
                     : speaking
                       ? rtl
-                        ? 'بتكلم…'
+                        ? 'أتحدث…'
                         : 'Speaking…'
                       : busy
                         ? rtl
-                          ? 'بلحظ…'
+                          ? 'لحظة…'
                           : 'One moment…'
                         : phase === 'ask_name'
                           ? rtl
-                            ? 'قولّي اسمك'
+                            ? 'ما اسمك؟'
                             : "What's your name?"
                           : visitorName
                             ? rtl
@@ -1336,7 +1332,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               {busy && (
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500 mr-4 px-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  {rtl ? `${assistantDisplayName('ar')} بيفكر…` : `${assistantDisplayName('en')} is thinking…`}
+                  {rtl ? `${assistantDisplayName('ar')} يفكر…` : `${assistantDisplayName('en')} is thinking…`}
                 </div>
               )}
             </div>
@@ -1431,7 +1427,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
               }
             }}
             className="relative group focus:outline-none"
-              aria-label="Open GoGo chat"
+              aria-label="Open AREF chat"
             >
               <span
                 className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
@@ -1459,7 +1455,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 )}
                 <img
                   src={spriteSrc}
-                  alt="GoGo"
+                  alt="AREF"
                   className={`relative w-auto drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass} ${
                     open ? 'h-16 sm:h-28' : 'h-28 sm:h-40'
                   }`}

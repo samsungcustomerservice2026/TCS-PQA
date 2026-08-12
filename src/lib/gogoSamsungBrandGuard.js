@@ -94,12 +94,12 @@ export function isAcceptableSamsungProduct(product, query = '') {
 
 export function getSamsungOnlyRefuseReply(lang = 'en') {
   return lang === 'ar'
-    ? 'جوجو بيرد على منتجات Samsung بس: موبايلات، تابلت، ساعات، سماعات Buds، غسالات، مكانس، تكييف، تلفزيونات والإكسسوارات. لو حابب، اسأل عن موديل Galaxy معيّن.'
-    : 'GoGo only answers about Samsung products: mobiles, tablets, watches, Buds, washing machines, vacuums, air conditioning, TVs, and accessories. Ask about a specific Galaxy model if you want specs.';
+    ? 'يرد عارف على منتجات سامسونج فقط: الهواتف، والأجهزة اللوحية، والساعات، وسماعات الأذن، والغسالات، والمكانس، والتكييف، والتلفزيونات والإكسسوارات. إن أحببت، اسأل عن طراز جالاكسي محدد.'
+    : 'AREF only answers about Samsung products: mobiles, tablets, watches, Buds, washing machines, vacuums, air conditioning, TVs, and accessories. Ask about a specific Galaxy model if you want specs.';
 }
 
 export function getUnverifiedSamsungModelReply(lang = 'en', query = '') {
   return lang === 'ar'
-    ? 'بيانات المنتج دي مش متاحة دلوقتي. خليك متابع للتحديثات الجديدة.'
+    ? 'بيانات هذا المنتج غير متاحة حالياً. تابع التحديثات الجديدة.'
     : 'These product data are currently unavailable. Stay tuned for new updates.';
 }
