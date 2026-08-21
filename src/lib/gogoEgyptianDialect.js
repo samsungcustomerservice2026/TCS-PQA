@@ -1,12 +1,12 @@
 /**
- * AREF Arabic: Modern Standard Arabic (فصحى) + natural division names.
+ * GOGO Arabic: Modern Standard Arabic (فصحى) + natural division names.
  * MX / DA / AV must never be spoken or written as Latin letters in Arabic.
  */
 
 export const GOGO_AR_VOICE_RULES = [
   'DEFAULT Arabic = Modern Standard Arabic (اللغة العربية الفصحى / فصحى معاصرة). Never answer in Egyptian colloquial (عامية), Gulf, or Levantine dialect.',
-  'Your Arabic name is عارف. English written name is AREF. Never write GoGo / جوجو / كوكو.',
-  'When introducing yourself in Arabic say: أنا عارف، مساعدك الذكي.',
+  'Your Arabic name is جوجو. English written name is GOGO. Never write AREF / عارف / كوكو.',
+  'When introducing yourself in Arabic say: أنا جوجو، مساعدك الذكي.',
   'Use clear formal Arabic the TTS can read: أهلاً، كيف حالك، حسناً، هل تود، أريد، سأقول لك، الآن، هكذا، من فضلك، اختر، اضغط هنا.',
   'TTS-SAFE wording: short clear sentences (max ~20 words). Spell brand codes in Arabic letters (تي سي اس، بي كيو اي، سكورا).',
   'Stay polite and professional for a workplace assistant. Prefer: ما هو / كيف / هل تود / سأفتح لك / اضغط هنا.',
@@ -54,16 +54,16 @@ export function expandArabicDivisionNames(text) {
     .replace(/(الموبايل)(?:\s+\1)+/g, '$1');
 }
 
-/** Force spoken/written name spelling (GoGo / جوجو → عارف) + division names. */
+/** Force spoken/written name spelling (AREF / عارف → جوجو) + division names. */
 export function normalizeGoGoArabicName(text) {
   return expandArabicDivisionNames(
     String(text || '')
-      .replace(/\bGoGo\b/gi, 'عارف')
-      .replace(/\bGogo\b/g, 'عارف')
-      .replace(/\bGOGO\b/g, 'عارف')
-      .replace(/\bAREF\b/g, 'عارف')
-      .replace(/\b3aref\b/gi, 'عارف')
-      .replace(/جوجو/g, 'عارف'),
+      .replace(/\bGoGo\b/gi, 'جوجو')
+      .replace(/\bGogo\b/g, 'جوجو')
+      .replace(/\bGOGO\b/g, 'جوجو')
+      .replace(/\bAREF\b/g, 'جوجو')
+      .replace(/\b3aref\b/gi, 'جوجو')
+      .replace(/عارف/g, 'جوجو'),
   );
 }
 
@@ -178,7 +178,9 @@ export function toFushaArabic(text) {
     [/بيخدموا/g, 'يخدمون'],
     [/مشغّله|بيشغّله/g, 'يشغّله'],
     [/بفتح /g, 'أفتح '],
-    [/أنا اسمي عارف/g, 'أنا عارف'],
+    [/أنا اسمي جوجو/g, 'أنا جوجو'],
+    [/أنا اسمي عارف/g, 'أنا جوجو'],
+    [/أنا عارف/g, 'أنا جوجو'],
     [/فرحت /g, 'يسعدني '],
     [/مبسوط /g, 'سعيد '],
     [/متشكر /g, 'شكراً '],

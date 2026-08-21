@@ -1,0 +1,203 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function tokenRole() {
+      return signedIn() && request.auth.token.role != null
+        ? request.auth.token.role
+        : '';
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.isAdmin == true ||
+        request.auth.token.isSuperAdmin == true ||
+        tokenRole() in ['super_admin', 'admin', 'editor', 'viewer'] ||
+        // Migration: Auth user with admins/{uid} doc (no custom claims yet)
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        // Temporary owner unlock until service-account claims are set
+        request.auth.token.email == 'fawzymaherahmed@gmail.com'
+      );
+    }
+
+    function isEditorPlus() {
+      return signedIn() && (
+        request.auth.token.isSuperAdmin == true ||
+        tokenRole() in ['super_admin', 'admin', 'editor'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'fawzymaherahmed@gmail.com'
+      );
+    }
+
+    function isSuperAdmin() {
+      return signedIn() && (
+        request.auth.token.isSuperAdmin == true ||
+        tokenRole() == 'super_admin' ||
+        request.auth.token.email == 'fawzymaherahmed@gmail.com'
+      );
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ── Default deny ──────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── Public leaderboard / TCS-PQA reads; admin writes ───────────
+    match /engineers/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /tcs_mx_receptionists/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /tcs_mx_galaxy_consultants/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /tcs_da_engineers/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /tcs_vd_engineers/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /tcs_dashboard_winners/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /tcs_snapshots/{id} {
+      allow read: if true;
+      allow create: if isEditorPlus();
+      allow update, delete: if isSuperAdmin();
+    }
+    match /pqa_mx_centers/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /pqa_ce_centers/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /leaderboard_aggregates/{id} {
+      allow read: if true;
+      allow write: if false; // Admin SDK / Cloud Functions only
+    }
+
+    // ── Admins (migration-friendly reads until Auth claims are live) ──
+    match /admins/{adminId} {
+      // Temporary open access so Manage Accounts can list Jimmy/George and write profiles.
+      // Tighten after every admin uses Firebase Auth + service account bootstrap.
+      allow read, write: if true;
+    }
+
+    // ── Employees / consultants ───────────────────────────────────
+    match /employees/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create: if isSelf(uid)
+        && !('passwordHash' in request.resource.data)
+        && !('passwordSalt' in request.resource.data);
+      allow update: if (isSelf(uid)
+          && !('passwordHash' in request.resource.data)
+          && !('passwordSalt' in request.resource.data)
+          && !('role' in request.resource.data))
+        || isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+    // Public get so signup/login can resolve GSPN → email before Auth session exists.
+    match /employee_index/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if signedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    match /employee_progress/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if isSelf(uid) || isAdmin();
+    }
+    match /consultants/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+    match /consultant_announcements/{id} {
+      allow read: if true;
+      allow write: if isEditorPlus();
+    }
+
+    // ── Survey / feedback (create + rate via App Check recommended) ─
+    match /feedback/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+    match /samsung_academy_survey/{doc=**} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Quiz / SCORA ──────────────────────────────────────────────
+    match /quiz_templates/{id} {
+      allow read: if isAdmin();
+      allow write: if isEditorPlus();
+    }
+    match /quiz_live_sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if isEditorPlus();
+      allow delete: if isSuperAdmin();
+
+      match /players/{playerId} {
+        allow read: if true;
+        // Join: create with score 0 only; score updates are server-only (Admin SDK)
+        allow create: if request.resource.data.score == 0
+          && request.resource.data.keys().hasAll(['nickname', 'score', 'joinedAt']);
+        allow update, delete: if isEditorPlus();
+      }
+      match /answers/{answerId} {
+        allow read: if isAdmin();
+        allow write: if false; // server-authoritative only
+      }
+    }
+    match /quiz_logs/{id} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    // ── GoGo ──────────────────────────────────────────────────────
+    match /gogo_assistant/{document=**} {
+      allow read: if true;
+      allow write: if true; // tighten further when visitor auth exists
+    }
+
+    // ── Samsung KB ────────────────────────────────────────────────
+    match /samsung_kb/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Analytics / activity logs ─────────────────────────────────
+    match /analytics/{document=**} {
+      allow read: if isAdmin();
+      allow write: if true; // increment counters from clients; prefer App Check
+    }
+    match /logs/{document=**} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ── Immutable audit logs (Admin SDK only) ─────────────────────
+    match /audit_logs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}

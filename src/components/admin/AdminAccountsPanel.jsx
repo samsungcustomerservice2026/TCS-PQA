@@ -15,6 +15,7 @@ import {
 
 export const EMPTY_ADMIN_FORM = {
   username: '',
+  email: '',
   password: '',
   name: '',
   role: 'ADMIN',
@@ -138,6 +139,16 @@ function AdminForm({
           />
         </div>
         <div className="space-y-2">
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Email (Firebase Auth)</label>
+          <input
+            type="email"
+            placeholder="name@company.com"
+            className="w-full bg-black border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-green-600 font-bold text-white"
+            value={formData.email || ''}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Password</label>
           <input
             type="password"
@@ -209,6 +220,9 @@ function AdminAccountCard({ admin, currentUser, isSuperAdmin, isEditing, onStart
           <div className="min-w-0 flex-1">
             <p className="text-base sm:text-lg font-black text-white uppercase tracking-tight break-words">{admin.name}</p>
             <p className="text-[10px] font-bold text-zinc-500 mt-0.5 break-all">@{admin.username}</p>
+            {admin.email ? (
+              <p className="text-[10px] font-medium text-zinc-600 mt-0.5 break-all">{admin.email}</p>
+            ) : null}
             <div className="flex flex-wrap gap-2 mt-2">
               {admin.role === 'SUPER_ADMIN' && (
                 <span className="text-[8px] bg-blue-600/15 text-blue-400 px-2 py-1 rounded-full border border-blue-600/25 font-black uppercase tracking-wider">

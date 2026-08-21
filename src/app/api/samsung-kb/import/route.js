@@ -3,6 +3,7 @@ import {
   importProductsFromCsv,
   importProductsFromJson,
 } from '../../../../lib/samsungKb/importParse';
+import { assertSamsungKbApiAllowed } from '../../../../lib/samsungKb/apiGate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,8 @@ export const dynamic = 'force-dynamic';
  * Returns validated products for the admin client to persist.
  */
 export async function POST(request) {
+  const blocked = assertSamsungKbApiAllowed();
+  if (blocked) return blocked;
   let body = {};
   try {
     body = await request.json();

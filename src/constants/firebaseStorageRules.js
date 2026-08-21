@@ -34,5 +34,9 @@ service firebase.storage {
       allow write: if request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
+    match /consultants/{consultantId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 40 * 1024 * 1024;
+    }
   }
 }`;

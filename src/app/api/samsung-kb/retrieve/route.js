@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { retrieveSamsungKbForQuestion } from '../../../../lib/samsungKb/retrieval';
+import { assertSamsungKbApiAllowed } from '../../../../lib/samsungKb/apiGate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,8 @@ export const dynamic = 'force-dynamic';
  * AI retrieval against provided catalog (usually empty until import).
  */
 export async function POST(request) {
+  const blocked = assertSamsungKbApiAllowed();
+  if (blocked) return blocked;
   let body = {};
   try {
     body = await request.json();

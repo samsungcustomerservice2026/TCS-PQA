@@ -359,7 +359,7 @@ function speakChunk(text, { lang, voice, rate, pitch, generation }) {
   });
 }
 
-async function fetchGeminiSpeech(text, lang) {
+async function fetchServerSpeech(text, lang) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), 25000) : null;
   try {
@@ -371,7 +371,7 @@ async function fetchGeminiSpeech(text, lang) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.audioBase64) {
-      const err = new Error(data?.error || 'Gemini TTS unavailable');
+      const err = new Error(data?.error || 'TTS unavailable');
       err.code = data?.code || 'tts_failed';
       throw err;
     }
@@ -483,8 +483,8 @@ async function speakWithBrowser(clean, lang, generation, onStart) {
   return generation === speechGeneration;
 }
 
-async function speakWithGemini(clean, lang, generation, onStart) {
-  const data = await fetchGeminiSpeech(clean, lang);
+async function speakWithServerTts(clean, lang, generation, onStart) {
+  const data = await fetchServerSpeech(clean, lang);
   if (generation !== speechGeneration) return false;
   onStart?.();
   return playBase64Audio(data.audioBase64, data.mimeType, generation);
@@ -493,6 +493,7 @@ async function speakWithGemini(clean, lang, generation, onStart) {
 /**
  * Speak GoGo reply with a stable adult-male cast per language.
  * Safe across EN↔AR switches via speechGeneration token.
+ * Uses Edge TTS via /api/gogo/speak (Gemini removed).
  */
 export async function speakGoGoText(text, { lang = 'en', muted = false, onStart, onEnd } = {}) {
   if (muted) {
@@ -523,12 +524,11 @@ export async function speakGoGoText(text, { lang = 'en', muted = false, onStart,
   };
 
   try {
-    // Gemini first (EN Charon / AR Orus), then natural browser male fallback.
     try {
-      const ok = await speakWithGemini(clean, L, generation, markStart);
+      const ok = await speakWithServerTts(clean, L, generation, markStart);
       if (ok) return;
     } catch {
-      // fall through
+      // fall through to browser TTS
     }
 
     if (generation !== speechGeneration) return;

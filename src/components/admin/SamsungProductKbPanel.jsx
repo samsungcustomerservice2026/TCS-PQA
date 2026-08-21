@@ -208,9 +208,9 @@ export default function SamsungProductKbPanel({ actor = 'admin' }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500 flex items-center gap-2">
-              <Database className="w-3.5 h-3.5" /> Samsung product knowledge base
+              <Database className="w-3.5 h-3.5" /> Product Information
             </p>
-            <h2 className="text-lg font-black mt-1">Architecture ready — catalog empty until verified import</h2>
+            <h2 className="text-lg font-black mt-1">Samsung product specs for GOGO</h2>
             <p className="text-xs text-zinc-500 mt-2 max-w-3xl leading-relaxed">
               Window {SAMSUNG_KB_DATE_WINDOW.from} → {SAMSUNG_KB_DATE_WINDOW.to}. Model number is the primary
               identifier. Sold in Egypt ≠ Made in Egypt. production_ready flag stays{' '}

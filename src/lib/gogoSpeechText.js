@@ -1,6 +1,6 @@
 /**
  * Clean reply text for spoken delivery (safe on server + client).
- * Arabic: عارف + Modern Standard Arabic (فصحى) + lexicon so Edge TTS reads words correctly.
+ * Arabic: جوجو + Modern Standard Arabic (فصحى) + lexicon so Edge TTS reads words correctly.
  */
 import { toFushaArabic } from './gogoEgyptianDialect';
 import {
@@ -19,7 +19,7 @@ export function textForSpeech(text, lang = 'en') {
     s = applyGoGoSpeechLexicon(s);
   }
 
-  s = rewriteAssistantNameForSpeech(s);
+  s = rewriteAssistantNameForSpeech(s, lang);
 
   s = s
     .replace(/[👋👇💭👉✨🎯📌✅❌•·]/gu, ' ')

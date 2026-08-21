@@ -34,8 +34,10 @@ export const GOGO_SPEECH_LEXICON = [
   [/\bLinkage\b/gi, 'لينكيدج'],
   [/\bGalaxy\b/gi, 'جالاكسي'],
   [/\bSamsung\b/gi, 'سامسونج'],
-  [/\bGoGo\b/gi, 'عارف'],
-  [/جوجو/g, 'عارف'],
+  [/\bGoGo\b/gi, 'جوجو'],
+  [/\bGOGO\b/g, 'جوجو'],
+  [/\bAREF\b/gi, 'جوجو'],
+  [/عارف/g, 'جوجو'],
   [/\bFinal Result\b/gi, 'النتيجة النهائية'],
 
   // Dialect leftovers → Modern Standard Arabic for TTS
@@ -79,8 +81,10 @@ export function applyGoGoSpeechLexicon(text) {
  */
 export function polishEgyptianDisplay(text) {
   return String(text || '')
-    .replace(/\bGoGo\b/gi, 'عارف')
-    .replace(/جوجو/g, 'عارف')
+    .replace(/\bGoGo\b/gi, 'جوجو')
+    .replace(/\bGOGO\b/g, 'جوجو')
+    .replace(/\bAREF\b/gi, 'جوجو')
+    .replace(/عارف/g, 'جوجو')
     // Collapse spaces/tabs only — never eat newlines (bullets must stay on their own lines)
     .replace(/[^\S\n]{2,}/g, ' ')
     .replace(/ *\n */g, '\n')

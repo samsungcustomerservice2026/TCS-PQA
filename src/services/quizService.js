@@ -23,13 +23,10 @@ import {
   QUIZ_DIVISIONS,
 } from '../constants/quiz';
 import { scoraChallengeJoinUrl, scoraChallengeHostPath, scoraChallengeResultsPath } from '../constants/scoraChallengePaths';
-import { checkQuizAnswer, isScoredQuestionType } from '../lib/quizAnswerCheck';
-import { computeQuizPoints } from '../lib/quizScoring';
 import {
   normalizeQuizSettings,
   prepareSessionQuestions,
   buildRankMap,
-  getQuestionTimeLimit,
 } from '../lib/quizSessionHelpers';
 
 const templatesCol = () => collection(db, QUIZ_COLLECTIONS.templates);
@@ -299,7 +296,19 @@ export async function joinQuizSession(sessionId, nickname, { existingPlayerId = 
   return { playerId: playerRef.id, session: sess };
 }
 
+async function callHostApi(sessionId, action, extra = {}) {
+  const { authJson } = await import('../lib/auth/clientAuth');
+  return authJson('/api/quiz/host', { sessionId, action, ...extra });
+}
+
 export async function hostStartQuestion(sessionId, hostUsername) {
+  try {
+    await callHostApi(sessionId, 'next');
+    return;
+  } catch (err) {
+    if (err?.code !== 'admin_not_configured' && err?.status !== 503) throw err;
+  }
+  // Legacy client path only when Admin SDK is not configured (dev). Prefer server.
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Session not found');
   const nextIndex = (sess.currentQuestionIndex ?? -1) + 1;
@@ -323,7 +332,7 @@ export async function hostStartQuestion(sessionId, hostUsername) {
     sessionId,
     pin: sess.pin,
     division: sess.division,
-    details: { questionIndex: nextIndex },
+    details: { questionIndex: nextIndex, legacyClient: true },
   });
 }
 
@@ -363,6 +372,12 @@ export async function updateQuizSessionSettings(sessionId, settingsPatch, actor)
 }
 
 export async function hostRevealQuestion(sessionId, hostUsername) {
+  try {
+    await callHostApi(sessionId, 'reveal');
+    return;
+  } catch (err) {
+    if (err?.code !== 'admin_not_configured' && err?.status !== 503) throw err;
+  }
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Session not found');
   await updateDoc(sessionRef(sessionId), {
@@ -376,11 +391,17 @@ export async function hostRevealQuestion(sessionId, hostUsername) {
     sessionId,
     pin: sess.pin,
     division: sess.division,
-    details: { questionIndex: sess.currentQuestionIndex },
+    details: { questionIndex: sess.currentQuestionIndex, legacyClient: true },
   });
 }
 
 export async function hostEndQuiz(sessionId, hostUsername) {
+  try {
+    await callHostApi(sessionId, 'end');
+    return;
+  } catch (err) {
+    if (err?.code !== 'admin_not_configured' && err?.status !== 503) throw err;
+  }
   const sess = await getQuizSession(sessionId);
   if (!sess) throw new Error('Session not found');
   if (sess.status === QUIZ_SESSION_STATUS.FINISHED) return;
@@ -395,8 +416,16 @@ export async function hostEndQuiz(sessionId, hostUsername) {
     sessionId,
     pin: sess.pin,
     division: sess.division,
-    details: { playerCount: sess.playerCount },
+    details: { playerCount: sess.playerCount, legacyClient: true },
   });
+}
+
+export async function hostKickPlayer(sessionId, playerId, reason = '') {
+  return callHostApi(sessionId, 'kick', { playerId, reason });
+}
+
+export async function hostBanPlayer(sessionId, playerId, reason = '') {
+  return callHostApi(sessionId, 'ban', { playerId, reason });
 }
 
 export async function adminEndQuizSession(sessionId, actor = 'admin') {
@@ -430,63 +459,30 @@ export async function submitQuizAnswer({
   nickname,
   answer,
 }) {
-  const sess = await getQuizSession(sessionId);
-  if (!sess || sess.status !== QUIZ_SESSION_STATUS.QUESTION) {
-    throw new Error('Not accepting answers right now');
-  }
-
-  const qIndex = sess.currentQuestionIndex ?? 0;
-  const question = sess.questions?.[qIndex];
-  if (!question) throw new Error('Invalid question');
-
-  const existingRef = doc(db, QUIZ_COLLECTIONS.sessions, sessionId, 'answers', `${playerId}_q${qIndex}`);
-  const existingSnap = await getDoc(existingRef);
-  if (existingSnap.exists()) throw new Error('Already answered this question');
-
-  const startedAt = sess.questionStartedAt ? new Date(sess.questionStartedAt).getTime() : Date.now();
-  const responseTimeMs = Math.max(0, Date.now() - startedAt);
-  const correct = checkQuizAnswer(question, answer);
-  const timeLimitSec = getQuestionTimeLimit(sess, question);
-  const scored = isScoredQuestionType(question.type);
-  const points = scored && correct
-    ? computeQuizPoints(question.points || 1000, timeLimitSec, responseTimeMs)
-    : 0;
-
-  await setDoc(existingRef, {
-    playerId,
-    nickname: nickname || 'Player',
-    questionIndex: qIndex,
-    questionType: question.type,
-    answer: String(answer),
-    correct,
-    points,
-    responseTimeMs,
-    answeredAt: new Date().toISOString(),
-    division: sess.division,
+  // Server-authoritative scoring — never trust client-calculated points.
+  const res = await fetch('/api/quiz/submit-answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId,
+      playerId,
+      nickname,
+      answer,
+    }),
   });
-
-  if (points > 0) {
-    await updateDoc(doc(db, QUIZ_COLLECTIONS.sessions, sessionId, 'players', playerId), {
-      score: increment(points),
-      lastAnswerAt: new Date().toISOString(),
-    });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || 'Answer submit failed');
+    err.code = data?.code;
+    err.status = res.status;
+    throw err;
   }
-
-  const newAnswerCount = (sess.answerCount || 0) + 1;
-  const settings = normalizeQuizSettings(sess.settings);
-  const shouldReveal = settings.autoRevealWhenAllAnswered
-    && newAnswerCount >= (sess.playerCount || 0)
-    && (sess.playerCount || 0) > 0;
-
-  await updateDoc(sessionRef(sessionId), {
-    answerCount: increment(1),
-    ...(shouldReveal ? {
-      status: QUIZ_SESSION_STATUS.REVEAL,
-      revealStartedAt: new Date().toISOString(),
-    } : {}),
-  });
-
-  return { correct, points, revealed: shouldReveal };
+  return {
+    correct: !!data.correct,
+    points: Number(data.points) || 0,
+    revealed: !!data.revealed,
+    duplicate: !!data.duplicate,
+  };
 }
 
 export async function getQuizSessionAnswers(sessionId) {

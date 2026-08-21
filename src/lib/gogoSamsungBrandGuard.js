@@ -94,8 +94,8 @@ export function isAcceptableSamsungProduct(product, query = '') {
 
 export function getSamsungOnlyRefuseReply(lang = 'en') {
   return lang === 'ar'
-    ? 'يرد عارف على منتجات سامسونج فقط: الهواتف، والأجهزة اللوحية، والساعات، وسماعات الأذن، والغسالات، والمكانس، والتكييف، والتلفزيونات والإكسسوارات. إن أحببت، اسأل عن طراز جالاكسي محدد.'
-    : 'AREF only answers about Samsung products: mobiles, tablets, watches, Buds, washing machines, vacuums, air conditioning, TVs, and accessories. Ask about a specific Galaxy model if you want specs.';
+    ? 'يرد جوجو على منتجات سامسونج فقط: الهواتف، والأجهزة اللوحية، والساعات، وسماعات الأذن، والغسالات، والمكانس، والتكييف، والتلفزيونات والإكسسوارات. إن أحببت، اسأل عن طراز جالاكسي محدد.'
+    : 'GOGO only answers about Samsung products: mobiles, tablets, watches, Buds, washing machines, vacuums, air conditioning, TVs, and accessories. Ask about a specific Galaxy model if you want specs.';
 }
 
 export function getUnverifiedSamsungModelReply(lang = 'en', query = '') {

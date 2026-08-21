@@ -1,0 +1,135 @@
+
+/* Admin command center shell */
+.admin-portal-shell {
+  isolation: isolate;
+}
+.portal-logo-float {
+  animation: portalLogoFloat 4.5s ease-in-out infinite;
+}
+@keyframes portalLogoFloat {
+  0%, 100% { transform: translateY(0) rotateZ(0deg); }
+  50% { transform: translateY(-6px) rotateZ(1.5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-logo-float { animation: none; }
+}
+
+.admin-portal-panel {
+  min-width: 0;
+}
+
+.report-studio-egypt-tilt {
+  transform: rotateX(8deg) rotateY(-4deg);
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.report-studio-egypt-stage:hover .report-studio-egypt-tilt {
+  transform: rotateX(4deg) rotateY(-2deg) scale(1.02);
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-studio-egypt-tilt {
+    transform: none;
+  }
+}
+
+.report-studio-panel {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+.report-studio-grid,
+.attendance-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.06) 1px, transparent 0);
+  background-size: 18px 18px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+.report-studio-card-in,
+.attendance-card-in {
+  animation: reportStudioFadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.report-studio-wave-line,
+.attendance-wave-line {
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800;
+  animation: reportStudioDraw 1.4s ease forwards;
+}
+.report-studio-wave-delay,
+.attendance-wave-line-delay {
+  animation-delay: 0.25s;
+}
+.report-studio-wave-fill,
+.attendance-wave-fill {
+  opacity: 0;
+  animation: reportStudioFade 1s ease 0.35s forwards;
+}
+.report-studio-donut,
+.attendance-donut-seg {
+  animation: reportStudioFade 0.8s ease both;
+}
+.report-studio-radial,
+.attendance-radial {
+  animation: reportStudioFadeUp 0.9s ease both;
+}
+.report-studio-bar,
+.attendance-bar {
+  transform-origin: bottom;
+  animation: reportStudioBarGrow 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.report-studio-hbar {
+  transform-origin: left center;
+  animation: reportStudioHBar 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes reportStudioDraw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes reportStudioFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes reportStudioFadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes reportStudioBarGrow {
+  from { transform: scaleY(0); opacity: 0.4; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+@keyframes reportStudioHBar {
+  from { transform: scaleX(0); opacity: 0.5; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+.report-studio-egypt-land {
+  animation: reportStudioFade 0.9s ease both;
+}
+.report-studio-egypt-pin {
+  animation: reportStudioFadeUp 0.7s ease both;
+}
+.report-studio-egypt-ring {
+  animation: reportStudioEgyptPulse 2.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes reportStudioEgyptPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.85; }
+}
+.report-studio-radar-fill {
+  animation: reportStudioFade 0.9s ease 0.2s both;
+}
+
+/* legacy attendance aliases */
+.attendance-dash .attendance-panel { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03); }
+.attendance-donut-delay-1 { animation-delay: 0.12s; }
+.attendance-donut-delay-2 { animation-delay: 0.24s; }
+.attendance-radial-delay-1 { animation-delay: 0.15s; }
+.attendance-radial-delay-2 { animation-delay: 0.3s; }
+.attendance-bar-delay-1 { animation-delay: 0.08s; }
+.attendance-bar-delay-2 { animation-delay: 0.16s; }
+@keyframes attendanceDraw { to { stroke-dashoffset: 0; } }
+@keyframes attendanceFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes attendanceFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes attendanceBarGrow { from { transform: scaleY(0); opacity: 0.4; } to { transform: scaleY(1); opacity: 1; } }

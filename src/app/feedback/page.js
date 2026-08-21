@@ -1,5 +1,8 @@
-import { redirect } from 'next/navigation';
+'use client';
+import dynamic from 'next/dynamic';
 
-export default function FeedbackRedirectPage() {
-  redirect('/?feedback=1');
+const ScoraApp = dynamic(() => import('../ScoraApp'), { ssr: false });
+
+export default function FeedbackRoutePage() {
+  return <ScoraApp initialView="FEEDBACK" />;
 }

@@ -53,6 +53,11 @@ import {
 } from '../../services/gogoService';
 import { findGoGoProduct, getGsmArenaConfirmReply, isGsmArenaSourceQuestion } from '../../lib/gogoSamsungProducts';
 import { assistantDisplayName } from '../../lib/gogoIdentity';
+import {
+  listAnnouncements,
+  retrieveConsultantAnswer,
+} from '../../services/consultantService';
+import { formatGoGoAnnouncement } from '../../lib/consultants/retrieval';
 
 const SPRITE_BY_POSE = {
   idle: '/gogo/idle.png?v=gogo4',
@@ -82,6 +87,8 @@ const ACTION_TARGET = {
   goto_search: 'search',
   goto_feedback: 'feedback',
   goto_survey: 'survey',
+  goto_employee_dashboard: 'knowledge',
+  goto_knowledge: 'knowledge',
 };
 
 const GUIDE_LINES = {
@@ -97,6 +104,14 @@ const GUIDE_LINES = {
     en: { think: 'Opening Search…', point: 'Point here — Search tab.' },
     ar: { think: 'أفتح البحث…', point: 'هنا — تبويب البحث.' },
   },
+  goto_employee_dashboard: {
+    en: { think: 'Opening your knowledge dashboard…', point: 'Open My Knowledge to complete the course.' },
+    ar: { think: 'أفتح لوحة المعرفة…', point: 'افتح لوحة المعرفة لإكمال الدورة.' },
+  },
+  goto_knowledge: {
+    en: { think: 'Opening your knowledge dashboard…', point: 'Open My Knowledge to complete the course.' },
+    ar: { think: 'أفتح لوحة المعرفة…', point: 'افتح لوحة المعرفة لإكمال الدورة.' },
+  },
 };
 
 function stamp(role, text, extra = {}) {
@@ -108,38 +123,21 @@ function stamp(role, text, extra = {}) {
   return { role, text: t, at: new Date().toISOString(), ...extra, ...(spoken != null ? { spoken } : {}) };
 }
 
-async function askGoGoGemini({ message, lang, visitorName, history, visitorId, learningHint = '' }) {
-  const res = await fetch('/api/gogo/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      lang,
-      visitorName,
-      visitorId,
-      learningHint: learningHint || undefined,
-      history: history
-        .filter((m) => m.role === 'user' || m.role === 'gogo')
-        .slice(-10)
-        .map((m) => ({
-          role: m.role === 'user' ? 'user' : 'gogo',
-          text: m.text,
-        })),
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data?.error || 'Gemini unavailable');
-    err.fallback = !!data?.fallback || res.status === 503;
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-  return data;
+async function askGoGoDisabled(lang) {
+  return {
+    fallback: true,
+    disabled: true,
+    code: 'ai_disabled',
+    reply:
+      lang === 'ar'
+        ? 'المساعد الذكي غير متاح مؤقتاً. استخدم الأزرار الإرشادية للمتابعة.'
+        : 'AI Assistant temporarily unavailable. Please use the guided menu chips to continue.',
+  };
 }
 
 /**
- * Click-to-chat guided + Gemini smart chat with voice I/O.
+ * Click-to-chat guided assistant + voice I/O.
+ * Smart Gemini chat is disabled (security / cost hardening).
  */
 export default function GoGoAssistant({ onNavigate, currentView = '', hidden = false }) {
   const [lang, setLang] = useState('en');
@@ -168,6 +166,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const micFinalSentRef = useRef(false);
   const guideTimersRef = useRef([]);
   const pendingGuideRef = useRef(null);
+  const pendingConsultantIdRef = useRef(null);
   const saveTimerRef = useRef(null);
   const recognizerRef = useRef(null);
   const voiceAskRef = useRef(false);
@@ -356,8 +355,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     const t1 = setTimeout(() => setEntered(true), 80);
     const t2 = setTimeout(() => setPose('welcome'), 750);
     const t3 = setTimeout(() => {
-      setPose('idle');
-      setShowBubble(true);
+      setPose('wave');
+      setShowBubble(false);
     }, 2400);
     return () => {
       clearTimeout(t1);
@@ -365,6 +364,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       clearTimeout(t3);
     };
   }, [hidden, ready]);
+
+  useEffect(() => {
+    if (hidden || open) return undefined;
+    setPose('wave');
+    const pulse = window.setInterval(() => {
+      setPose('wave');
+    }, 3200);
+    return () => clearInterval(pulse);
+  }, [hidden, open]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -489,6 +497,23 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     if (!action || !onNavigate) return;
     clearGuideTimers();
     const L = langRef.current === 'ar' ? 'ar' : 'en';
+
+    if (typeof action === 'string' && action.startsWith('goto_consultant:')) {
+      const think =
+        L === 'ar' ? 'أفتح الاستشارة الفنية…' : 'Opening the technical consultant…';
+      setPose('think');
+      setMessages((prev) => {
+        const next = [...prev, stamp('gogo', think, { expression: 'think' })];
+        persistChat(next, L);
+        return next;
+      });
+      schedule(() => {
+        onNavigate(action);
+        setPose('success');
+      }, 500);
+      return;
+    }
+
     const lines = GUIDE_LINES[action]?.[L] || {
       think: L === 'ar' ? 'بلفكّر…' : 'Thinking…',
       point: L === 'ar' ? 'أشر هنا' : 'Point here',
@@ -673,6 +698,50 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     try {
       setBusy(true);
       setPose('think');
+      if (
+        /consultant|technical\s*tip|knowledge|course|استشار|نصيحة|معرفة|دورة|tip\b|bulletin/i.test(
+          text,
+        )
+      ) {
+        const hit = await retrieveConsultantAnswer(text, lang);
+        if (hit?.found && hit.reply) {
+          pendingConsultantIdRef.current = hit.consultant?.id || null;
+          const pair = prepareGoGoReplyPair(hit.reply, lang);
+          setMessages((prev) => {
+            const next = [
+              ...prev,
+              stamp('user', text),
+              stamp('gogo', pair.display, {
+                source: 'consultant_library',
+                mode: 'traditional',
+                learnable: true,
+                question: text,
+                expression: 'explaining',
+                spoken: pair.spoken,
+              }),
+            ];
+            persistChat(next, lang, nameRef.current);
+            return next;
+          });
+          setChips(['open_consultant', 'goto_knowledge', 'main_menu']);
+          setPose('explaining');
+          void speakReply(pair.display, {
+            force: fromVoice,
+            initialState: 'explaining',
+            spoken: pair.spoken,
+          });
+          return;
+        }
+      }
+    } catch {
+      /* fall through */
+    } finally {
+      setBusy(false);
+    }
+
+    try {
+      setBusy(true);
+      setPose('think');
       const productHit = await lookupGoGoProductAnswer(text, lang, {
         history: messagesRef.current,
       });
@@ -713,7 +782,6 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
     setBusy(true);
     setPose('think');
-    const historySnapshot = messagesRef.current;
     setMessages((prev) => {
       const next = [...prev, stamp('user', text)];
       persistChat(next, lang, nameRef.current);
@@ -748,59 +816,36 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         return;
       }
 
-      const data = await askGoGoGemini({
-        message: text,
-        lang,
-        visitorName: nameRef.current,
-        history: historySnapshot,
-        visitorId,
-        learningHint: learnedTurn.learningHint || buildLearningPromptHints(learnedTurn.learnedMatch),
-      });
-      const reply = String(data.reply || '').trim();
-      const spoken = String(data.spoken || prepareGoGoReplyPair(reply, lang).spoken);
-      const animation = data.animation || null;
-      const segments = Array.isArray(animation?.segments) ? animation.segments : null;
-      const expression = animation?.initialState || segments?.[0]?.state || null;
+      // Smart AI (Gemini) disabled — guided / learned / safe fallback only.
+      const disabledAi = await askGoGoDisabled(lang);
+      const fallback = resolveGoGoSafeFallback(text, lang, nameRef.current);
+      const reply =
+        fallback?.reply && fallback.source !== 'empty'
+          ? fallback.reply
+          : disabledAi.reply;
+      const spoken = fallback?.spoken;
       setMessages((prev) => {
         const next = [
           ...prev,
           stamp('gogo', reply, {
-            denied: !!data.denied,
-            source: data.source,
-            mode: data.mode || (data.source === 'agentic' ? 'agentic' : 'generative'),
-            learnable: !!data.learnable && !data.denied,
-            question: text,
-            expression,
+            source: fallback?.source || 'ai_disabled',
+            mode: 'guided_only',
             spoken,
-            toolsUsed: data.toolsUsed || [],
+            learnable: !!fallback?.learnable,
+            denied: !!fallback?.denied,
+            question: text,
           }),
         ];
+        if (fallback?.extraReply) {
+          next.push(stamp('gogo', fallback.extraReply, { source: 'menu_fallback', mode: 'guided_only' }));
+        }
         persistChat(next, lang, nameRef.current);
         return next;
       });
-      setChips(Array.isArray(data.chips) && data.chips.length ? data.chips : GOGO_SMART_CHIPS);
-      if (animation?.initialState) {
-        setPose(poseFromGoGoState(animation.initialState));
-      } else {
-        setPose('idle');
-      }
-      if (fromVoice) voiceAskRef.current = true;
-      void speakReply(spoken || reply, {
-        force: fromVoice,
-        segments,
-        initialState: animation?.initialState || null,
-        spoken,
-      });
-      applyClientActions(data.clientActions);
-      const product = findGoGoProduct(text);
-      if (product && reply) {
-        void upsertGoGoProductFact({
-          ...product,
-          lastQuestion: text,
-          lastAnswer: reply,
-          lastLang: lang,
-        });
-      }
+      setChips(fallback?.chips || GOGO_SMART_CHIPS);
+      void speakReply(reply, { force: fromVoice, spoken });
+      if (fallback?.action) runGuidedAction(fallback.action);
+      setPose('idle');
     } catch {
       const fallback = resolveGoGoSafeFallback(text, lang, nameRef.current);
       if (fallback.extraReply) {
@@ -911,6 +956,32 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         const menu = resolveFlowReply('main_menu', langRef.current, name);
         setChips(menu.chips);
       }
+      void (async () => {
+        try {
+          const anns = await listAnnouncements({ activeOnly: true, max: 5 });
+          const latest = anns?.[0];
+          if (!latest) return;
+          const L = langRef.current === 'ar' ? 'ar' : 'en';
+          const reply = formatGoGoAnnouncement(latest, L);
+          pendingConsultantIdRef.current = latest.consultantId || null;
+          const pair = prepareGoGoReplyPair(reply, L);
+          setMessages((prev) => {
+            const next = [
+              ...prev,
+              stamp('gogo', pair.display, {
+                source: 'consultant_announce',
+                expression: 'wave',
+                spoken: pair.spoken,
+              }),
+            ];
+            persistChat(next, L, nameRef.current);
+            return next;
+          });
+          setChips(['open_consultant', 'goto_knowledge', 'main_menu']);
+        } catch {
+          /* optional */
+        }
+      })();
       return;
     }
 
@@ -1004,6 +1075,18 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
     if (id === 'main_menu') {
       appendFlow('main_menu', labels.main_menu);
+      return;
+    }
+
+    if (id === 'open_consultant') {
+      const cid = pendingConsultantIdRef.current;
+      if (cid) runGuidedAction(`goto_consultant:${cid}`);
+      else runGuidedAction('goto_employee_dashboard');
+      return;
+    }
+
+    if (id === 'goto_knowledge' || id === 'new_consultant') {
+      runGuidedAction('goto_employee_dashboard');
       return;
     }
 
@@ -1146,8 +1229,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
             ? 'لحظة…'
             : 'One moment…'
           : rtl
-            ? 'اكتب أو تحدّث إلى عارف…'
-            : 'Type or talk to AREF…';
+            ? `اكتب أو تحدّث إلى ${assistantDisplayName('ar')}…`
+            : `Type or talk to ${assistantDisplayName('en')}…`;
 
   return (
     <>
@@ -1178,18 +1261,16 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       )}
 
       <div
-        className={`fixed z-[45] flex flex-col transition-[left,bottom,width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`fixed z-[45] flex flex-col transition-[left,bottom,width,top,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           open
-            ? 'inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] sm:inset-x-auto sm:left-5 sm:bottom-24 sm:w-auto sm:max-w-[min(100vw-1.5rem,22rem)] items-stretch sm:items-start gap-2'
-            : `bottom-24 max-w-[min(100vw-1.5rem,22rem)] items-start gap-2 ${
-                dock === 'guide' ? 'left-[min(42vw,12rem)] sm:left-[min(48vw,18rem)]' : 'left-3 sm:left-5'
-              }`
+            ? 'inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[max(0.5rem,env(safe-area-inset-bottom))] sm:inset-x-auto sm:left-5 sm:right-auto sm:w-[min(100vw-1.5rem,22rem)] sm:max-h-[calc(100dvh-1rem)] items-stretch justify-end gap-2'
+            : 'bottom-[5.5rem] sm:bottom-24 left-0 items-start gap-0 gogo-dock-peek'
         }`}
         dir={rtl ? 'rtl' : 'ltr'}
       >
         {open && (
-          <div className="w-full sm:w-[min(100vw-1.5rem,21rem)] max-h-[min(68dvh,32rem)] sm:max-h-[min(70vh,36rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 bg-gradient-to-r from-blue-600/25 to-transparent shrink-0">
+          <div className="w-full min-h-0 max-h-[min(calc(100%-4.75rem),32rem)] sm:max-h-[min(calc(100%-7.5rem),34rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 bg-gradient-to-r from-blue-600/25 to-transparent shrink-0 sticky top-0 z-10">
               <div className="min-w-0">
                 <p className={`text-[11px] font-black text-white truncate ${rtl ? 'tracking-normal' : 'uppercase tracking-widest'}`}>{assistantDisplayName(lang)}</p>
                 <p className="text-[9px] text-zinc-500 font-bold truncate">
@@ -1245,8 +1326,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                     playGesture('bye', 1100);
                     schedule(() => {
                       setOpen(false);
-                      setShowBubble(true);
-                      setPose('idle');
+                      setShowBubble(false);
+                      setPose('wave');
                     }, 850);
                   }}
                   className="p-2 sm:p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/5"
@@ -1263,8 +1344,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                     playGesture('bye', 1100);
                     schedule(() => {
                       setOpen(false);
-                      setShowBubble(true);
-                      setPose('idle');
+                      setShowBubble(false);
+                      setPose('wave');
                     }, 850);
                   }}
                   className="p-2 sm:p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/5"
@@ -1399,17 +1480,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           </div>
         )}
 
-        <div className={`relative flex items-end gap-2 ${open ? 'justify-start sm:justify-start' : ''}`}>
-          {!open && showBubble && entered && (
-            <button
-              type="button"
-              onClick={startChatSession}
-              className="mb-14 sm:mb-20 max-w-[10.5rem] rounded-2xl border border-white/10 bg-zinc-950/95 px-3 py-2.5 text-[11px] font-bold text-zinc-100 shadow-lg whitespace-pre-line text-start animate-in fade-in zoom-in-95 duration-500"
-            >
-              {GOGO_BUBBLE[lang] || GOGO_BUBBLE.en}
-            </button>
-          )}
-
+        <div className={`relative flex items-end gap-1 shrink-0 ${open ? 'justify-start' : 'justify-start'}`}>
           <button
             type="button"
             onClick={() => {
@@ -1419,16 +1490,17 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 playGesture('bye', 1200);
                 schedule(() => {
                   setOpen(false);
-                  setShowBubble(true);
-                  setPose('idle');
+                  setShowBubble(false);
+                  setPose('wave');
                 }, 900);
               } else {
                 startChatSession();
               }
             }}
-            className="relative group focus:outline-none"
-              aria-label="Open AREF chat"
-            >
+            className="relative group focus:outline-none touch-manipulation"
+            aria-label={open ? `Close ${assistantDisplayName('en')}` : `Summon ${assistantDisplayName('en')}`}
+            title={open ? 'Close' : 'Talk to GOGO'}
+          >
               <span
                 className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
                   listening || speaking
@@ -1455,15 +1527,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                 )}
                 <img
                   src={spriteSrc}
-                  alt="AREF"
+                  alt={assistantDisplayName('en')}
                   className={`relative w-auto drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass} ${
-                    open ? 'h-16 sm:h-28' : 'h-28 sm:h-40'
+                    open ? 'h-16 sm:h-28' : 'h-24 sm:h-32'
                   }`}
                   draggable={false}
                 />
               </span>
             {!open && (
-              <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 border border-blue-300/40 text-white shadow-lg">
+              <span className="absolute top-2 right-0 translate-x-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 border-2 border-blue-200/50 text-white shadow-lg gogo-summon-sign">
                 <MessageCircle className="w-3.5 h-3.5" />
               </span>
             )}

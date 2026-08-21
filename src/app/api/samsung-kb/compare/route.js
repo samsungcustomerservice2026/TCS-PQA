@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { compareSamsungProducts } from '../../../../lib/samsungKb/compare';
 import { findByExactModelNumber, findByProductId } from '../../../../lib/samsungKb/search';
+import { assertSamsungKbApiAllowed } from '../../../../lib/samsungKb/apiGate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,8 @@ export const dynamic = 'force-dynamic';
  * }
  */
 export async function POST(request) {
+  const blocked = assertSamsungKbApiAllowed();
+  if (blocked) return blocked;
   let body = {};
   try {
     body = await request.json();

@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Unit tests (security-critical)
+        run: npm run test:unit
+      - name: PQA map regression
+        run: npm run test:pqa-map
+      - name: Production build
+        run: npm run build
+        env:
+          # Build must not require secrets; Admin SDK routes degrade to 503
+          NEXT_TELEMETRY_DISABLED: '1'
+      # Lint is informational — legacy page debt should not block security merges
+      - name: Lint (non-blocking)
+        run: npm run lint || true

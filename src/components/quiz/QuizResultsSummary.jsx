@@ -2,6 +2,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { BarChart3, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  StudioStatGrid,
+  StudioPanel,
+  StudioDonut,
+} from '../admin/reportStudio/ReportStudio';
 import QuizPodium, { PODIUM_REVEAL_PHASE } from './QuizPodium';
 import { analyzeQuizQuestions } from '../../lib/quizAnswerAnalysis';
 import { getQuestionPrompt } from '../../lib/quizSessionHelpers';
@@ -93,7 +98,49 @@ export default function QuizResultsSummary({
   const showAnalysis = !animatePodium || podiumPhase >= PODIUM_REVEAL_PHASE.full;
 
   return (
-    <div className="space-y-10 w-full max-w-3xl mx-auto">
+    <div className="space-y-10 w-full max-w-3xl mx-auto report-studio">
+      <StudioStatGrid
+        cols="grid-cols-2 md:grid-cols-4"
+        items={[
+          { label: lang === 'ar' ? 'اللاعبون' : 'Players', value: players.length },
+          {
+            label: lang === 'ar' ? 'أفضل درجة' : 'Top score',
+            value: players[0]?.score || 0,
+          },
+          {
+            label: lang === 'ar' ? 'صحة قصوى' : 'Best Q %',
+            value: mostCorrect?.correctPct || 0,
+            suffix: '%',
+          },
+          {
+            label: lang === 'ar' ? 'أصعب سؤال' : 'Hardest Q %',
+            value: mostWrong?.wrongPct || 0,
+            suffix: '%',
+          },
+        ]}
+      />
+
+      {(mostCorrect || mostWrong) && (
+        <StudioPanel title={labels.analysis}>
+          <StudioDonut
+            centerValue={players.length}
+            centerLabel={lang === 'ar' ? 'لاعبون' : 'Players'}
+            segments={[
+              {
+                label: labels.mostCorrect,
+                value: mostCorrect?.correct || 0,
+                color: '#d4d4d8',
+              },
+              {
+                label: labels.mostWrong,
+                value: mostWrong?.wrong || 0,
+                color: '#71717a',
+              },
+            ]}
+          />
+        </StudioPanel>
+      )}
+
       <QuizPodium
         players={players}
         lang={lang}

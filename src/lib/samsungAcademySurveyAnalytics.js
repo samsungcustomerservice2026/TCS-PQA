@@ -1,6 +1,74 @@
 /** Known academy locations / products (survey form options). */
-export const SAMSUNG_ACADEMY_LOCATIONS = ['الإسكندرية', 'أسيوط', 'طنطا'];
+export const SAMSUNG_ACADEMY_LOCATIONS = ['القاهرة', 'الإسكندرية', 'أسيوط', 'طنطا'];
 export const ACADEMY_PRODUCTS = ['موبايل', 'تلفزيون', 'أجهزة منزلية'];
+
+/**
+ * Egypt geo pins for Samsung Academy survey reports.
+ * Pins are projected from lat/lng onto the full Egypt map frame.
+ */
+export const SAMSUNG_ACADEMY_GEO = Object.freeze([
+  {
+    id: 'cairo',
+    ar: 'القاهرة',
+    en: 'Cairo',
+    regionEn: 'Greater Cairo · Egypt',
+    lat: 30.0444,
+    lng: 31.2357,
+  },
+  {
+    id: 'alexandria',
+    ar: 'الإسكندرية',
+    en: 'Alexandria',
+    regionEn: 'North Coast · Egypt',
+    lat: 31.2001,
+    lng: 29.9187,
+  },
+  {
+    id: 'tanta',
+    ar: 'طنطا',
+    en: 'Tanta',
+    regionEn: 'Nile Delta · Egypt',
+    lat: 30.7865,
+    lng: 31.0004,
+  },
+  {
+    id: 'assiut',
+    ar: 'أسيوط',
+    en: 'Assiut',
+    regionEn: 'Upper Egypt',
+    lat: 27.1809,
+    lng: 31.1837,
+  },
+]);
+
+const GEO_ALIASES = {
+  القاهرة: 'cairo',
+  القاهره: 'cairo',
+  cairo: 'cairo',
+  'greater cairo': 'cairo',
+  الإسكندرية: 'alexandria',
+  الاسكندرية: 'alexandria',
+  alexandria: 'alexandria',
+  alex: 'alexandria',
+  أسيوط: 'assiut',
+  اسيوط: 'assiut',
+  assiut: 'assiut',
+  asyut: 'assiut',
+  طنطا: 'tanta',
+  tanta: 'tanta',
+};
+
+export function resolveAcademyGeo(locationName) {
+  const raw = String(locationName || '').trim();
+  if (!raw) return null;
+  const key = GEO_ALIASES[raw] || GEO_ALIASES[raw.toLowerCase()];
+  if (key) return SAMSUNG_ACADEMY_GEO.find((g) => g.id === key) || null;
+  return (
+    SAMSUNG_ACADEMY_GEO.find(
+      (g) => g.ar === raw || g.en.toLowerCase() === raw.toLowerCase() || g.id === raw.toLowerCase(),
+    ) || null
+  );
+}
 
 /** @typedef {{ dateFrom?: string, dateTo?: string, location?: string, product?: string }} SurveyFilters */
 
@@ -90,8 +158,18 @@ export function getSurveyFilterOptions(surveys) {
   }
   const uniqueDates = [...new Set(dates)].sort((a, b) => b.localeCompare(a));
 
+  // Prefer canonical order: Cairo first, then known list, then extras
+  const ordered = [];
+  for (const loc of SAMSUNG_ACADEMY_LOCATIONS) {
+    if (locSet.has(loc)) {
+      ordered.push(loc);
+      locSet.delete(loc);
+    }
+  }
+  ordered.push(...[...locSet].sort((a, b) => a.localeCompare(b, 'ar')));
+
   return {
-    locations: [...locSet],
+    locations: ordered,
     products: [...prodSet],
     dates: uniqueDates,
   };
@@ -136,16 +214,63 @@ export function describeSurveyFilters(filters = {}) {
   const dateTo = String(filters.dateTo || '').trim();
   if (dateFrom || dateTo) {
     parts.push(
-      `Date: ${dateFrom ? formatSurveyDateLabel(dateFrom) : '…'} → ${dateTo ? formatSurveyDateLabel(dateTo) : '…'}`
+      `Date: ${dateFrom ? formatSurveyDateLabel(dateFrom) : '…'} → ${dateTo ? formatSurveyDateLabel(dateTo) : '…'}`,
     );
   }
   if (filters.location && filters.location !== 'ALL') {
-    parts.push(`Location: ${filters.location}`);
+    const geo = resolveAcademyGeo(filters.location);
+    parts.push(`Location: ${geo ? `${geo.en} (${filters.location})` : filters.location}`);
   }
   if (filters.product && filters.product !== 'ALL') {
     parts.push(`Product: ${filters.product}`);
   }
   return parts.length ? parts.join(' | ') : 'All responses (no filters)';
+}
+
+/** Build geo pins + counts for Egypt map (always includes known cities). */
+export function buildAcademyGeoBreakdown(surveys) {
+  const rows = Array.isArray(surveys) ? surveys : [];
+  const counts = new Map();
+  for (const r of rows) {
+    const geo = resolveAcademyGeo(r.academyLocation);
+    const id = geo?.id || 'other';
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+
+  const pins = SAMSUNG_ACADEMY_GEO.map((g) => {
+    const cityRows = rows.filter((r) => resolveAcademyGeo(r.academyLocation)?.id === g.id);
+    const avg =
+      cityRows.length > 0
+        ? (() => {
+            const scores = cityRows
+              .map((r) => {
+                const vals = SURVEY_RATING_FIELDS.map((f) => parseRating(r[f.key])).filter((n) => n != null);
+                if (!vals.length) return null;
+                return vals.reduce((a, b) => a + b, 0) / vals.length;
+              })
+              .filter((n) => n != null);
+            if (!scores.length) return null;
+            return Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2));
+          })()
+        : null;
+    return {
+      ...g,
+      count: counts.get(g.id) || 0,
+      average: avg,
+    };
+  });
+
+  const other = counts.get('other') || 0;
+  const totalMapped = pins.reduce((s, p) => s + p.count, 0);
+
+  return {
+    country: 'Egypt',
+    countryCode: 'EG',
+    pins,
+    other,
+    totalMapped,
+    total: rows.length,
+  };
 }
 
 export function buildSamsungAcademySurveyAnalytics(surveys) {
@@ -183,12 +308,19 @@ export function buildSamsungAcademySurveyAnalytics(surveys) {
     return bands.every((b) => b === 'Satisfied');
   }).length;
 
+  const geo = buildAcademyGeoBreakdown(rows);
+
   return {
     total,
     overallAverage,
     satisfiedRate: total > 0 ? Number(((satisfiedCount / total) * 100).toFixed(1)) : 0,
     questionStats,
     byLocation: countBy(rows, (r) => String(r.academyLocation || '').trim() || 'Unknown'),
+    byLocationEn: geo.pins
+      .map((p) => ({ name: p.en, count: p.count, ar: p.ar, regionEn: p.regionEn }))
+      .filter((p) => p.count > 0)
+      .sort((a, b) => b.count - a.count),
+    geo,
     byProduct: countBy(rows, (r) => String(r.product || '').trim() || 'Unknown'),
     byCompany: countBy(rows, (r) => String(r.company || '').trim() || 'Unknown').slice(0, 12),
     byDay: submissionsByDay(rows),

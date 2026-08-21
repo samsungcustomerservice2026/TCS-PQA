@@ -41,6 +41,9 @@ export const GOGO_CHIP_LABELS = {
     nice_to_meet: 'Nice to meet you',
     who_built: 'Who built SCORA?',
     cs_org: 'CS Head Office structure',
+    open_consultant: 'Open consultant',
+    goto_knowledge: 'My Knowledge',
+    new_consultant: 'New technical tip',
   },
   ar: {
     lang_toggle: 'English',
@@ -73,6 +76,9 @@ export const GOGO_CHIP_LABELS = {
     what_can_you_do: 'ماذا تستطيع أن تفعل؟',
     nice_to_meet: 'تشرفنا',
     who_built: 'من بنى سكورا؟',
+    open_consultant: 'افتح الاستشارة',
+    goto_knowledge: 'لوحة المعرفة',
+    new_consultant: 'نصيحة فنية جديدة',
   },
 };
 
@@ -82,8 +88,8 @@ const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
 export const GOGO_FLOW = {
   ask_name: {
     replies: {
-      en: "Hi! I am AREF, your AI assistant for SCORA.\n\nWhat's your name?",
-      ar: 'أهلاً وسهلاً! أنا اسمي عارف، مساعدك الذكي في سكورا.\n\nاسمك إيه؟',
+      en: "Hi! I am GOGO, your AI assistant for SCORA.\n\nWhat's your name?",
+      ar: 'أهلاً وسهلاً! أنا اسمي جوجو، مساعدك الذكي في سكورا.\n\nاسمك إيه؟',
     },
     chips: [],
   },
@@ -437,8 +443,8 @@ export const GOGO_FLOW = {
   },
   who_are_you: {
     replies: {
-      en: "I am AREF, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
-      ar: 'أنا اسمي عارف، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
+      en: "I am GOGO, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
+      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -458,8 +464,8 @@ export const GOGO_FLOW = {
   },
   nice_to_meet: {
     replies: {
-      en: "Nice to meet you too! I am AREF — glad you're here. What should we look at first?",
-      ar: 'وأنا كمان فرحت بمعرفتك! أنا عارف — مبسوط بوجودك. نبدأ بإيه؟',
+      en: "Nice to meet you too! I am GOGO — glad you're here. What should we look at first?",
+      ar: 'وأنا كمان فرحت بمعرفتك! أنا جوجو — مبسوط بوجودك. نبدأ بإيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -514,8 +520,8 @@ export const GOGO_FLOW = {
 };
 
 export const GOGO_BUBBLE = {
-  en: "Hi! I'm AREF 👋\nTap me to chat",
-  ar: 'أهلاً! أنا عارف 👋\nاضغط عليّ لنتحدث',
+  en: "Hi! I'm GOGO 👋\nTap me to chat",
+  ar: 'أهلاً! أنا جوجو 👋\nاضغط عليّ لنتحدث',
 };
 
 export function getFlowNode(id) {
@@ -583,7 +589,7 @@ export function saveGoGoVisitorName(name) {
 export function matchFreeTextToFlow(text, lang = 'en') {
   const raw = String(text || '').trim();
   const lower = raw.toLowerCase();
-  if (/who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|\bgogo\b|\baref\b|\b3aref\b|عارف/i.test(raw)) {
+  if (/who\s*are\s*you|what\s*are\s*you|what'?s\s*your\s*name|مين\s*انت|من\s*أنت|من\s*انت|اسمك\s*ايه|\bgogo\b|\baref\b|\b3aref\b|عارف|جوجو/i.test(raw)) {
     return 'who_are_you';
   }
   if (/how\s*are\s*you|how'?s\s*it\s*going|عامل\s*ايه|ازيك|إزيك|أخبارك|اخبارك/i.test(raw)) {

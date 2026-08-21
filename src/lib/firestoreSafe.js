@@ -45,13 +45,22 @@ export async function withFirestoreRetry(fn, { retries = 1 } = {}) {
   throw lastErr;
 }
 
-/** Soft read helper — returns null instead of throwing on offline/unreachable. */
+/** Soft read helper — returns fallback on offline OR permission-denied (rules). */
 export async function softFirestore(fn, fallback = null) {
   if (!isBrowserOnline() || isFirestorePoisoned()) return fallback;
   try {
     return await withFirestoreRetry(fn, { retries: 1 });
   } catch (err) {
     if (isFirestoreOfflineError(err)) return fallback;
+    const code = String(err?.code || '');
+    const msg = String(err?.message || '');
+    if (
+      code === 'permission-denied' ||
+      /missing or insufficient permissions/i.test(msg)
+    ) {
+      console.warn('Firestore permission denied (soft):', msg);
+      return fallback;
+    }
     throw err;
   }
 }

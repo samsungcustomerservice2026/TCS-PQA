@@ -64,11 +64,11 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-dvh min-w-0 overflow-x-clip`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-dvh min-w-0 overflow-x-clip relative bg-black`}
         suppressHydrationWarning
       >
         <FirestoreClientGuard />
-        {children}
+        <div className="relative z-[1] min-h-dvh min-w-0">{children}</div>
       </body>
     </html>
   );

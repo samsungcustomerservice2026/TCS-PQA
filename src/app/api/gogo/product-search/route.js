@@ -178,16 +178,31 @@ function parseGsmArenaProductPage(html, url, query = '') {
 }
 
 async function fetchText(url) {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': UA,
-      Accept: 'text/html,application/xhtml+xml',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-    cache: 'no-store',
+  const { assertSafePublicHttpsUrl } = await import('../../../../lib/security/safeFetch');
+  const check = assertSafePublicHttpsUrl(url, {
+    allowHosts: ['www.gsmarena.com', 'gsmarena.com'],
   });
-  if (!res.ok) throw new Error(`Fetch failed ${res.status}`);
-  return res.text();
+  if (!check.ok) throw new Error(check.error);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(check.url.toString(), {
+      headers: {
+        'User-Agent': UA,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      cache: 'no-store',
+      redirect: 'error',
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Fetch failed ${res.status}`);
+    const text = await res.text();
+    if (text.length > 2_000_000) throw new Error('Response too large');
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function resolveKnownUrl(query) {

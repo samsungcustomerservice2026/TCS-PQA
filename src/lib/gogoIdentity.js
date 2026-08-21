@@ -1,14 +1,14 @@
 /**
  * Public assistant identity.
- * Display: AREF (EN) / عارف (AR)
- * Speech: always Arabic عارف so English TTS keeps the Egyptian pronunciation.
+ * Display: GOGO (EN) / جوجو (AR)
+ * Speech: GOGO in English, جوجو in Arabic.
  */
-export const ASSISTANT_NAME_EN = 'AREF';
-export const ASSISTANT_NAME_AR = 'عارف';
-/** Spoken form in every language (Egyptian Arabic pronunciation). */
-export const ASSISTANT_NAME_SPOKEN = 'عارف';
+export const ASSISTANT_NAME_EN = 'GOGO';
+export const ASSISTANT_NAME_AR = 'جوجو';
+/** Spoken form for Arabic TTS. */
+export const ASSISTANT_NAME_SPOKEN = 'جوجو';
 /** Browser-English fallback when the engine cannot read Arabic script. */
-export const ASSISTANT_NAME_SPOKEN_EN_FALLBACK = 'Aa-ref';
+export const ASSISTANT_NAME_SPOKEN_EN_FALLBACK = 'GOGO';
 
 export function assistantDisplayName(lang = 'en') {
   return lang === 'ar' ? ASSISTANT_NAME_AR : ASSISTANT_NAME_EN;
@@ -23,12 +23,16 @@ export function rewriteAssistantNameForDisplay(text, lang = 'en') {
   return String(text || '').replace(assistantNamePattern(), name);
 }
 
-export function rewriteAssistantNameForSpeech(text) {
-  return String(text || '').replace(assistantNamePattern(), ASSISTANT_NAME_SPOKEN);
+export function rewriteAssistantNameForSpeech(text, lang = 'en') {
+  const name = lang === 'ar' ? ASSISTANT_NAME_SPOKEN : ASSISTANT_NAME_EN;
+  return String(text || '').replace(assistantNamePattern(), name);
 }
 
 export function rewriteAssistantNameForBrowserEnglish(text) {
   return String(text || '')
+    .replace(/جوجو/g, ASSISTANT_NAME_SPOKEN_EN_FALLBACK)
     .replace(/عارف/g, ASSISTANT_NAME_SPOKEN_EN_FALLBACK)
-    .replace(/\bAREF\b/gi, ASSISTANT_NAME_SPOKEN_EN_FALLBACK);
+    .replace(/\bAREF\b/gi, ASSISTANT_NAME_SPOKEN_EN_FALLBACK)
+    .replace(/\bGOGO\b/gi, ASSISTANT_NAME_SPOKEN_EN_FALLBACK)
+    .replace(/\bGoGo\b/gi, ASSISTANT_NAME_SPOKEN_EN_FALLBACK);
 }

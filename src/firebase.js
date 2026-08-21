@@ -6,6 +6,7 @@ import {
   memoryLocalCache,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
@@ -152,3 +153,4 @@ export async function ensureFirestoreNetwork() {
 }
 
 export const storage = getStorage(app);
+export const auth = getAuth(app);

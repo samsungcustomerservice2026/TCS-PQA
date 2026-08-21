@@ -35,7 +35,13 @@ export default function QuizHostPage() {
   const autoPlayRef = useRef(false);
   const allAnsweredRevealRef = useRef(false);
   const hostUser = typeof window !== 'undefined'
-    ? (() => { try { const raw = localStorage.getItem('adminSession'); if (!raw) return 'host'; return JSON.parse(raw).user?.username || 'host'; } catch { return 'host'; } })()
+    ? (() => {
+        try {
+          return localStorage.getItem('userName') || 'host';
+        } catch {
+          return 'host';
+        }
+      })()
     : 'host';
 
   useEffect(() => {

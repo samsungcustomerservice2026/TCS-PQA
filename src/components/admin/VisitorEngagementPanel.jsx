@@ -3,42 +3,22 @@
 import React from 'react';
 import { MousePointer2, WifiOff, Timer, ClipboardList, MessageSquare } from 'lucide-react';
 import { DEFAULT_SURVEY_FUNNEL, DEFAULT_FEEDBACK_FUNNEL } from '../../services/visitorEngagementService';
+import {
+  StudioShell,
+  StudioStatGrid,
+  StudioFunnel,
+  StudioDonut,
+  StudioPanel,
+} from './reportStudio/ReportStudio';
 
-function FunnelRow({ label, funnel, compact = false, icon: Icon }) {
-  const f = { ...DEFAULT_SURVEY_FUNNEL, ...funnel };
-  const steps = [
-    { key: 'promoShown', label: 'Promo shown' },
-    { key: 'promoDismissed', label: 'Neglected' },
-    { key: 'opened', label: 'Opened' },
-    { key: 'started', label: 'Started' },
-    { key: 'abandoned', label: 'Abandoned' },
-    { key: 'completed', label: 'Completed' },
-  ];
-  const hasData = steps.some(({ key }) => (f[key] || 0) > 0);
-
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/30 p-3 sm:p-4 space-y-2">
-      <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 flex-wrap">
-        {Icon ? <Icon className="w-3 h-3" /> : null}
-        {label}
-        {!hasData && <span className="text-zinc-600 font-bold normal-case tracking-normal">· no events yet</span>}
-      </p>
-      <div className={`grid gap-1.5 ${compact ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3'}`}>
-        {steps.map(({ key, label: stepLabel }) => (
-          <div key={key} className="rounded-lg border border-white/5 bg-zinc-950/80 px-2 py-1.5 text-center">
-            <p className="text-[6px] sm:text-[7px] font-black text-zinc-600 uppercase tracking-wider leading-tight">{stepLabel}</p>
-            <p className={`font-black text-white tabular-nums mt-0.5 ${compact ? 'text-sm' : 'text-lg'}`}>{f[key] ?? 0}</p>
-          </div>
-        ))}
-      </div>
-      {f.opened > 0 && (
-        <p className="text-[7px] sm:text-[8px] text-zinc-500">
-          {Math.round(((f.completed || 0) / f.opened) * 100)}% completed · {Math.round(((f.abandoned || 0) / Math.max(1, f.started)) * 100)}% abandoned
-        </p>
-      )}
-    </div>
-  );
-}
+const FUNNEL_STEPS = [
+  { key: 'promoShown', label: 'Promo shown' },
+  { key: 'promoDismissed', label: 'Neglected' },
+  { key: 'opened', label: 'Opened' },
+  { key: 'started', label: 'Started' },
+  { key: 'abandoned', label: 'Abandoned' },
+  { key: 'completed', label: 'Completed' },
+];
 
 export default function VisitorEngagementPanel({ analyticsSummary, compact = false }) {
   const eng = analyticsSummary?.visitorEngagement || {};
@@ -53,51 +33,68 @@ export default function VisitorEngagementPanel({ analyticsSummary, compact = fal
     );
   }
 
+  const avgMs = analyticsSummary.avgVisitorSessionMs || 0;
+  const avgText = `${Math.floor(avgMs / 60000)}m ${Math.floor((avgMs % 60000) / 1000)}s`;
+
   return (
-    <div className={`rounded-2xl border border-purple-500/15 bg-zinc-950/40 space-y-4 ${compact ? 'p-4' : 'p-5 md:p-6'}`}>
-      <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-300 flex items-center gap-2">
-        <MousePointer2 className="w-4 h-4 text-purple-400" />
-        Visitor engagement
-      </p>
+    <StudioShell
+      title="Visitor engagement studio"
+      subtitle="Clicks, session quality, and survey / feedback funnels."
+    >
+      <StudioStatGrid
+        cols={compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}
+        items={[
+          { label: 'Clicks', value: eng.visitorClicks ?? eng.totalClicks ?? 0 },
+          { label: 'Avg visit', text: avgText },
+          { label: 'Offline', value: eng.offlineEvents ?? 0 },
+          { label: 'Lag events', value: eng.lagEvents ?? 0 },
+        ]}
+      />
 
-      <div className={`grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
-        <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-center">
-          <p className="text-[7px] font-black text-zinc-500 uppercase tracking-widest flex items-center justify-center gap-1">
-            <MousePointer2 className="w-3 h-3" /> Clicks
-          </p>
-          <p className="text-xl font-black text-white tabular-nums">{eng.visitorClicks ?? eng.totalClicks ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-center">
-          <p className="text-[7px] font-black text-zinc-500 uppercase tracking-widest flex items-center justify-center gap-1">
-            <Timer className="w-3 h-3" /> Avg visit
-          </p>
-          <p className="text-sm font-black text-emerald-400 tabular-nums">
-            {(() => {
-              const ms = analyticsSummary.avgVisitorSessionMs || 0;
-              return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
-            })()}
-          </p>
-        </div>
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-center">
-          <p className="text-[7px] font-black text-zinc-500 uppercase tracking-widest flex items-center justify-center gap-1">
-            <WifiOff className="w-3 h-3" /> Offline
-          </p>
-          <p className="text-xl font-black text-amber-400 tabular-nums">{eng.offlineEvents ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-center">
-          <p className="text-[7px] font-black text-zinc-500 uppercase tracking-widest">Lag events</p>
-          <p className="text-xl font-black text-red-400 tabular-nums">{eng.lagEvents ?? 0}</p>
-        </div>
+      <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
+        <StudioPanel title="Survey funnel mix">
+          <StudioDonut
+            centerValue={survey.opened || 0}
+            centerLabel="Opened"
+            segments={[
+              { label: 'Completed', value: survey.completed || 0, color: '#d4d4d8' },
+              { label: 'Abandoned', value: survey.abandoned || 0, color: '#71717a' },
+              { label: 'Started', value: survey.started || 0, color: '#52525b' },
+            ]}
+          />
+        </StudioPanel>
+        <StudioPanel title="Feedback funnel mix">
+          <StudioDonut
+            centerValue={feedback.opened || 0}
+            centerLabel="Opened"
+            segments={[
+              { label: 'Completed', value: feedback.completed || 0, color: '#d4d4d8' },
+              { label: 'Abandoned', value: feedback.abandoned || 0, color: '#71717a' },
+              { label: 'Started', value: feedback.started || 0, color: '#52525b' },
+            ]}
+          />
+        </StudioPanel>
       </div>
 
-      <div className={`grid gap-3 ${compact ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
-        <FunnelRow label="Samsung Academy survey" funnel={survey} compact={compact} icon={ClipboardList} />
-        <FunnelRow label="Arabic feedback" funnel={feedback} compact={compact} icon={MessageSquare} />
+      <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
+        <StudioFunnel
+          label="Samsung Academy survey"
+          icon={ClipboardList}
+          steps={FUNNEL_STEPS.map((s) => ({ ...s, value: survey[s.key] || 0 }))}
+        />
+        <StudioFunnel
+          label="Arabic feedback"
+          icon={MessageSquare}
+          steps={FUNNEL_STEPS.map((s) => ({ ...s, value: feedback[s.key] || 0 }))}
+        />
       </div>
 
-      <p className="text-[7px] text-zinc-600 leading-relaxed">
-        Survey &amp; feedback steps also appear in the event list below (filter category SURVEY or FEEDBACK). Use Export Analytics for Excel.
+      <p className="text-[7px] text-zinc-600 leading-relaxed flex items-center gap-2">
+        <MousePointer2 className="w-3 h-3" />
+        <Timer className="w-3 h-3" />
+        <WifiOff className="w-3 h-3" />
+        Funnel steps also appear in the event list (SURVEY / FEEDBACK). Export Analytics for Excel.
       </p>
-    </div>
+    </StudioShell>
   );
 }

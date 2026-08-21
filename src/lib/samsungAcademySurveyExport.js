@@ -4,6 +4,7 @@ import {
   surveyRateBandEn,
   buildSamsungAcademySurveyAnalytics,
   describeSurveyFilters,
+  resolveAcademyGeo,
 } from './samsungAcademySurveyAnalytics';
 
 function buildResponseRows(surveys) {
@@ -11,6 +12,7 @@ function buildResponseRows(surveys) {
     .slice()
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
     .map((item, idx) => {
+      const geo = resolveAcademyGeo(item.academyLocation);
       const row = {
         '#': idx + 1,
         Name: item.fullName || '',
@@ -18,6 +20,11 @@ function buildResponseRows(surveys) {
         Company: item.company || '',
         Product: item.product || '',
         'Academy Location': item.academyLocation || '',
+        'Location (EN)': geo?.en || '',
+        'Egypt Region': geo?.regionEn || '',
+        Country: geo ? 'Egypt' : '',
+        Lat: geo?.lat ?? '',
+        Lng: geo?.lng ?? '',
         'Content Valuable': item.contentValue || '',
         'Content Band': surveyRateBandEn(item.contentValue) || '',
         'Trainer Clear & Effective': item.trainerClarity || '',
@@ -99,6 +106,25 @@ export function buildSamsungAcademySurveyWorkbook(surveys, filters, totalLoaded)
       wb,
       XLSX.utils.json_to_sheet(buildCountRows('Location', analytics.byLocation)),
       'By Location'
+    );
+  }
+
+  if (analytics.geo?.pins?.length) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        analytics.geo.pins.map((p) => ({
+          Country: 'Egypt',
+          City_EN: p.en,
+          City_AR: p.ar,
+          Region: p.regionEn,
+          Lat: p.lat,
+          Lng: p.lng,
+          Responses: p.count,
+          Avg_Score: p.average ?? '',
+        })),
+      ),
+      'Egypt Geo'
     );
   }
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { RefreshCw, Download, BarChart3, Users, Package, Building2, Filter, X, MessageSquare } from 'lucide-react';
+import { RefreshCw, Download, Filter, X, MessageSquare } from 'lucide-react';
 import { getFeedbacks } from '../../services/firestoreService';
 import {
   buildArabicFeedbackAnalytics,
@@ -11,6 +11,13 @@ import {
   getFeedbackFilterOptions,
 } from '../../lib/arabicFeedbackAnalytics';
 import { downloadArabicFeedbackWorkbook } from '../../lib/arabicFeedbackExport';
+import {
+  StudioStatGrid,
+  StudioPanel,
+  StudioHBars,
+  StudioWave,
+  StudioDonut,
+} from './reportStudio/ReportStudio';
 
 const DEFAULT_FILTERS = {
   dateFrom: '',
@@ -24,32 +31,6 @@ const selectClass =
 
 const datePickerClass =
   'w-full [&_.ant-picker]:w-full [&_.ant-picker]:rounded-xl [&_.ant-picker]:border-white/10 [&_.ant-picker]:bg-black [&_.ant-picker-input>input]:text-[11px] [&_.ant-picker-input>input]:font-bold';
-
-function BarChart({ items, maxBars = 8, colorClass = 'bg-purple-500' }) {
-  const shown = (items || []).slice(0, maxBars);
-  const max = Math.max(1, ...shown.map((i) => i.count));
-  if (!shown.length) {
-    return <p className="text-[10px] text-zinc-600 uppercase tracking-widest py-4 text-center">No data</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {shown.map((item) => (
-        <div key={item.name} className="grid grid-cols-[minmax(0,100px)_1fr_28px] gap-2 items-center">
-          <span className="text-[9px] font-bold text-zinc-400 truncate" title={item.name} dir="auto">
-            {item.name}
-          </span>
-          <div className="h-7 rounded-lg bg-zinc-950 border border-white/5 overflow-hidden">
-            <div
-              className={`h-full ${colorClass} transition-all duration-500`}
-              style={{ width: `${Math.max(4, (item.count / max) * 100)}%` }}
-            />
-          </div>
-          <span className="text-[10px] font-black text-white text-right">{item.count}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function ArabicFeedbackDashboard({ message, onExported, allowExport = true }) {
   const [loading, setLoading] = useState(true);
@@ -254,42 +235,63 @@ export default function ArabicFeedbackDashboard({ message, onExported, allowExpo
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-center">
-              <Users className="w-4 h-4 text-purple-400 mx-auto mb-2" />
-              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Responses</p>
-              <p className="text-2xl font-black text-white italic">{analytics.total}</p>
+          <div className="report-studio space-y-5">
+            <StudioStatGrid
+              cols="grid-cols-2 md:grid-cols-4"
+              items={[
+                { label: 'Responses', value: analytics.total },
+                { label: 'Products', value: analytics.byProduct.length },
+                { label: 'Companies', value: analytics.byCompany.length },
+                { label: 'Filtered of total', text: `${filteredFeedbacks.length}/${feedbacks.length}` },
+              ]}
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <StudioPanel title="By product">
+                <StudioHBars items={analytics.byProduct} />
+              </StudioPanel>
+              <StudioPanel title="By company">
+                <StudioHBars items={analytics.byCompany} maxBars={10} />
+              </StudioPanel>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-center">
-              <Package className="w-4 h-4 text-blue-400 mx-auto mb-2" />
-              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Products</p>
-              <p className="text-2xl font-black text-white italic">{analytics.byProduct.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-center col-span-2 md:col-span-1">
-              <Building2 className="w-4 h-4 text-emerald-400 mx-auto mb-2" />
-              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Companies</p>
-              <p className="text-2xl font-black text-white italic">{analytics.byCompany.length}</p>
-            </div>
+
+            {(analytics.byDay || []).length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <StudioPanel title="Submissions wave">
+                  <StudioWave
+                    primary={analytics.byDay.slice(-14).map((d) => d.count)}
+                    primaryLabel="Feedback"
+                  />
+                </StudioPanel>
+                <StudioPanel title="Mix">
+                  <StudioDonut
+                    centerValue={analytics.total}
+                    centerLabel="Total"
+                    segments={[
+                      {
+                        label: 'Top product',
+                        value: analytics.byProduct[0]?.count || 0,
+                        color: '#d4d4d8',
+                      },
+                      {
+                        label: 'Other products',
+                        value: Math.max(
+                          0,
+                          analytics.total - (analytics.byProduct[0]?.count || 0),
+                        ),
+                        color: '#71717a',
+                      },
+                    ]}
+                  />
+                </StudioPanel>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-[1.5rem] border border-white/10 bg-zinc-900/40 p-5">
-              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-4 flex items-center gap-2">
-                <BarChart3 className="w-3.5 h-3.5" /> By product
-              </p>
-              <BarChart items={analytics.byProduct} colorClass="bg-purple-500" />
-            </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-zinc-900/40 p-5">
-              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-4 flex items-center gap-2">
-                <BarChart3 className="w-3.5 h-3.5" /> By company
-              </p>
-              <BarChart items={analytics.byCompany} maxBars={10} colorClass="bg-emerald-500" />
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-white/10 bg-zinc-900/40 p-5 overflow-x-auto">
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-4">Latest responses (Arabic content)</p>
-            <table className="w-full text-left text-[10px]">
+          <div className="rounded-[1.75rem] border border-white/10 bg-zinc-950/70 p-5 overflow-x-auto relative overflow-hidden report-studio-panel">
+            <div className="report-studio-grid" aria-hidden />
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-4 relative z-[1]">Latest responses (Arabic content)</p>
+            <table className="w-full text-left text-[10px] relative z-[1]">
               <thead>
                 <tr className="text-zinc-500 border-b border-white/10">
                   <th className="py-2 px-2 font-black">Name</th>

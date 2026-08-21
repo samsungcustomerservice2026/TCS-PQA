@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { RefreshCw, Download, BarChart3, Users, MapPin, Package, Filter, X } from 'lucide-react';
+import { RefreshCw, Download, Filter, X } from 'lucide-react';
 import { getSamsungAcademySurveys } from '../../services/firestoreService';
 import {
   buildSamsungAcademySurveyAnalytics,
@@ -12,6 +12,15 @@ import {
   SURVEY_RATING_FIELDS,
 } from '../../lib/samsungAcademySurveyAnalytics';
 import { downloadSamsungAcademySurveyWorkbook } from '../../lib/samsungAcademySurveyExport';
+import {
+  StudioStatGrid,
+  StudioPanel,
+  StudioHBars,
+  StudioWave,
+  StudioDonut,
+  StudioEgyptGeoMap,
+  StudioRadar,
+} from './reportStudio/ReportStudio';
 
 const DEFAULT_FILTERS = {
   dateFrom: '',
@@ -25,41 +34,15 @@ const selectClass =
 
 const datePickerClass = 'w-full [&_.ant-picker]:w-full [&_.ant-picker]:rounded-xl [&_.ant-picker]:border-white/10 [&_.ant-picker]:bg-black [&_.ant-picker-input>input]:text-[11px] [&_.ant-picker-input>input]:font-bold';
 
-function BarChart({ items, maxBars = 8, colorClass = 'bg-blue-500' }) {
-  const shown = (items || []).slice(0, maxBars);
-  const max = Math.max(1, ...shown.map((i) => i.count));
-  if (!shown.length) {
-    return <p className="text-[10px] text-zinc-600 uppercase tracking-widest py-4 text-center">No data</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {shown.map((item) => (
-        <div key={item.name} className="grid grid-cols-[minmax(0,100px)_1fr_28px] gap-2 items-center">
-          <span className="text-[9px] font-bold text-zinc-400 truncate" title={item.name}>
-            {item.name}
-          </span>
-          <div className="h-7 rounded-lg bg-zinc-950 border border-white/5 overflow-hidden">
-            <div
-              className={`h-full ${colorClass} transition-all duration-500`}
-              style={{ width: `${Math.max(4, (item.count / max) * 100)}%` }}
-            />
-          </div>
-          <span className="text-[10px] font-black text-white text-right">{item.count}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function BandStack({ bands, answered }) {
   const total = answered || bands.Dissatisfied + bands.Neutral + bands.Satisfied;
   if (!total) return <p className="text-[9px] text-zinc-600">—</p>;
   const pct = (n) => `${Math.round((n / total) * 100)}%`;
   return (
     <div className="flex h-2 rounded-full overflow-hidden border border-white/5">
-      <div className="bg-red-500/80" style={{ width: pct(bands.Dissatisfied) }} title={`Dissatisfied: ${bands.Dissatisfied}`} />
-      <div className="bg-amber-400/80" style={{ width: pct(bands.Neutral) }} title={`Neutral: ${bands.Neutral}`} />
-      <div className="bg-emerald-500/80" style={{ width: pct(bands.Satisfied) }} title={`Satisfied: ${bands.Satisfied}`} />
+      <div className="bg-zinc-600 report-studio-hbar" style={{ width: pct(bands.Dissatisfied) }} title={`Dissatisfied: ${bands.Dissatisfied}`} />
+      <div className="bg-zinc-400 report-studio-hbar" style={{ width: pct(bands.Neutral) }} title={`Neutral: ${bands.Neutral}`} />
+      <div className="bg-zinc-200 report-studio-hbar" style={{ width: pct(bands.Satisfied) }} title={`Satisfied: ${bands.Satisfied}`} />
     </div>
   );
 }
@@ -147,7 +130,7 @@ export default function SamsungAcademySurveyDashboard({ message, onExported, all
           <p className="text-[9px] font-black uppercase tracking-[0.35em] text-emerald-500/90">Samsung Academy</p>
           <h3 className="text-lg font-black text-white uppercase tracking-tight">Survey analysis</h3>
           <p className="text-[10px] text-zinc-500 font-medium mt-1">
-            Pick from / to dates on the calendar, plus location and product. Charts and export use the same filters.
+            Egypt regions include Cairo, Alexandria, Assiut, and Tanta. Charts, geo map, and export use the same filters.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -274,49 +257,107 @@ export default function SamsungAcademySurveyDashboard({ message, onExported, all
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-center">
-              <Users className="w-4 h-4 text-blue-400 mx-auto mb-2" />
-              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Responses</p>
-              <p className="text-2xl font-black text-white italic">{analytics.total}</p>
+          <div className="report-studio space-y-5">
+            <StudioStatGrid
+              items={[
+                { label: 'Responses', value: analytics.total },
+                {
+                  label: 'Avg score',
+                  text: analytics.overallAverage != null ? String(analytics.overallAverage) : '—',
+                },
+                { label: 'Fully satisfied', value: analytics.satisfiedRate, suffix: '%' },
+                {
+                  label: 'Egypt cities',
+                  text: String((analytics.geo?.pins || []).filter((p) => p.count > 0).length || 0),
+                },
+              ]}
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <StudioPanel title="Egypt activity map · academy cities">
+                <StudioEgyptGeoMap
+                  pins={analytics.geo?.pins || []}
+                  other={analytics.geo?.other || 0}
+                  countryLabel="Egypt"
+                />
+              </StudioPanel>
+              <StudioPanel title="Score radar (1–10)">
+                <StudioRadar
+                  axes={(analytics.questionStats || []).map((q) => ({
+                    key: q.key,
+                    label: q.label,
+                    value: q.average,
+                  }))}
+                  maxValue={10}
+                />
+              </StudioPanel>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-center">
-              <BarChart3 className="w-4 h-4 text-emerald-400 mx-auto mb-2" />
-              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Avg score</p>
-              <p className="text-2xl font-black text-emerald-300 italic">{analytics.overallAverage ?? '—'}</p>
-              <p className="text-[8px] text-zinc-600">out of 10</p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <StudioPanel title="By academy location">
+                <StudioHBars
+                  items={
+                    analytics.byLocationEn?.length
+                      ? analytics.byLocationEn.map((r) => ({
+                          name: `${r.name}${r.ar ? ` · ${r.ar}` : ''}`,
+                          count: r.count,
+                        }))
+                      : analytics.byLocation
+                  }
+                />
+              </StudioPanel>
+              <StudioPanel title="By product">
+                <StudioHBars items={analytics.byProduct} />
+              </StudioPanel>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-center col-span-2 md:col-span-2">
-              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Fully satisfied (all 5 questions 9–10)</p>
-              <p className="text-2xl font-black text-white italic">{analytics.satisfiedRate}%</p>
-            </div>
+
+            {analytics.byDay.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <StudioPanel title="Submissions wave">
+                  <StudioWave
+                    primary={analytics.byDay.slice(-14).map((d) => d.count)}
+                    primaryLabel="Responses"
+                  />
+                </StudioPanel>
+                <StudioPanel title="Satisfaction bands">
+                  <StudioDonut
+                    centerValue={analytics.total}
+                    centerLabel="Responses"
+                    segments={(() => {
+                      const bands = (analytics.questionStats || []).reduce(
+                        (acc, q) => {
+                          acc.Satisfied += q.bands?.Satisfied || 0;
+                          acc.Neutral += q.bands?.Neutral || 0;
+                          acc.Dissatisfied += q.bands?.Dissatisfied || 0;
+                          return acc;
+                        },
+                        { Satisfied: 0, Neutral: 0, Dissatisfied: 0 },
+                      );
+                      return [
+                        { label: 'Satisfied', value: bands.Satisfied, color: '#d4d4d8' },
+                        { label: 'Neutral', value: bands.Neutral, color: '#71717a' },
+                        { label: 'Dissatisfied', value: bands.Dissatisfied, color: '#52525b' },
+                      ];
+                    })()}
+                  />
+                </StudioPanel>
+              </div>
+            )}
+
+            {analytics.byDay.length > 0 && (
+              <StudioPanel title="Submissions over time">
+                <StudioHBars
+                  items={analytics.byDay.map((d) => ({ name: d.day, count: d.count }))}
+                  maxBars={14}
+                />
+              </StudioPanel>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-[2rem] border border-white/10 bg-zinc-900/40 p-6 space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5" /> By academy location
-              </p>
-              <BarChart items={analytics.byLocation} colorClass="bg-cyan-500" />
-            </div>
-            <div className="rounded-[2rem] border border-white/10 bg-zinc-900/40 p-6 space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                <Package className="w-3.5 h-3.5" /> By product
-              </p>
-              <BarChart items={analytics.byProduct} colorClass="bg-purple-500" />
-            </div>
-          </div>
-
-          {analytics.byDay.length > 0 && (
-            <div className="rounded-[2rem] border border-white/10 bg-zinc-900/40 p-6 space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Submissions over time</p>
-              <BarChart items={analytics.byDay.map((d) => ({ name: d.day, count: d.count }))} maxBars={14} colorClass="bg-emerald-500" />
-            </div>
-          )}
-
-          <div className="rounded-[2rem] border border-white/10 bg-zinc-900/40 p-6 space-y-5">
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Question scores (1–10)</p>
-            <div className="space-y-4">
+          <div className="rounded-[1.75rem] border border-white/10 bg-zinc-950/70 p-6 space-y-5 relative overflow-hidden report-studio-panel">
+            <div className="report-studio-grid" aria-hidden />
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 relative z-[1]">Question scores (1–10)</p>
+            <div className="space-y-4 relative z-[1]">
               {analytics.questionStats.map((q) => (
                 <div key={q.key} className="space-y-2 border-b border-white/5 pb-4 last:border-0 last:pb-0">
                   <div className="flex justify-between items-baseline gap-2">

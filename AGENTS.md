@@ -13,9 +13,14 @@ This repo is a single **Next.js 16 (App Router) + React 19** app (JavaScript, pa
 ### Non-obvious notes
 - `npm run lint` currently reports pre-existing errors/warnings (see `lint_output.txt`); these are in the existing code and are not caused by setup. Do not treat them as environment breakage.
 - Next.js prints a deprecation warning that `middleware` should be renamed to `proxy`. This is harmless; the app runs fine.
-- No `.env.local` is required for core functionality. Optional env vars (copy `.env.example` → `.env.local` if needed):
-  - `GEMINI_API_KEY` — enables GoGo AI **smart chat**. Without it, `/api/gogo/chat` returns `{fallback:true}` (HTTP 503) and the assistant still works via guided menu chips + voice I/O (client-side). Set it as a secret if you need to test smart chat.
-  - `NEXT_PUBLIC_BOOTSTRAP_ADMIN_PASSWORD_B64` — only needed to bootstrap the admin portal when Firestore has zero admins (value = base64 of the password).
-- There is no Jest/Vitest/Playwright suite; the `scripts/*.mjs` test files (`test:pqa-map`, `test-unified-engineer-wide.mjs`, etc.) are standalone node scripts. E2E testing is manual in the browser against live Firebase.
-- Admin login uses a custom scheme (base64 password in Firestore `admins`, 2-hour `localStorage` session); there is no Firebase Auth.
-- **GoGo voice assistant (STT/TTS):** implemented via the browser Web Speech API in `src/lib/gogoVoice.js`, wired through `src/components/gogo/GoGoAssistant.jsx`. Microphone access is gated by the `Permissions-Policy` header in `next.config.mjs` — it must include `microphone=(self)` (not `microphone=()`) or voice input is blocked in every browser. The cloud VM has **no microphone device and no installed TTS voices**, so real speech capture/playback cannot be exercised here; voice can only be verified at the wiring/policy level (e.g. `getUserMedia`/`SpeechRecognition` reaching the device-lookup stage rather than a permissions-policy block). When no mic is available, GoGo posts a friendly localized guidance message instead of failing silently.
+- No `.env.local` is required for core UI, but **production security features require server secrets**:
+ - `FIREBASE_SERVICE_ACCOUNT_JSON` — Firebase Admin SDK (quiz scoring, host APIs, Excel commit, admin bootstrap). Without it those APIs return 503.
+ - `BOOTSTRAP_ADMIN_SECRET` — one-time / SUPER_ADMIN bootstrap for `POST /api/admin/bootstrap`.
+ - **Gemini / smart GoGo chat is DISABLED** — do not set `GEMINI_API_KEY`. `/api/gogo/chat` and `/api/gogo/product-gemini` return 503 `{disabled:true}`. Guided menu chips + Edge TTS still work.
+ - `NEXT_PUBLIC_FIREBASE_APPCHECK_KEY` — optional App Check site key.
+ - **Do not use** `NEXT_PUBLIC_BOOTSTRAP_ADMIN_PASSWORD_B64` (removed as auth mechanism).
+- Admin login uses **Firebase Authentication** (not base64/`localStorage.adminSession`). Create admins via `/api/admin/bootstrap`.
+- Employee login uses **Firebase Authentication only** (SHA-256 fallback removed).
+- Deploy Firestore rules: `npm run deploy:firestore-rules` (verify in Console — repo rules ≠ live until deployed).
+- Tests: `npm run test:unit`, `npm run test:pqa-map`. CI: `.github/workflows/ci.yml`.
+- **GoGo voice:** STT via Web Speech API; TTS via `/api/gogo/speak` (Edge neural — **no Gemini**). `Permissions-Policy` must include `microphone=(self)`.
