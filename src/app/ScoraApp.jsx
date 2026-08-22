@@ -1958,6 +1958,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   const [academySurveySettingsSaving, setAcademySurveySettingsSaving] = useState(false);
   /** User dismissed the floating shortcut for this session only */
   const [showSurveyShortcut, setShowSurveyShortcut] = useState(true);
+  const [gogoOpen, setGogoOpen] = useState(false);
   const [academySurvey, setAcademySurvey] = useState({
     fullName: '',
     phoneNumber: '',
@@ -10566,6 +10567,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
       {/* Floating Arabic feedback link (other pages; hidden on HOME while promo active) */}
       {!isAdminPortal &&
+        !gogoOpen &&
         isFeedbackPortalRealm(portalRealm) &&
         feedbackEnabled &&
         showFeedbackPromo &&
@@ -10600,8 +10602,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         )}
 
       {/* Floating Samsung Academy Survey Link */}
-      {!isAdminPortal && portalRealm === 'TCS' && academySurveyPopupEnabled && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
-        <div className="fixed right-5 top-1/2 -translate-y-1/2 z-50">
+      {!isAdminPortal && !gogoOpen && portalRealm === 'TCS' && academySurveyPopupEnabled && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
+        <div className="fixed right-5 top-[max(6rem,18%)] z-40 sm:top-1/2 sm:-translate-y-1/2">
           <button
             onClick={dismissSurveyShortcut}
             className="absolute -top-2 -right-2 h-6 w-6 rounded-full border border-white/20 bg-zinc-900 text-white/80 hover:text-white hover:border-white/40 transition-all flex items-center justify-center"
@@ -10628,7 +10630,13 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       {!isAdminPortal && !showPhotoAuth && !showRankReveal && (
         <GoGoAssistant
           currentView={view}
-          hidden={view === 'EXTERNAL_LOGS' || view === 'ADMIN_DASHBOARD'}
+          hidden={
+            view === 'EXTERNAL_LOGS'
+            || view === 'ADMIN_DASHBOARD'
+            || view === 'EMPLOYEE_DASHBOARD'
+            || view === 'CONSULTANT_VIEWER'
+          }
+          onOpenChange={setGogoOpen}
           onNavigate={(action) => {
             if (typeof action === 'string' && action.startsWith('goto_consultant:')) {
               const id = action.slice('goto_consultant:'.length);
@@ -10850,8 +10858,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
 
       {/* Admin bottom tabs intentionally hidden */}
 
-      {!isAdminPortal && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && view !== 'TCS_DIVISION_SELECTION' && (
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[98%] max-w-lg bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-3 px-4 shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-50">
+      {!isAdminPortal && !gogoOpen && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && view !== 'TCS_DIVISION_SELECTION' && (
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[min(92vw,22rem)] bg-zinc-900/95 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] py-2.5 px-3 shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-40">
         <div className="relative">
           <div
             className="pointer-events-none absolute top-1 bottom-1 rounded-2xl border border-blue-400/35 bg-blue-600/20 shadow-[0_0_22px_rgba(37,99,235,0.35)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -10860,10 +10868,10 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               left: ['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'calc(50% + 0.125rem)' : '0.25rem',
             }}
           />
-          <div className="relative grid grid-cols-2 gap-2">
+          <div className="relative grid grid-cols-2 gap-1.5 place-items-center">
             <button
               onClick={() => navigateTo('HOME')}
-              className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${view === 'HOME' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
+              className={`cursor-pointer w-full rounded-2xl py-2.5 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 ${view === 'HOME' ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
             >
               <BarChart3 className={`w-5 h-5 transition-all duration-300 ${view === 'HOME' ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
               <span className="text-[8px] font-black uppercase tracking-tight">Dashboard</span>
@@ -10871,7 +10879,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             <button
               onClick={() => { setProfileOpenedByExactCode(false); navigateTo('ENGINEER_LOOKUP'); }}
               data-gogo-target="search"
-              className={`cursor-pointer rounded-2xl py-2.5 flex flex-col items-center gap-1.5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
+              className={`cursor-pointer w-full rounded-2xl py-2.5 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-white -translate-y-0.5' : 'text-zinc-600 hover:text-zinc-400'}`}
             >
               <Search className={`w-5 h-5 transition-all duration-300 ${['ENGINEER_LOOKUP', 'ENGINEER_PROFILE', 'ENGINEER_HISTORY'].includes(view) ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] scale-110' : ''}`} />
               <span className="text-[8px] font-black uppercase tracking-tight">Search</span>

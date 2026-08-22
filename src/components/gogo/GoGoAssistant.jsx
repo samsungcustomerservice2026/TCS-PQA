@@ -139,7 +139,7 @@ async function askGoGoDisabled(lang) {
  * Click-to-chat guided assistant + voice I/O.
  * Smart Gemini chat is disabled (security / cost hardening).
  */
-export default function GoGoAssistant({ onNavigate, currentView = '', hidden = false }) {
+export default function GoGoAssistant({ onNavigate, currentView = '', hidden = false, onOpenChange }) {
   const [lang, setLang] = useState('en');
   const [open, setOpen] = useState(false);
   const [entered, setEntered] = useState(false);
@@ -168,6 +168,8 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
   const pendingGuideRef = useRef(null);
   const pendingConsultantIdRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
   const recognizerRef = useRef(null);
   const voiceAskRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -355,7 +357,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     const t1 = setTimeout(() => setEntered(true), 80);
     const t2 = setTimeout(() => setPose('welcome'), 750);
     const t3 = setTimeout(() => {
-      setPose('wave');
+      setPose('idle');
       setShowBubble(false);
     }, 2400);
     return () => {
@@ -367,12 +369,13 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
 
   useEffect(() => {
     if (hidden || open) return undefined;
-    setPose('wave');
-    const pulse = window.setInterval(() => {
-      setPose('wave');
-    }, 3200);
-    return () => clearInterval(pulse);
+    setPose('idle');
+    return undefined;
   }, [hidden, open]);
+
+  useEffect(() => {
+    onOpenChangeRef.current?.(open);
+  }, [open]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -1261,15 +1264,15 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
       )}
 
       <div
-        className={`fixed z-[45] flex flex-col transition-[left,bottom,width,top,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`fixed flex flex-col transition-[left,bottom,width,top,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           open
-            ? 'inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[max(0.5rem,env(safe-area-inset-bottom))] sm:inset-x-auto sm:left-5 sm:right-auto sm:w-[min(100vw-1.5rem,22rem)] sm:max-h-[calc(100dvh-1rem)] items-stretch justify-end gap-2'
-            : 'bottom-[5.5rem] sm:bottom-24 left-0 items-start gap-0 gogo-dock-peek'
+            ? 'z-[60] inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[max(0.5rem,env(safe-area-inset-bottom))] sm:inset-x-auto sm:left-5 sm:right-auto sm:w-[min(100vw-1.5rem,22rem)] sm:max-h-[calc(100dvh-1rem)] items-stretch justify-end gap-2'
+            : 'z-[48] bottom-[5.75rem] sm:bottom-24 left-0 right-auto items-end justify-end gap-0 gogo-dock-fullbody'
         }`}
         dir={rtl ? 'rtl' : 'ltr'}
       >
         {open && (
-          <div className="w-full min-h-0 max-h-[min(calc(100%-4.75rem),32rem)] sm:max-h-[min(calc(100%-7.5rem),34rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="w-full min-h-0 max-h-[min(calc(100%-13.5rem),30rem)] sm:max-h-[min(calc(100%-15rem),32rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 bg-gradient-to-r from-blue-600/25 to-transparent shrink-0 sticky top-0 z-10">
               <div className="min-w-0">
                 <p className={`text-[11px] font-black text-white truncate ${rtl ? 'tracking-normal' : 'uppercase tracking-widest'}`}>{assistantDisplayName(lang)}</p>
@@ -1480,7 +1483,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
           </div>
         )}
 
-        <div className={`relative flex items-end gap-1 shrink-0 ${open ? 'justify-start' : 'justify-start'}`}>
+        <div className={`relative flex shrink-0 items-end justify-start ${open ? 'gogo-dock-full' : 'gogo-dock-fullbody-avatar'}`}>
           <button
             type="button"
             onClick={() => {
@@ -1508,7 +1511,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                     : 'bg-blue-500/20 opacity-60 group-hover:opacity-90'
                 }`}
               />
-              <span className="gogo-stage relative">
+              <span className="gogo-stage relative gogo-stage-full">
                 {showThinkCue && (
                   <span className="gogo-gesture-cue gogo-cue-think" aria-hidden>
                     <span />
@@ -1529,7 +1532,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   src={spriteSrc}
                   alt={assistantDisplayName('en')}
                   className={`relative w-auto drop-shadow-[0_12px_24px_rgba(0,0,0,0.65)] select-none pointer-events-none gogo-sprite ${poseClass} ${
-                    open ? 'h-16 sm:h-28' : 'h-24 sm:h-32'
+                    open ? 'h-32 sm:h-44' : 'h-24 sm:h-32'
                   }`}
                   draggable={false}
                 />
