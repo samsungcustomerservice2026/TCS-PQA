@@ -241,6 +241,24 @@ const getQuarter = (monthName) => {
 
 const UI_STATE_STORAGE_KEY_MAIN = 'tcs_ui_state_main_v1';
 const UI_STATE_STORAGE_KEY_ADMIN = 'tcs_ui_state_admin_v1';
+/** Tab-scoped flag: admin explicitly logged in this session (survives reload, cleared on logout). */
+const ADMIN_SESSION_OK_KEY = 'adminSessionOk_v1';
+
+const ADMIN_RESTORABLE_VIEWS = new Set(['ADMIN_DASHBOARD', 'PROFILE_MGMT', 'EXTERNAL_LOGS']);
+
+function readAdminBootView() {
+  if (typeof window === 'undefined') return 'ADMIN_LOGIN';
+  try {
+    if (sessionStorage.getItem(ADMIN_SESSION_OK_KEY) !== '1') return 'ADMIN_LOGIN';
+    const raw = sessionStorage.getItem(UI_STATE_STORAGE_KEY_ADMIN);
+    if (!raw) return 'ADMIN_DASHBOARD';
+    const parsed = JSON.parse(raw);
+    const restored = parsed?.view || 'ADMIN_DASHBOARD';
+    return ADMIN_RESTORABLE_VIEWS.has(restored) ? restored : 'ADMIN_DASHBOARD';
+  } catch {
+    return 'ADMIN_DASHBOARD';
+  }
+}
 
 /** Clean public paths — also work via query: ?survey=samsung-academy | ?feedback=1 */
 const PUBLIC_SAMSUNG_ACADEMY_SURVEY_PATH = SCORA_PUBLIC_PATHS.survey;
@@ -1626,8 +1644,8 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   })();
   const bootStorageKey = adminEntryAtBoot ? UI_STATE_STORAGE_KEY_ADMIN : UI_STATE_STORAGE_KEY_MAIN;
   const [view, setView] = useState(() => {
-    // Admin entry always starts at login — never restore a saved dashboard view.
-    if (initialAdminPortal || adminEntryAtBoot) return 'ADMIN_LOGIN';
+    // Admin: restore dashboard when this tab already has an active admin session.
+    if (initialAdminPortal || adminEntryAtBoot) return readAdminBootView();
     if (initialView) return initialView;
     if (typeof window === 'undefined') return 'APP_SELECTION';
     try {
@@ -1692,7 +1710,13 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   });
 
   // ─── View history stack for swipe-back / browser-back support ────────────
-  const viewStackRef = React.useRef(['APP_SELECTION']);
+  const viewStackRef = React.useRef((() => {
+    if (initialAdminPortal || adminEntryAtBoot) {
+      const bootView = readAdminBootView();
+      return bootView === 'ADMIN_LOGIN' ? ['ADMIN_LOGIN'] : ['ADMIN_LOGIN', bootView];
+    }
+    return ['APP_SELECTION'];
+  })());
   const navigateTo = React.useCallback((nextView) => {
     viewStackRef.current = [...viewStackRef.current, nextView];
     window.history.pushState({ view: nextView }, '');
@@ -1874,49 +1898,40 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   const [bulkSelectedArchivedIds, setBulkSelectedArchivedIds] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef(null);
-  const [isLogged, setIsLogged] = useState(false);
-  // Admin UI unlock only after the login form succeeds — ignore Firebase Auth persistence.
-  const adminSessionOkRef = React.useRef(false);
+  const [isLogged, setIsLogged] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    if (initialAdminPortal || adminEntryAtBoot) {
+      try {
+        return sessionStorage.getItem(ADMIN_SESSION_OK_KEY) === '1';
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+  // Admin UI unlock after login form OR restored tab session (see ADMIN_SESSION_OK_KEY).
+  const adminSessionOkRef = React.useRef((() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return sessionStorage.getItem(ADMIN_SESSION_OK_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })());
+  const academySurveySettingsTouchedRef = React.useRef(false);
 
   useEffect(() => {
     if (!isAdminPortal) return;
-    let cancelled = false;
-    adminSessionOkRef.current = false;
-    (async () => {
-      try {
-        await signOutAdmin();
-      } catch {
-        /* ignore */
-      }
-      if (cancelled) return;
-      setCurrentUser(null);
-      setIsLogged(false);
-      setView('ADMIN_LOGIN');
-      viewStackRef.current = ['ADMIN_LOGIN'];
-      try {
-        sessionStorage.setItem(
-          UI_STATE_STORAGE_KEY_ADMIN,
-          JSON.stringify({
-            view: 'ADMIN_LOGIN',
-            appMode: null,
-            portalRealm: null,
-            isAdminPortal: true,
-            tcsMxRoleTab: 'engineers',
-          }),
-        );
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    try {
+      adminSessionOkRef.current = sessionStorage.getItem(ADMIN_SESSION_OK_KEY) === '1';
+    } catch {
+      adminSessionOkRef.current = false;
+    }
   }, [isAdminPortal]);
 
   useEffect(() => {
     const unsub = subscribeAdminAuth(({ profile }) => {
       if (isAdminPortal) {
-        // Do not auto-enter admin from a persisted Firebase session.
         if (!adminSessionOkRef.current) {
           return;
         }
@@ -1925,6 +1940,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
           setIsLogged(true);
         } else {
           adminSessionOkRef.current = false;
+          try {
+            sessionStorage.removeItem(ADMIN_SESSION_OK_KEY);
+          } catch {
+            /* ignore */
+          }
           setCurrentUser(null);
           setIsLogged(false);
           setView('ADMIN_LOGIN');
@@ -1945,7 +1965,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
 
   // Hard lock: admin portal with no session can only show the login screen.
   useEffect(() => {
-    if (isAdminPortal && !isLogged && view !== 'ADMIN_LOGIN') {
+    if (isAdminPortal && !isLogged && !adminSessionOkRef.current && view !== 'ADMIN_LOGIN') {
       setView('ADMIN_LOGIN');
       viewStackRef.current = ['ADMIN_LOGIN'];
     }
@@ -2446,9 +2466,15 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
         setAcademySurveySettingsLoading(true);
         try {
           const settings = await getAcademySurveySettings();
-          if (cancelled) return;
+          if (cancelled || academySurveySettingsTouchedRef.current) return;
           setAcademySurveyPopupEnabled(settings.academySurveyPopupEnabled !== false);
           setFeedbackEnabled(settings.feedbackEnabled !== false);
+          if (settings.academySurveyPopupEnabled === false) {
+            setShowSurveyShortcut(false);
+          }
+          if (settings.feedbackEnabled === false) {
+            setShowFeedbackPromo(false);
+          }
         } catch (err) {
           if (!cancelled) console.error('Academy survey settings load failed', err);
         } finally {
@@ -2520,9 +2546,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       return;
     }
     setAcademySurveySettingsSaving(true);
+    academySurveySettingsTouchedRef.current = true;
+    setAcademySurveyPopupEnabled(enabled);
+    if (!enabled) setShowSurveyShortcut(false);
     try {
       await saveAcademySurveySettings({ academySurveyPopupEnabled: enabled }, currentUser?.username || 'admin');
-      setAcademySurveyPopupEnabled(enabled);
       if (enabled) setShowSurveyShortcut(true);
       message.success(enabled ? 'Samsung Academy survey popup is ON for all visitors.' : 'Samsung Academy survey popup is OFF.');
       writeLog({
@@ -2534,6 +2562,9 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       });
     } catch (err) {
       console.error(err);
+      setAcademySurveyPopupEnabled(!enabled);
+      if (enabled) setShowSurveyShortcut(false);
+      else setShowSurveyShortcut(true);
       message.error('Could not save survey popup setting.');
     } finally {
       setAcademySurveySettingsSaving(false);
@@ -2553,9 +2584,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       return;
     }
     setAcademySurveySettingsSaving(true);
+    academySurveySettingsTouchedRef.current = true;
+    setFeedbackEnabled(enabled);
+    if (!enabled) setShowFeedbackPromo(false);
     try {
       await saveAcademySurveySettings({ feedbackEnabled: enabled }, currentUser?.username || 'admin');
-      setFeedbackEnabled(enabled);
       if (enabled) setShowFeedbackPromo(true);
       message.success(enabled ? 'Arabic feedback form is ON for all visitors.' : 'Arabic feedback form is OFF.');
       writeLog({
@@ -2567,6 +2600,9 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       });
     } catch (err) {
       console.error(err);
+      setFeedbackEnabled(!enabled);
+      if (enabled) setShowFeedbackPromo(false);
+      else setShowFeedbackPromo(true);
       message.error('Could not save feedback setting.');
     } finally {
       setAcademySurveySettingsSaving(false);
@@ -4273,6 +4309,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
 
   const finishAdminSession = (profile, { migration = false } = {}, ipInfo = {}) => {
     adminSessionOkRef.current = true;
+    try {
+      sessionStorage.setItem(ADMIN_SESSION_OK_KEY, '1');
+    } catch {
+      /* ignore */
+    }
     setCurrentUser(profile);
     setLoginUser('');
     setLoginPass('');
@@ -4359,6 +4400,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
 
   const handleClearSession = async () => {
     adminSessionOkRef.current = false;
+    try {
+      sessionStorage.removeItem(ADMIN_SESSION_OK_KEY);
+    } catch {
+      /* ignore */
+    }
     clearAdminUiPrefs();
     try {
       await signOutAdmin();
@@ -4374,6 +4420,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   const handleLogout = async () => {
     writeLog({ type: 'ADMIN_LOGOUT', actor: currentUser?.username || 'admin', action: 'Admin logged out', severity: 'info' });
     adminSessionOkRef.current = false;
+    try {
+      sessionStorage.removeItem(ADMIN_SESSION_OK_KEY);
+    } catch {
+      /* ignore */
+    }
     setCurrentUser(null);
     clearAdminUiPrefs();
     try {
@@ -6101,7 +6152,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
                   onClick={() => {
                     launchPortal('tcs', () => {
                       setPortalRealm('TCS');
-                      setShowSurveyShortcut(true);
+                      if (academySurveyPopupEnabled) setShowSurveyShortcut(true);
                       navigateTo('TCS_DIVISION_SELECTION');
                     });
                   }}
