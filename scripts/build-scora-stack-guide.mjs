@@ -23,6 +23,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'SCORA_Stack_and_Programmer_Guide.docx');
+const OUT_ALT = path.join(ROOT, 'docs', 'SCORA_Stack_and_Programmer_Guide_updated.docx');
 
 const BLUE = '1428A0';
 const DARK = '0B1F3A';
@@ -593,65 +594,162 @@ const doc = new Document({
         bullet('NEXT_PUBLIC_FIREBASE_APPCHECK_KEY — optional App Check.'),
         p('Core UI can run without .env.local; production security features cannot.', { italics: true }),
 
-        h1('12. Programmer onboarding — what to look at first'),
+        h1('12. Programmer teaching guide — what to look at first'),
         p(
-          'If you are a programmer new to SCORA, do not start by reading every file. Follow this order to understand the system in hours, not weeks.',
+          'This section is written as a lesson. Goal: in one afternoon you should be able to explain how a click becomes a screen change, how data is stored, and where security lives — without reading the whole repo.',
         ),
 
-        h2('12.1 First 30 minutes — map the skeleton'),
-        numbered('Open package.json — learn scripts and dependencies (this is the inventory of tools).'),
-        numbered('Open AGENTS.md — project rules, Firebase project name, what is disabled (Gemini), how to run/dev.'),
-        numbered('Open src/firebase.js — see how the live Firebase project is wired.'),
-        numbered('Open src/app/layout.js and src/app/page.js — confirm App Router entry; note the app loads ScoraApp.'),
-        numbered('Skim docs/PROJECT_STRUCTURE.md and README.md for folder intent.'),
-
-        h2('12.2 Next — the “god file” and navigation'),
-        numbered(
-          'Open src/app/ScoraApp.jsx — this is the main application shell (views, portals, GoGo mount, admin tabs). Search for view === and navigateTo( to learn screens.',
-        ),
-        numbered(
-          'Find where GoGoAssistant is rendered and which views hide it (admin, tip viewer). That shows product boundaries.',
-        ),
-        numbered(
-          'Find EmployeeAuthModal + EMPLOYEE_DASHBOARD + CONSULTANT_VIEWER — that is the Knowledge employee journey.',
-        ),
-
-        h2('12.3 Data model before UI polish'),
-        numbered('Read firestore.rules (and Storage rules) — security tells you the real data ownership model.'),
-        numbered('List key collections conceptually: engineers/KPI docs, employees, consultants, employee_progress, announcements, gogo learned, quiz sessions.'),
-        numbered('Open src/services/*.js for the CRUD APIs the UI calls (consultantService, employeeAuthService, gogoService).'),
-
-        h2('12.4 Feature deep-dives (pick one at a time)'),
-        numbered('TCS: follow Excel import API → lib parsers → Firestore write → dashboard read.'),
-        numbered('GoGo: gogoGuideFlow.js (chips) → GoGoAssistant.jsx (orchestration) → /api/gogo/speak (voice).'),
-        numbered('Knowledge tips: TechnicalConsultantsPanel (admin) → Storage upload → ConsultantViewer (employee timer/quiz) → progress docs.'),
-        numbered('Auth: admin bootstrap API vs employee Firebase Auth; never assume localStorage adminSession (removed).'),
-
-        h2('12.5 What “good” looks like when debugging'),
-        bullet('Reproduce on localhost:3000 with the same role (visitor / employee / admin).'),
-        bullet('Check browser console + Network for /api/* 503 (often missing Admin SDK secret).'),
-        bullet('If Firestore permission errors: compare live rules in Console with repo rules.'),
-        bullet('If GoGo “invents”: confirm Gemini disabled and answers come from guide/library/learned only.'),
-        bullet('If tip upload fails: Storage rules for consultants/ path.'),
-
-        h2('12.6 Mental model (one paragraph)'),
+        h2('12.0 The golden rule'),
         p(
-          'SCORA is a React state machine of views inside ScoraApp, backed by Firestore documents, with Next.js API routes as a privileged side door. GoGo is a guided host (chips + library), not an open chatbot. Admin tools ingest Excel and publish tips; employees consume tips under Auth + progress rules. Once you can draw that picture, every new file has a place to land.',
+          'Do not start from random components or CSS. Start from entry → navigation → data → one vertical feature. UI polish is last.',
+        ),
+        bullet('Wrong first question: “Which button component is used?”'),
+        bullet('Right first question: “What is the current view, and who is allowed to change data?”'),
+
+        h2('12.1 Picture the architecture in 5 boxes'),
+        p('Draw this on paper before opening many files:'),
+        numbered('Browser UI (React / ScoraApp views + components).'),
+        numbered('Navigation state (a view string like EMPLOYEE_DASHBOARD, TCS_DIVISION_SELECTION).'),
+        numbered('Firebase client (Auth + Firestore + Storage from src/firebase.js).'),
+        numbered('Next.js API routes (/api/*) for privileged work (quiz score, speak TTS, admin delete, Excel).'),
+        numbered('Security rules (firestore.rules / storage.rules) — the real gatekeepers.'),
+        p(
+          'If a feature only reads public leaderboard data, it often stays in the client + Firestore. If it needs secrets or Admin Auth deletes, it goes through /api.',
+          { italics: true },
+        ),
+
+        h2('12.2 Day-0 checklist (do these in order)'),
+        h3('Step A — Run and click (10 minutes)'),
+        numbered('Run npm run dev and open http://localhost:3000.'),
+        numbered('Click as a visitor: gateway → TCS/PQA → Search. Notice URLs may stay simple while the app swaps internal views.'),
+        numbered('Open GoGo, tap chips. Notice it guides; it does not freely invent.'),
+        numbered('If you have an employee account: sign in → My Profile / Knowledge → open a tip.'),
+        p(
+          'Why first: your brain needs the product map before the file map. Code without product context feels like noise.',
+        ),
+
+        h3('Step B — Read the “contract” files (15 minutes)'),
+        numbered('package.json — scripts (dev/build/lint/test/deploy) and libraries.'),
+        numbered('AGENTS.md — how this repo is meant to be run; Gemini disabled; required secrets.'),
+        numbered('src/firebase.js — which Firebase project the app talks to (tcs-for-engineers).'),
+        numbered('src/app/page.js — entry is tiny: it only mounts <ScoraApp />.'),
+        p(
+          'Why: these files tell you constraints. Many bugs are “I assumed a separate backend / local DB / Gemini chat” — those assumptions are false here.',
+        ),
+
+        h3('Step C — Find the screen map (20–30 minutes)'),
+        numbered('Open src/app/ScoraApp.jsx (large file — do not read top-to-bottom).'),
+        numbered('Use search for: navigateTo(  and  view ==='),
+        numbered('Write a short list of view names you find (APP_SELECTION, TCS_…, PQA_…, EMPLOYEE_DASHBOARD, CONSULTANT_VIEWER, ADMIN_…).'),
+        numbered('Search for GoGoAssistant — note which views set hidden={true} (admin, tip viewer, etc.).'),
+        p(
+          'Why: ScoraApp is a view state machine. Almost every “page” is a branch of view, not a separate Next.js page. Once you accept that, the big file becomes a map, not a monster.',
+        ),
+
+        h3('Step D — Find who is logged in (15 minutes)'),
+        numbered('Search useEmployeeAuth / EmployeeAuthModal — employee GSPN journey.'),
+        numbered('Search admin auth / bootstrap — admin portal journey (Firebase Auth + roles).'),
+        numbered('Ask: which features require login? Knowledge tips yes; public TCS winners often no.'),
+        p(
+          'Why: auth boundaries explain half of “why is this button missing / why permission denied”.',
+        ),
+
+        h3('Step E — Find data before pretty UI (25 minutes)'),
+        numbered('Open firestore.rules — skim match /employees, /consultants, /employee_progress.'),
+        numbered('Open src/services/consultantService.js and employeeAuthService.js — these are the data APIs UI calls.'),
+        numbered('Trace one write: admin upload tip asset → Storage path consultants/{id}/… → Firestore assets[] → employee viewer reads url.'),
+        p(
+          'Why: UI is replaceable; collections + rules are the real product model.',
+        ),
+
+        h2('12.3 What each folder means (programmer legend)'),
+        table(
+          ['Folder', 'Look here when…', 'Do not expect…'],
+          [
+            ['src/app/', 'Routing entry, API routes', 'All business UI (much lives in ScoraApp)'],
+            ['src/app/ScoraApp.jsx', 'Screen switching, global state', 'Small focused components'],
+            ['src/components/', 'Reusable UI (GoGo, employee, admin panels)', 'Firebase init'],
+            ['src/services/', 'Firestore/Storage operations used by UI', 'Visual layout'],
+            ['src/lib/', 'Pure logic (KPI text, GoGo flow, Excel parsers)', 'React JSX screens'],
+            ['src/app/api/', 'Server secrets, Admin SDK, TTS', 'Client-only Firebase reads'],
+            ['firestore.rules', 'Permissions truth', 'UI validation alone'],
+            ['public/', 'Static images (GoGo sprites, logos)', 'Business rules'],
+            ['scripts/', 'One-off generators/tests/deploys', 'Runtime user features'],
+            ['docs/', 'Human guides (this Word file)', 'Executable logic'],
+          ],
+        ),
+
+        h2('12.4 Search keywords that unlock understanding fast'),
+        p('In your IDE global search, these queries are the fastest teachers:'),
+        bullet('navigateTo( — every screen transition.'),
+        bullet('view === — every rendered screen branch.'),
+        bullet('collection( or doc(db — every Firestore touch.'),
+        bullet('uploadBytes( / getDownloadURL( — file/attachment flow.'),
+        bullet('resolveFlowReply( / GOGO_FLOW — GoGo allowed answers.'),
+        bullet('completeConsultantAttempt( — tip finish + quiz pass logic.'),
+        bullet('FIREBASE_SERVICE_ACCOUNT / getAdmin — privileged server paths.'),
+        bullet('503 or disabled:true — features that need secrets or are intentionally off.'),
+
+        h2('12.5 Trace one user story end-to-end (best learning exercise)'),
+        p('Pick ONE story and follow it across files. Example: “Employee finishes a technical tip.”'),
+        numbered('UI start: EmployeeDashboard lists tips (components/employee/EmployeeDashboard.jsx).'),
+        numbered('Open tip: ScoraApp sets activeConsultantId + view CONSULTANT_VIEWER.'),
+        numbered('Viewer: ConsultantViewer.jsx starts attempt, timer, optional quiz.'),
+        numbered('Service write: completeConsultantAttempt in consultantService.js updates employee_progress.'),
+        numbered('Rules: firestore.rules must allow that uid to update their progress doc id pattern.'),
+        numbered('After pass: ScoraApp may bump GoGo tipCompleteNonce → GoGo celebrates on profile.'),
+        p(
+          'When you can narrate that path without notes, you understand SCORA’s Knowledge vertical. Then repeat for TCS Excel import or GoGo chip navigation.',
+          { italics: true },
+        ),
+
+        h2('12.6 Common traps for new programmers on this repo'),
+        bullet('Trap: Looking for Express/Spring “controllers”. Reality: Next.js route.js + client services.'),
+        bullet('Trap: Looking for SQL migrations. Reality: Firestore documents + security rules.'),
+        bullet('Trap: Assuming GoGo uses Gemini. Reality: guided chips + library/learned; Gemini routes disabled.'),
+        bullet('Trap: Editing firestore.rules locally and expecting live fix. Reality: must deploy rules.'),
+        bullet('Trap: Reading ScoraApp linearly. Reality: search by view name / navigateTo.'),
+        bullet('Trap: Thinking src/app/*/page.js are all separate apps. Reality: many are thin wrappers; core UX is ScoraApp.'),
+
+        h2('12.7 Debugging order (when something breaks)'),
+        numbered('Which role? visitor / employee / admin.'),
+        numbered('Which view name is active? (log view or infer from UI).'),
+        numbered('Browser console errors? (React / permissions).'),
+        numbered('Network tab: failing /api/* ? status 503 usually means missing Admin SDK / disabled AI.'),
+        numbered('Firestore permission error? compare Console rules vs repo rules.'),
+        numbered('Only then dig into component props and CSS.'),
+
+        h2('12.8 2-hour study plan (suggested)'),
+        table(
+          ['Time', 'Do this', 'You should be able to answer'],
+          [
+            ['0:00–0:20', 'Click through localhost as visitor + open GoGo', 'What are TCS, PQA, GoGo for?'],
+            ['0:20–0:40', 'Read AGENTS.md + firebase.js + page.js', 'Where does data live? Is there a separate backend?'],
+            ['0:40–1:10', 'Map navigateTo / view === in ScoraApp', 'Name 8 important views'],
+            ['1:10–1:35', 'Skim firestore.rules + consultantService', 'Who can complete a tip?'],
+            ['1:35–2:00', 'Trace tip finish OR GoGo chip → speak API', 'Draw the path on paper'],
+          ],
+        ),
+
+        h2('12.9 Mental model (memorize this)'),
+        p(
+          'SCORA = one Next.js app + Firebase. ScoraApp is a view state machine. Firestore holds documents; rules enforce identity. /api is the privileged door. GoGo is a guided host inside a fixed range (chips, tip library, learned answers), not an open chatbot. Learn navigation and data rules first; components second; styling last.',
         ),
 
         h1('13. Recommended reading order (files)'),
         table(
-          ['Order', 'File / area', 'Why first'],
+          ['Order', 'File / area', 'Why first', 'What to search inside'],
           [
-            ['1', 'package.json + AGENTS.md', 'Commands, constraints, secrets'],
-            ['2', 'src/firebase.js', 'Live backend identity'],
-            ['3', 'src/app/ScoraApp.jsx (search navigateTo)', 'Screen map'],
-            ['4', 'firestore.rules', 'Who can touch what'],
-            ['5', 'src/services/*', 'Data access layer'],
-            ['6', 'src/lib/gogoGuideFlow.js', 'GoGo behavior range'],
-            ['7', 'src/components/employee/*', 'Knowledge tip journey'],
-            ['8', 'src/app/api/**/route.js', 'Privileged server features'],
-            ['9', 'components/admin/*', 'Ops/admin features'],
+            ['1', 'package.json + AGENTS.md', 'Commands & constraints', 'scripts, Gemini disabled'],
+            ['2', 'src/firebase.js', 'Live backend identity', 'projectId, getAuth, getFirestore'],
+            ['3', 'src/app/page.js', 'Entry point', 'ScoraApp'],
+            ['4', 'src/app/ScoraApp.jsx', 'Screen map', 'navigateTo, view ==='],
+            ['5', 'firestore.rules', 'Permission truth', 'employees, consultants, progress'],
+            ['6', 'src/services/*', 'Data access', 'export async function'],
+            ['7', 'src/lib/gogoGuideFlow.js', 'GoGo range', 'GOGO_FLOW, chips'],
+            ['8', 'src/components/employee/*', 'Knowledge journey', 'ConsultantViewer, Dashboard'],
+            ['9', 'src/app/api/**/route.js', 'Privileged server', 'export async function POST'],
+            ['10', 'src/components/admin/*', 'Ops tools', 'TechnicalConsultantsPanel'],
           ],
         ),
 
@@ -660,13 +758,14 @@ const doc = new Document({
         bullet('PQA — Partner Quality Award (center/partner performance).'),
         bullet('GoGo — Guided visitor/employee assistant with voice.'),
         bullet('My Knowledge — Employee tip library + completion tracking.'),
-        bullet('MCP — Model Context Protocol (agent tool bridge in Cursor).'),
+        bullet('View — Internal screen id in ScoraApp (not always a URL).'),
+        bullet('MCP — Model Context Protocol (Cursor agent tool bridge).'),
         bullet('Edge TTS — Neural text-to-speech used by GoGo speak API.'),
         bullet('Admin SDK — Server Firebase privileges via service account JSON.'),
 
         h1('15. Closing'),
         p(
-          'SCORA’s strength is a clear product range: rankings, Knowledge tips, guided GoGo, and admin ops — on one Next.js + Firebase stack. Prefer guided/library answers over open AI. When learning the code, start from navigation (ScoraApp views) and data rules (Firestore), then dive into one feature vertical end-to-end.',
+          'To learn SCORA as a programmer: click the product, read the contracts (AGENTS + firebase + rules), map ScoraApp views, then trace one user story end-to-end. That path beats reading thousands of lines in order.',
         ),
         p('Document path: docs/SCORA_Stack_and_Programmer_Guide.docx', {
           muted: true,
@@ -679,5 +778,14 @@ const doc = new Document({
 
 const buffer = await Packer.toBuffer(doc);
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
-fs.writeFileSync(OUT, buffer);
-console.log(`Wrote ${OUT}`);
+try {
+  fs.writeFileSync(OUT, buffer);
+  console.log(`Wrote ${OUT}`);
+} catch (err) {
+  if (err?.code === 'EBUSY' || err?.code === 'EPERM') {
+    fs.writeFileSync(OUT_ALT, buffer);
+    console.warn(`Primary file locked; wrote ${OUT_ALT}`);
+  } else {
+    throw err;
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2, MessageCircle, Mic, MicOff, Minus, Send, ThumbsDown, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
 import {
   GOGO_BUBBLE,
@@ -208,6 +209,7 @@ export default function GoGoAssistant({
   employeeUid = '',
   tipCompleteNonce = 0,
 }) {
+  const reduceMotion = useReducedMotion();
   const [lang, setLang] = useState('en');
   const [open, setOpen] = useState(false);
   const [entered, setEntered] = useState(false);
@@ -1490,8 +1492,16 @@ export default function GoGoAssistant({
         }`}
         dir={rtl ? 'rtl' : 'ltr'}
       >
+        <AnimatePresence>
         {open && (
-          <div className="w-full min-h-0 max-h-[min(calc(100%-13.5rem),30rem)] sm:max-h-[min(calc(100%-15rem),32rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <motion.div
+            key="gogo-panel"
+            initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: reduceMotion ? 0.2 : 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full min-h-0 max-h-[min(calc(100%-13.5rem),30rem)] sm:max-h-[min(calc(100%-15rem),32rem)] flex flex-col rounded-3xl border border-white/10 bg-zinc-950/96 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.55)] overflow-hidden"
+          >
             <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 bg-gradient-to-r from-blue-600/25 to-transparent shrink-0 sticky top-0 z-10">
               <div className="min-w-0">
                 <p className={`text-[11px] font-black text-white truncate ${rtl ? 'tracking-normal' : 'uppercase tracking-widest'}`}>{assistantDisplayName(lang)}</p>
@@ -1644,12 +1654,15 @@ export default function GoGoAssistant({
               <div className="px-3 pb-2 flex flex-wrap gap-1.5 shrink-0 max-h-20 overflow-y-auto">
                 {chips
                   .filter((id) => id && id !== 'lang_toggle')
-                  .map((id) => (
-                  <button
+                  .map((id, chipIndex) => (
+                  <motion.button
                     key={id}
                     type="button"
                     disabled={busy}
                     onClick={() => handleChip(id)}
+                    initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.28, delay: 0.08 + chipIndex * 0.07, ease: [0.22, 1, 0.36, 1] }}
                     className={`px-2.5 py-1.5 rounded-full text-[9px] font-black tracking-wide border transition-all disabled:opacity-50 ${
                       id === 'main_menu'
                         ? 'border-white/20 bg-zinc-800 text-zinc-200'
@@ -1657,7 +1670,7 @@ export default function GoGoAssistant({
                     }`}
                   >
                     {labels[id] || id}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             )}
@@ -1699,12 +1712,19 @@ export default function GoGoAssistant({
                 <p className="text-[9px] text-amber-200/90 px-1">{micHint}</p>
               ) : null}
             </form>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
         <div className={`relative flex shrink-0 items-end justify-start ${open ? 'gogo-dock-full' : 'gogo-dock-fullbody-avatar'}`}>
+          <AnimatePresence>
           {!open && showBubble && dockNudge && (
-            <div
+            <motion.div
+              key={`nudge-${dockNudge.kind}`}
+              initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.96 }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               className="gogo-mx-tip-popup absolute bottom-full mb-2 left-2 sm:left-3 z-[2] w-[min(16.5rem,calc(100vw-2rem))]"
               role="status"
               aria-live="polite"
@@ -1752,9 +1772,10 @@ export default function GoGoAssistant({
                 </div>
                 <span className="gogo-mx-tip-popup-tail" aria-hidden />
               </div>
-            </div>
+            </motion.div>
           )}
-          <button
+          </AnimatePresence>
+          <motion.button
             type="button"
             onClick={() => {
               if (open) {
@@ -1774,7 +1795,20 @@ export default function GoGoAssistant({
             className="relative group focus:outline-none touch-manipulation"
             aria-label={open ? `Close ${assistantDisplayName('en')}` : `Summon ${assistantDisplayName('en')}`}
             title={open ? 'Close' : 'Talk to GOGO'}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.4, y: 24 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={
+              reduceMotion
+                ? { duration: 0.2 }
+                : { type: 'spring', stiffness: 380, damping: 18, mass: 0.9, delay: 0.12 }
+            }
           >
+              {dockNudge?.kind === 'complete' && !open ? (
+                <span className="gogo-tip-burst pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" aria-hidden>
+                  <span className="gogo-tip-burst-ring" />
+                  <span className="gogo-tip-burst-ring gogo-tip-burst-ring-delay" />
+                </span>
+              ) : null}
               <span
                 className={`absolute -inset-2 rounded-full blur-xl transition-opacity ${
                   listening || speaking
@@ -1818,7 +1852,7 @@ export default function GoGoAssistant({
                 Mic
               </span>
             )}
-          </button>
+          </motion.button>
         </div>
       </div>
     </>

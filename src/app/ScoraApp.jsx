@@ -54,6 +54,7 @@ import QuizAdminPanel from '../components/quiz/QuizAdminPanel';
 import AdminAccountsPanel, { EMPTY_ADMIN_FORM } from '../components/admin/AdminAccountsPanel';
 import AdminPortalShell from '../components/admin/AdminPortalShell';
 import ScoraAtmosphereMount from '../components/atmosphere/ScoraAtmosphereMount';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { MotionCard, MotionStage, usePortalLaunch } from '../components/transitions/PortalLaunch';
 import LogTrafficPanel from '../components/admin/LogTrafficPanel';
 import VisitorEngagementPanel from '../components/admin/VisitorEngagementPanel';
@@ -1236,35 +1237,34 @@ const TIER_GLOW_COLORS = {
 };
 
 const RankReveal3D = ({ tier, score, name, onDismiss, isPqaMode, rank }) => {
+  const reduce = useReducedMotion();
   const glowColors = isPqaMode ? TIER_GLOW_COLORS.Diamond : (TIER_GLOW_COLORS[tier] || TIER_GLOW_COLORS.Bronze);
   const meta = isPqaMode ? null : (TIER_META[tier] || TIER_META.Bronze);
   const [phase, setPhase] = React.useState('reveal'); // 'reveal' | 'idle'
   const [visible, setVisible] = React.useState(true);
   const scoreNum = Number(score);
   const scoreText = Number.isFinite(scoreNum) && scoreNum > 0 ? score : '';
+  const spinMs = reduce ? 280 : 1300;
 
   React.useEffect(() => {
-    // After the spin completes, switch to idle float
-    const spinTimer = setTimeout(() => setPhase('idle'), 1500);
-    // Auto-dismiss after 5 seconds
+    const spinTimer = setTimeout(() => setPhase('idle'), spinMs);
     let dismissFadeTimer = null;
     const dismissTimer = setTimeout(() => {
       setVisible(false);
-      dismissFadeTimer = setTimeout(() => onDismiss?.(), 500);
-    }, 5000);
+      dismissFadeTimer = setTimeout(() => onDismiss?.(), 400);
+    }, reduce ? 2200 : 5000);
     return () => {
       clearTimeout(spinTimer);
       clearTimeout(dismissTimer);
       if (dismissFadeTimer) clearTimeout(dismissFadeTimer);
     };
-  }, []);
+  }, [onDismiss, reduce, spinMs]);
 
   const handleTap = () => {
     setVisible(false);
-    setTimeout(() => onDismiss?.(), 500);
+    setTimeout(() => onDismiss?.(), 400);
   };
 
-  // Generate 8 orbiting particles
   const particles = Array.from({ length: 8 }, (_, i) => ({
     id: i,
     delay: `${i * 0.35}s`,
@@ -1274,100 +1274,125 @@ const RankReveal3D = ({ tier, score, name, onDismiss, isPqaMode, rank }) => {
   }));
 
   return (
-    <div
-      className={`fixed inset-0 z-[200] flex items-center justify-center cursor-pointer transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      onClick={handleTap}
-      style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.98) 100%)' }}
-    >
-      {/* Subtle background grid */}
-      <div className="absolute inset-0 bg-grid opacity-20" />
+    <AnimatePresence>
+      {visible ? (
+        <motion.div
+          key="rank-reveal"
+          className="fixed inset-0 z-[200] flex items-center justify-center cursor-pointer"
+          onClick={handleTap}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.4 }}
+          style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.98) 100%)' }}
+        >
+          <div className="absolute inset-0 bg-grid opacity-20" />
 
-      {/* Central reveal stage */}
-      <div className="relative flex flex-col items-center gap-10 perspective-1200">
+          <div className="relative flex flex-col items-center gap-10 perspective-1200">
+            {!reduce && (
+              <>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className={`absolute w-40 h-40 rounded-full border-2 ${glowColors.ring} animate-ring-expand`} />
+                  <div className={`absolute w-40 h-40 rounded-full border-2 ${glowColors.ring} animate-ring-expand-delay`} />
+                </div>
 
-        {/* Expanding rings */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className={`absolute w-40 h-40 rounded-full border-2 ${glowColors.ring} animate-ring-expand`} />
-          <div className={`absolute w-40 h-40 rounded-full border-2 ${glowColors.ring} animate-ring-expand-delay`} />
-        </div>
+                <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+                  <div
+                    className="w-32 h-32 rounded-full animate-radial-burst"
+                    style={{ background: `radial-gradient(circle, ${glowColors.from} 0%, transparent 70%)` }}
+                  />
+                </div>
 
-        {/* Radial burst */}
-        <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-          <div
-            className="w-32 h-32 rounded-full animate-radial-burst"
-            style={{ background: `radial-gradient(circle, ${glowColors.from} 0%, transparent 70%)` }}
-          />
-        </div>
+                <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -55%)' }}>
+                  <div
+                    className="w-56 h-56 rounded-full animate-glow-pulse blur-3xl"
+                    style={{ background: `radial-gradient(circle, ${glowColors.from} 0%, ${glowColors.to} 50%, transparent 80%)` }}
+                  />
+                </div>
 
-        {/* Glow aura */}
-        <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -55%)' }}>
-          <div
-            className="w-56 h-56 rounded-full animate-glow-pulse blur-3xl"
-            style={{ background: `radial-gradient(circle, ${glowColors.from} 0%, ${glowColors.to} 50%, transparent 80%)` }}
-          />
-        </div>
+                <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -55%)' }}>
+                  {particles.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`absolute ${p.size} ${glowColors.particle} rounded-full shadow-lg animate-particle-orbit`}
+                      style={{
+                        '--orbit-radius': p.radius,
+                        '--orbit-duration': p.duration,
+                        animationDelay: p.delay,
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
 
-        {/* Orbiting particles */}
-        <div className="absolute flex items-center justify-center pointer-events-none" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -55%)' }}>
-          {particles.map(p => (
-            <div
-              key={p.id}
-              className={`absolute ${p.size} ${glowColors.particle} rounded-full shadow-lg animate-particle-orbit`}
-              style={{
-                '--orbit-radius': p.radius,
-                '--orbit-duration': p.duration,
-                animationDelay: p.delay,
-              }}
-            />
-          ))}
-        </div>
+            <motion.div
+              className={phase === 'reveal' ? (reduce ? '' : 'animate-rank-spin-3d') : 'animate-rank-float'}
+              initial={reduce ? { opacity: 0, scale: 0.92 } : false}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: reduce ? 0.28 : 0.45 }}
+            >
+              {isPqaMode ? (
+                <div className="w-36 h-36 md:w-48 md:h-48 rounded-full border-[6px] border-blue-400 bg-black/50 shadow-[0_0_40px_rgba(96,165,250,0.5)] flex items-center justify-center relative z-10">
+                  <span className="text-7xl font-black italic text-blue-400">#{rank || '-'}</span>
+                </div>
+              ) : (
+                <img
+                  src={meta?.img}
+                  alt={tier}
+                  className="w-36 h-36 md:w-48 md:h-48 object-contain drop-shadow-[0_0_40px_rgba(255,255,255,0.2)] relative z-10 tier-emblem-blend"
+                />
+              )}
+            </motion.div>
 
-        {/* The tier emblem / PQA rank — 3D spin then float */}
-        <div className={phase === 'reveal' ? 'animate-rank-spin-3d' : 'animate-rank-float'}>
-          {isPqaMode ? (
-            <div className={`w-36 h-36 md:w-48 md:h-48 rounded-full border-[6px] border-blue-400 bg-black/50 shadow-[0_0_40px_rgba(96,165,250,0.5)] flex items-center justify-center relative z-10`}>
-                <span className="text-7xl font-black italic text-blue-400">#{rank || '-'}</span>
-            </div>
-          ) : (
-            <img
-              src={meta?.img}
-              alt={tier}
-              className="w-36 h-36 md:w-48 md:h-48 object-contain drop-shadow-[0_0_40px_rgba(255,255,255,0.2)] relative z-10 tier-emblem-blend"
-            />
-          )}
-        </div>
-
-        {/* Tier / Rank name */}
-        <div className="animate-tier-title text-center space-y-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-600">
-            {isPqaMode ? 'System Ranking' : 'You have earned'}
-          </p>
-          <h2 className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter bg-gradient-to-r ${glowColors.gradient} bg-clip-text text-transparent animate-shimmer`}
-            style={{ backgroundImage: `linear-gradient(110deg, ${glowColors.from}, white 30%, ${glowColors.from} 50%, white 70%, ${glowColors.from})` }}
-          >
-            {isPqaMode ? `Rank #${rank || '-'}` : tier}
-          </h2>
-          <p className={`text-xs font-black uppercase tracking-[0.4em] ${glowColors.text}`}>{name}</p>
-        </div>
-
-        {/* Score counter (hidden for PQA animation by request) */}
-        {!isPqaMode && (
-          <div className="animate-score-bounce text-center">
-            <span className="text-7xl md:text-8xl font-black text-white italic tracking-tighter drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
-              {scoreText}
-            </span>
-            {scoreText ? (
-              <p className="text-[9px] font-black uppercase tracking-[0.5em] text-zinc-600 mt-2">
-                TCS Score
+            <motion.div
+              className="text-center space-y-3"
+              initial={{ opacity: 0, y: reduce ? 0 : 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: reduce ? 0.05 : 0.75, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-600">
+                {isPqaMode ? 'System Ranking' : 'You have earned'}
               </p>
-            ) : null}
-          </div>
-        )}
+              <h2
+                className={`text-4xl md:text-6xl font-black uppercase italic tracking-tighter bg-gradient-to-r ${glowColors.gradient} bg-clip-text text-transparent animate-shimmer`}
+                style={{ backgroundImage: `linear-gradient(110deg, ${glowColors.from}, white 30%, ${glowColors.from} 50%, white 70%, ${glowColors.from})` }}
+              >
+                {isPqaMode ? `Rank #${rank || '-'}` : tier}
+              </h2>
+              <p className={`text-xs font-black uppercase tracking-[0.4em] ${glowColors.text}`}>{name}</p>
+            </motion.div>
 
-        {/* Tap to continue hint */}
-        <p className="text-[8px] font-black uppercase tracking-[0.5em] text-zinc-800 animate-pulse mt-8">Tap anywhere to continue</p>
-      </div>
-    </div>
+            {!isPqaMode && (
+              <motion.div
+                className="text-center"
+                initial={{ opacity: 0, scale: reduce ? 1 : 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: reduce ? 0.1 : 1.05, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <span className="text-7xl md:text-8xl font-black text-white italic tracking-tighter drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+                  {scoreText}
+                </span>
+                {scoreText ? (
+                  <p className="text-[9px] font-black uppercase tracking-[0.5em] text-zinc-600 mt-2">
+                    TCS Score
+                  </p>
+                ) : null}
+              </motion.div>
+            )}
+
+            <motion.p
+              className="text-[8px] font-black uppercase tracking-[0.5em] text-zinc-700 mt-8"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0.35, 0.85, 0.35] }}
+              transition={{ duration: 2.2, repeat: Infinity, delay: reduce ? 0.2 : 1.4 }}
+            >
+              Tap anywhere to continue
+            </motion.p>
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 };
 
@@ -3052,9 +3077,21 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
     return (
       <div className="mb-6 w-full min-w-0 max-w-full md:mb-10" aria-label="Top three podium">
         <div className="mx-auto grid w-full min-w-0 max-w-4xl grid-cols-3 items-end gap-1 px-1 sm:gap-3 sm:px-3 md:gap-5">
-          {top.length >= 2 && <PodiumCol eng={top[1]} forcedRank={2} stepClass="h-12 sm:h-[5.5rem] md:h-[7rem]" />}
-          {top.length >= 1 && <PodiumCol eng={top[0]} forcedRank={1} stepClass="h-16 sm:h-[7.5rem] md:h-[9.5rem]" champion />}
-          {top.length >= 3 && <PodiumCol eng={top[2]} forcedRank={3} stepClass="h-10 sm:h-[4.5rem] md:h-[5.5rem]" />}
+          {top.length >= 2 && (
+            <MotionCard index={1}>
+              <PodiumCol eng={top[1]} forcedRank={2} stepClass="h-12 sm:h-[5.5rem] md:h-[7rem]" />
+            </MotionCard>
+          )}
+          {top.length >= 1 && (
+            <MotionCard index={0}>
+              <PodiumCol eng={top[0]} forcedRank={1} stepClass="h-16 sm:h-[7.5rem] md:h-[9.5rem]" champion />
+            </MotionCard>
+          )}
+          {top.length >= 3 && (
+            <MotionCard index={2}>
+              <PodiumCol eng={top[2]} forcedRank={3} stepClass="h-10 sm:h-[4.5rem] md:h-[5.5rem]" />
+            </MotionCard>
+          )}
         </div>
       </div>
     );

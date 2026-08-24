@@ -145,9 +145,9 @@ export function PortalLaunchOverlay({ event, onComplete }) {
 
             <motion.div
               className="text-center"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: [0, 1, 1, 0], y: [12, 0, 0, -6] }}
-              transition={{ duration: sceneMs / 1000, times: [0, 0.15, 0.75, 1], ease: 'easeInOut' }}
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: [0, 1, 1, 0], y: [16, 0, 0, -8], scale: [0.96, 1, 1.02, 1.04] }}
+              transition={{ duration: sceneMs / 1000, times: [0, 0.14, 0.72, 1], ease: [0.22, 1, 0.36, 1] }}
             >
               <p className="text-[10px] font-black uppercase tracking-[0.35em]" style={{ color: theme.accent }}>
                 Launching
@@ -193,9 +193,9 @@ export function MotionStage({ children, className = '', delay = 0 }) {
   return (
     <motion.div
       className={className}
-      initial={reduce ? false : { opacity: 0, y: 28, filter: 'blur(8px)' }}
+      initial={reduce ? false : { opacity: 0, y: 20, filter: 'blur(6px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      transition={{ duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: reduce ? 0.2 : 0.55, delay: reduce ? 0 : delay, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
@@ -207,11 +207,10 @@ export function MotionCard({ children, className = '', index = 0 }) {
   return (
     <motion.div
       className={className}
-      initial={reduce ? false : { opacity: 0, y: 36, scale: 0.94, rotateX: 8 }}
-      animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-      transition={{ duration: 0.55, delay: 0.12 + index * 0.1, ease: [0.22, 1, 0.36, 1] }}
+      initial={reduce ? false : { opacity: 0, y: 28, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.45, delay: 0.15 + index * 0.08, ease: [0.22, 1, 0.36, 1] }}
       whileHover={reduce ? undefined : { y: -8, transition: { duration: 0.25 } }}
-      style={{ transformStyle: 'preserve-3d' }}
     >
       {children}
     </motion.div>
