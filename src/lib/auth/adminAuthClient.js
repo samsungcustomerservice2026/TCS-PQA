@@ -347,8 +347,11 @@ export function clearAdminUiPrefs() {
 export function subscribeAdminAuth(callback) {
   return onAuthStateChanged(auth, async (user) => {
     if (!user) {
-      // Never auto-enter via emergency/migration session — login form required.
-      clearMigrationSession();
+      const migrationProfile = readMigrationSession();
+      if (migrationProfile) {
+        callback({ user: null, profile: migrationProfile, migration: true });
+        return;
+      }
       callback({ user: null, profile: null });
       return;
     }

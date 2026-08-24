@@ -152,9 +152,15 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isAdmin();
     }
-    match /samsung_academy_survey/{doc=**} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+    match /samsung_academy_survey/records {
+      // Display flags must be readable by all visitors (TCS popup on/off).
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+
+      match /responses/{responseId} {
+        allow create: if true;
+        allow read, update, delete: if isAdmin();
+      }
     }
 
     // ΓöÇΓöÇ Quiz / SCORA ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ

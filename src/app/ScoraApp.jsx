@@ -187,6 +187,7 @@ import {
   signOutAdmin,
   subscribeAdminAuth,
   clearAdminUiPrefs,
+  readMigrationSession,
 } from '../lib/auth/adminAuthClient';
 import { authJson } from '../lib/auth/clientAuth';
 
@@ -243,8 +244,59 @@ const UI_STATE_STORAGE_KEY_MAIN = 'tcs_ui_state_main_v1';
 const UI_STATE_STORAGE_KEY_ADMIN = 'tcs_ui_state_admin_v1';
 /** Tab-scoped flag: admin explicitly logged in this session (survives reload, cleared on logout). */
 const ADMIN_SESSION_OK_KEY = 'adminSessionOk_v1';
+const ADMIN_PROFILE_CACHE_KEY = 'adminSessionProfile_v1';
+const ACADEMY_SURVEY_SETTINGS_CACHE_KEY = 'academySurveySettingsCache_v1';
 
 const ADMIN_RESTORABLE_VIEWS = new Set(['ADMIN_DASHBOARD', 'PROFILE_MGMT', 'EXTERNAL_LOGS']);
+
+function readCachedAdminProfile() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(ADMIN_PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAdminProfile(profile) {
+  if (typeof window === 'undefined' || !profile) return;
+  try {
+    sessionStorage.setItem(ADMIN_PROFILE_CACHE_KEY, JSON.stringify(profile));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearCachedAdminProfile() {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(ADMIN_PROFILE_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function readCachedAcademySurveySettings() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ACADEMY_SURVEY_SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAcademySurveySettings(settings) {
+  if (typeof window === 'undefined' || !settings) return;
+  try {
+    localStorage.setItem(ACADEMY_SURVEY_SETTINGS_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    /* ignore */
+  }
+}
 
 function readAdminBootView() {
   if (typeof window === 'undefined') return 'ADMIN_LOGIN';
@@ -1754,8 +1806,11 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       viewStackRef.current = ['APP_SELECTION', 'PQA_DIVISION_SELECTION'];
     } else if (host.includes('scora-admin')) {
       setIsAdminPortal(true);
-      setView('ADMIN_LOGIN');
-      viewStackRef.current = ['ADMIN_LOGIN'];
+      const bootView = readAdminBootView();
+      if (bootView !== 'ADMIN_LOGIN') {
+        setView(bootView);
+        viewStackRef.current = ['ADMIN_LOGIN', bootView];
+      }
     } else if (host.includes('scora-tcs')) {
       setPortalRealm('TCS');
       setView('TCS_DIVISION_SELECTION');
@@ -1799,7 +1854,16 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   const colName = resolveFirestoreCollection(appMode, tcsMxRoleTab);
   const [engineers, setEngineers] = useState([]);
   const [admins, setAdmins] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    if (!(initialAdminPortal || adminEntryAtBoot)) return null;
+    try {
+      if (sessionStorage.getItem(ADMIN_SESSION_OK_KEY) !== '1') return null;
+    } catch {
+      return null;
+    }
+    return readCachedAdminProfile() || readMigrationSession();
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null); // New error state
 
@@ -1930,7 +1994,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   }, [isAdminPortal]);
 
   useEffect(() => {
-    const unsub = subscribeAdminAuth(({ profile }) => {
+    const unsub = subscribeAdminAuth(({ user, profile, migration }) => {
       if (isAdminPortal) {
         if (!adminSessionOkRef.current) {
           return;
@@ -1938,18 +2002,28 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
         if (profile) {
           setCurrentUser(profile);
           setIsLogged(true);
-        } else {
-          adminSessionOkRef.current = false;
-          try {
-            sessionStorage.removeItem(ADMIN_SESSION_OK_KEY);
-          } catch {
-            /* ignore */
-          }
-          setCurrentUser(null);
-          setIsLogged(false);
-          setView('ADMIN_LOGIN');
-          viewStackRef.current = ['ADMIN_LOGIN'];
+          writeCachedAdminProfile(profile);
+          return;
         }
+        // Firebase signed in but admin profile still loading — keep restored session.
+        if (user) {
+          return;
+        }
+        // Legacy migration login (no Firebase user) is handled above via readMigrationSession.
+        if (migration) {
+          return;
+        }
+        adminSessionOkRef.current = false;
+        try {
+          sessionStorage.removeItem(ADMIN_SESSION_OK_KEY);
+        } catch {
+          /* ignore */
+        }
+        clearCachedAdminProfile();
+        setCurrentUser(null);
+        setIsLogged(false);
+        setView('ADMIN_LOGIN');
+        viewStackRef.current = ['ADMIN_LOGIN'];
         return;
       }
       if (profile) {
@@ -1993,16 +2067,28 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   const [engineerFeedback, setEngineerFeedback] = useState(INITIAL_ENGINEER_FEEDBACK);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
-  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  const [feedbackEnabled, setFeedbackEnabled] = useState(() => {
+    const cached = readCachedAcademySurveySettings();
+    return cached?.feedbackEnabled !== false;
+  });
   /** Home popup + floating promo; dismissed in-memory until full page refresh */
-  const [showFeedbackPromo, setShowFeedbackPromo] = useState(true);
+  const [showFeedbackPromo, setShowFeedbackPromo] = useState(() => {
+    const cached = readCachedAcademySurveySettings();
+    return cached?.feedbackEnabled !== false;
+  });
   const [academySurveySent, setAcademySurveySent] = useState(false);
   const [isSubmittingAcademySurvey, setIsSubmittingAcademySurvey] = useState(false);
-  const [academySurveyPopupEnabled, setAcademySurveyPopupEnabled] = useState(true);
+  const [academySurveyPopupEnabled, setAcademySurveyPopupEnabled] = useState(() => {
+    const cached = readCachedAcademySurveySettings();
+    return cached?.academySurveyPopupEnabled !== false;
+  });
   const [academySurveySettingsLoading, setAcademySurveySettingsLoading] = useState(false);
   const [academySurveySettingsSaving, setAcademySurveySettingsSaving] = useState(false);
   /** User dismissed the floating shortcut for this session only */
-  const [showSurveyShortcut, setShowSurveyShortcut] = useState(true);
+  const [showSurveyShortcut, setShowSurveyShortcut] = useState(() => {
+    const cached = readCachedAcademySurveySettings();
+    return cached?.academySurveyPopupEnabled !== false;
+  });
   const [gogoOpen, setGogoOpen] = useState(false);
   const [academySurvey, setAcademySurvey] = useState({
     fullName: '',
@@ -2413,6 +2499,13 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       setIsAdminPortal(true);
       const forceLogout = ['1', 'true', 'yes'].includes(String(params.get('logout') || '').toLowerCase());
       if (forceLogout) {
+        adminSessionOkRef.current = false;
+        try {
+          sessionStorage.removeItem(ADMIN_SESSION_OK_KEY);
+        } catch {
+          /* ignore */
+        }
+        clearCachedAdminProfile();
         clearAdminUiPrefs();
         signOutAdmin().finally(() => {
           setIsLogged(false);
@@ -2431,10 +2524,18 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
       if (tab === 'samsung-kb' || tab === 'samsung-products' || tab === 'products-kb' || tab === 'consultants' || tab === 'technical-consultants' || tab === 'knowledge') {
         setAdminPanelTab('knowledge-base');
       }
-      if (isLogged && (logs === 'external' || logs === '1')) {
+      const hasAdminSession =
+        isLogged ||
+        adminSessionOkRef.current ||
+        (typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_SESSION_OK_KEY) === '1');
+      const bootView = readAdminBootView();
+      if (hasAdminSession && (logs === 'external' || logs === '1')) {
         setView('EXTERNAL_LOGS');
         viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD', 'EXTERNAL_LOGS'];
-      } else if (isLogged) {
+      } else if (hasAdminSession && bootView !== 'ADMIN_LOGIN') {
+        setView(bootView);
+        viewStackRef.current = ['ADMIN_LOGIN', bootView];
+      } else if (hasAdminSession) {
         setView('ADMIN_DASHBOARD');
         viewStackRef.current = ['ADMIN_LOGIN', 'ADMIN_DASHBOARD'];
       } else {
@@ -2469,6 +2570,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
           if (cancelled || academySurveySettingsTouchedRef.current) return;
           setAcademySurveyPopupEnabled(settings.academySurveyPopupEnabled !== false);
           setFeedbackEnabled(settings.feedbackEnabled !== false);
+          writeCachedAcademySurveySettings(settings);
           if (settings.academySurveyPopupEnabled === false) {
             setShowSurveyShortcut(false);
           }
@@ -2551,6 +2653,10 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
     if (!enabled) setShowSurveyShortcut(false);
     try {
       await saveAcademySurveySettings({ academySurveyPopupEnabled: enabled }, currentUser?.username || 'admin');
+      writeCachedAcademySurveySettings({
+        academySurveyPopupEnabled: enabled,
+        feedbackEnabled,
+      });
       if (enabled) setShowSurveyShortcut(true);
       message.success(enabled ? 'Samsung Academy survey popup is ON for all visitors.' : 'Samsung Academy survey popup is OFF.');
       writeLog({
@@ -2589,6 +2695,10 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
     if (!enabled) setShowFeedbackPromo(false);
     try {
       await saveAcademySurveySettings({ feedbackEnabled: enabled }, currentUser?.username || 'admin');
+      writeCachedAcademySurveySettings({
+        academySurveyPopupEnabled,
+        feedbackEnabled: enabled,
+      });
       if (enabled) setShowFeedbackPromo(true);
       message.success(enabled ? 'Arabic feedback form is ON for all visitors.' : 'Arabic feedback form is OFF.');
       writeLog({
@@ -4314,6 +4424,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
     } catch {
       /* ignore */
     }
+    writeCachedAdminProfile(profile);
     setCurrentUser(profile);
     setLoginUser('');
     setLoginPass('');
@@ -4405,6 +4516,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
     } catch {
       /* ignore */
     }
+    clearCachedAdminProfile();
     clearAdminUiPrefs();
     try {
       await signOutAdmin();
@@ -4425,6 +4537,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
     } catch {
       /* ignore */
     }
+    clearCachedAdminProfile();
     setCurrentUser(null);
     clearAdminUiPrefs();
     try {
