@@ -11,12 +11,12 @@ import {
   browserLocalPersistence,
   updateProfile,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, getDocs, collection, query, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, getDocs, collection, query, limit, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { CONSULTANT_FIRESTORE, EMPLOYEE_STATUS, EMPLOYEE_PRODUCT_LINE } from '../lib/consultants/constants';
 import { createEmptyEmployeeProfile } from '../lib/consultants/schema';
 
-const { employees: EMPLOYEES, employeeIndex: INDEX } = CONSULTANT_FIRESTORE;
+const { employees: EMPLOYEES, employeeIndex: INDEX, progress: PROGRESS } = CONSULTANT_FIRESTORE;
 
 let persistenceReady = false;
 
@@ -60,6 +60,42 @@ function mapAuthError(err) {
     return new Error('Incorrect GSPN/email or password.');
   }
   return new Error(err?.message || 'Authentication failed');
+}
+
+/**
+ * Public index lookup — used during signup to block duplicates before Auth create.
+ * @returns {{ emailTaken: boolean, gspnTaken: boolean, email?: string, gspnId?: string }}
+ */
+export async function checkEmployeeAvailability({ email, gspnId } = {}) {
+  const em = normalizeEmail(email);
+  const gspn = normalizeGspn(gspnId);
+  const result = { emailTaken: false, gspnTaken: false, email: em || undefined, gspnId: gspn || undefined };
+
+  const reads = [];
+  if (gspn) {
+    reads.push(
+      getDoc(doc(db, INDEX, indexKeyForGspn(gspn)))
+        .then((snap) => {
+          if (snap.exists()) result.gspnTaken = true;
+        })
+        .catch((err) => {
+          if (!/permission|insufficient/i.test(String(err?.message || err?.code || ''))) throw err;
+        }),
+    );
+  }
+  if (em) {
+    reads.push(
+      getDoc(doc(db, INDEX, indexKeyForEmail(em)))
+        .then((snap) => {
+          if (snap.exists()) result.emailTaken = true;
+        })
+        .catch((err) => {
+          if (!/permission|insufficient/i.test(String(err?.message || err?.code || ''))) throw err;
+        }),
+    );
+  }
+  await Promise.all(reads);
+  return result;
 }
 
 export async function getEmployeeProfile(uid) {
@@ -107,11 +143,12 @@ export async function signUpEmployee({ email, gspnId, phone, password, confirmPa
   }
 
   try {
-    const existingGspn = await getDoc(doc(db, INDEX, indexKeyForGspn(gspn)));
-    if (existingGspn.exists()) throw new Error('This GSPN account is already registered. Please log in.');
+    const avail = await checkEmployeeAvailability({ email: em, gspnId: gspn });
+    if (avail.gspnTaken) throw new Error('This GSPN account is already registered. Please log in.');
+    if (avail.emailTaken) throw new Error('This email is already registered. Please log in.');
   } catch (err) {
-    if (err?.message?.includes('already registered')) throw err;
-    // permission-denied on old live rules — continue; Auth create + index write still enforce uniqueness by email
+    if (/already registered/i.test(String(err?.message || ''))) throw err;
+    // permission-denied on old live rules — continue; Auth create still enforces email uniqueness
     if (!/permission|insufficient/i.test(String(err?.message || err?.code || ''))) throw mapAuthError(err);
   }
 
@@ -207,6 +244,62 @@ export async function adminResetEmployeePassword(uid, newPassword) {
   if (!uid || !newPassword) throw new Error('uid and newPassword required');
   const { authJson } = await import('../lib/auth/clientAuth');
   return authJson('/api/admin/employees/reset-password', { uid, newPassword });
+}
+
+/** Admin delete: Auth user + Firestore profile, indexes, and progress (Admin SDK). */
+export async function adminDeleteEmployee(uid) {
+  if (!uid) throw new Error('uid required');
+  const { authJson } = await import('../lib/auth/clientAuth');
+  try {
+    return await authJson('/api/admin/employees/delete', { uid });
+  } catch (err) {
+    // No service account locally — fall back to Firestore-only cleanup from the admin client.
+    if (err?.code === 'admin_not_configured' || /Admin SDK required/i.test(String(err?.message || ''))) {
+      const result = await deleteEmployeeFirestoreClient(uid);
+      return {
+        ...result,
+        authDeleted: false,
+        warning:
+          'Profile removed from Firestore. Auth login may still exist until FIREBASE_SERVICE_ACCOUNT_JSON is set.',
+      };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Client-side employee purge (no Admin SDK). Removes profile, indexes, progress.
+ * Does not delete Firebase Auth credentials.
+ */
+export async function deleteEmployeeFirestoreClient(uid) {
+  if (!uid) throw new Error('uid required');
+  const profile = await getEmployeeProfile(uid);
+  const email = normalizeEmail(profile?.email);
+  const gspnId = normalizeGspn(profile?.gspnId);
+
+  const progressSnap = await getDocs(query(collection(db, PROGRESS), where('uid', '==', uid)));
+  const refs = progressSnap.docs.map((d) => d.ref);
+  refs.push(doc(db, EMPLOYEES, uid));
+
+  // Only clear index docs that still point at this uid (safe with duplicates).
+  if (gspnId) {
+    const gRef = doc(db, INDEX, indexKeyForGspn(gspnId));
+    const gSnap = await getDoc(gRef);
+    if (gSnap.exists() && gSnap.data()?.uid === uid) refs.push(gRef);
+  }
+  if (email) {
+    const eRef = doc(db, INDEX, indexKeyForEmail(email));
+    const eSnap = await getDoc(eRef);
+    if (eSnap.exists() && eSnap.data()?.uid === uid) refs.push(eRef);
+  }
+
+  for (let i = 0; i < refs.length; i += 400) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+
+  return { ok: true, uid, email, gspnId, authDeleted: false };
 }
 
 export async function listEmployees({ max = 200 } = {}) {

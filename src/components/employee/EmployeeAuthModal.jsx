@@ -1,8 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, LogIn, UserPlus } from 'lucide-react';
-import { signInEmployee, signUpEmployee } from '../../services/employeeAuthService';
+import {
+  checkEmployeeAvailability,
+  signInEmployee,
+  signUpEmployee,
+} from '../../services/employeeAuthService';
 import {
   EMPLOYEE_PRODUCT_LINE,
   EMPLOYEE_PRODUCT_LINE_LABELS,
@@ -19,6 +23,47 @@ export default function EmployeeAuthModal({ open, onClose, onSuccess }) {
   const [phone, setPhone] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [productLine, setProductLine] = useState('');
+  const [gspnHint, setGspnHint] = useState('');
+  const [emailHint, setEmailHint] = useState('');
+  const [gspnTaken, setGspnTaken] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
+  const checkSeq = useRef(0);
+
+  useEffect(() => {
+    if (!open || mode !== 'signup') return undefined;
+    const seq = ++checkSeq.current;
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const avail = await checkEmployeeAvailability({ email, gspnId });
+          if (seq !== checkSeq.current) return;
+          setGspnTaken(!!avail.gspnTaken);
+          setEmailTaken(!!avail.emailTaken);
+          setGspnHint(
+            avail.gspnTaken
+              ? 'This GSPN ID is already registered. Please log in.'
+              : gspnId.trim()
+                ? 'GSPN ID is available.'
+                : '',
+          );
+          setEmailHint(
+            avail.emailTaken
+              ? 'This email is already registered. Please log in.'
+              : email.trim()
+                ? 'Email is available.'
+                : '',
+          );
+        } catch {
+          if (seq !== checkSeq.current) return;
+          setGspnHint('');
+          setEmailHint('');
+          setGspnTaken(false);
+          setEmailTaken(false);
+        }
+      })();
+    }, 400);
+    return () => clearTimeout(t);
+  }, [open, mode, email, gspnId]);
 
   if (!open) return null;
 
@@ -32,6 +77,15 @@ export default function EmployeeAuthModal({ open, onClose, onSuccess }) {
         onSuccess?.(profile);
         onClose?.();
       } else {
+        if (gspnTaken || emailTaken) {
+          throw new Error(
+            gspnTaken && emailTaken
+              ? 'This GSPN ID and email are already registered. Please log in.'
+              : gspnTaken
+                ? 'This GSPN ID is already registered. Please log in.'
+                : 'This email is already registered. Please log in.',
+          );
+        }
         const profile = await signUpEmployee({
           email,
           gspnId,
@@ -64,7 +118,12 @@ export default function EmployeeAuthModal({ open, onClose, onSuccess }) {
         <div className="flex gap-2 pt-2">
           <button
             type="button"
-            onClick={() => { setMode('login'); setError(''); }}
+            onClick={() => {
+              setMode('login');
+              setError('');
+              setGspnHint('');
+              setEmailHint('');
+            }}
             className={`flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
               mode === 'login' ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-zinc-500'
             }`}
@@ -73,7 +132,10 @@ export default function EmployeeAuthModal({ open, onClose, onSuccess }) {
           </button>
           <button
             type="button"
-            onClick={() => { setMode('signup'); setError(''); }}
+            onClick={() => {
+              setMode('signup');
+              setError('');
+            }}
             className={`flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
               mode === 'signup' ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-zinc-500'
             }`}
@@ -105,23 +167,41 @@ export default function EmployeeAuthModal({ open, onClose, onSuccess }) {
             </>
           ) : (
             <>
-              <input
-                required
-                value={gspnId}
-                onChange={(e) => setGspnId(e.target.value)}
-                placeholder="GSPN user ID"
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-3 text-sm text-white"
-                autoComplete="username"
-              />
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-3 text-sm text-white"
-                autoComplete="email"
-              />
+              <div className="space-y-1">
+                <input
+                  required
+                  value={gspnId}
+                  onChange={(e) => setGspnId(e.target.value)}
+                  placeholder="GSPN user ID"
+                  className={`w-full bg-zinc-900 border rounded-xl px-3 py-3 text-sm text-white ${
+                    gspnTaken ? 'border-red-500/50' : 'border-white/10'
+                  }`}
+                  autoComplete="username"
+                />
+                {gspnHint && (
+                  <p className={`text-[11px] ${gspnTaken ? 'text-red-400' : 'text-emerald-400/80'}`}>
+                    {gspnHint}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <input
+                  required
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className={`w-full bg-zinc-900 border rounded-xl px-3 py-3 text-sm text-white ${
+                    emailTaken ? 'border-red-500/50' : 'border-white/10'
+                  }`}
+                  autoComplete="email"
+                />
+                {emailHint && (
+                  <p className={`text-[11px] ${emailTaken ? 'text-red-400' : 'text-emerald-400/80'}`}>
+                    {emailHint}
+                  </p>
+                )}
+              </div>
               <input
                 required
                 value={phone}
@@ -170,7 +250,7 @@ export default function EmployeeAuthModal({ open, onClose, onSuccess }) {
 
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || (mode === 'signup' && (gspnTaken || emailTaken))}
             className="w-full py-3 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest disabled:opacity-40"
           >
             {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}

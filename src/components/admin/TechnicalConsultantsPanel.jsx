@@ -20,9 +20,11 @@ import {
   CONSULTANT_AUDIENCE_LABELS,
   CONSULTANT_STATUS,
   DEFAULT_MIN_DWELL_SECONDS,
+  DEFAULT_QUESTION_TIME_LIMIT_SEC,
   EMPLOYEE_STATUS,
   EMPLOYEE_PRODUCT_LINE,
   EMPLOYEE_PRODUCT_LINE_LABELS,
+  TIP_QUESTION_TYPE,
 } from '../../lib/consultants/constants';
 import { FIREBASE_CONSULTANTS_CONSOLE_HINT } from '../../constants/firebaseConsultantsRules';
 import AttendanceAnimatedDashboard from './AttendanceAnimatedDashboard';
@@ -37,12 +39,13 @@ import {
   upsertConsultant,
 } from '../../services/consultantService';
 import {
+  adminDeleteEmployee,
   adminResetEmployeePassword,
   adminSetEmployeeProductLine,
   listEmployees,
   setEmployeeStatus,
 } from '../../services/employeeAuthService';
-import { createEmptyConsultant } from '../../lib/consultants/schema';
+import { createEmptyConsultant, createEmptyTipQuestion } from '../../lib/consultants/schema';
 
 const EMPTY_FORM = {
   title_en: '',
@@ -54,6 +57,8 @@ const EMPTY_FORM = {
   minDwellMinutes: Math.round(DEFAULT_MIN_DWELL_SECONDS / 60),
   audience: CONSULTANT_AUDIENCE.MX,
   mustComplete: true,
+  quizEnabled: false,
+  questions: [],
 };
 
 function fmtSec(s) {
@@ -77,6 +82,15 @@ function formFromConsultant(c) {
         ? CONSULTANT_AUDIENCE.CE
         : c.audience || CONSULTANT_AUDIENCE.ALL,
     mustComplete: c.mustComplete !== false,
+    quizEnabled: !!c.quizEnabled,
+    questions: Array.isArray(c.questions) && c.questions.length
+      ? c.questions.map((q) => ({
+          ...createEmptyTipQuestion({ type: q.type }),
+          ...q,
+          options_en: Array.isArray(q.options_en) ? [...q.options_en] : ['', '', '', ''],
+          options_ar: Array.isArray(q.options_ar) ? [...q.options_ar] : ['', '', '', ''],
+        }))
+      : [],
   };
 }
 
@@ -149,6 +163,8 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
         minDwellSeconds: Math.max(30, Math.round(Number(form.minDwellMinutes) || 5) * 60),
         audience: form.audience,
         mustComplete: !!form.mustComplete,
+        quizEnabled: !!form.quizEnabled,
+        questions: form.quizEnabled ? form.questions || [] : [],
       };
 
       if (editingId) {
@@ -305,6 +321,31 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
     }
   }
 
+  async function deleteEmployee(emp) {
+    const label = emp?.gspnId || emp?.email || emp?.uid;
+    if (
+      !window.confirm(
+        `Permanently delete employee “${label}”?\n\nThis removes their profile and tip progress. Auth login is also removed when Admin SDK is configured.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await adminDeleteEmployee(emp.uid);
+      if (result?.warning) {
+        setMessage(`Deleted ${label} from the list. ${result.warning}`);
+      } else {
+        setMessage(`Deleted employee ${label}.`);
+      }
+      await refresh();
+    } catch (err) {
+      setMessage(err?.message || 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function exportCsv() {
     const courses = report.courses || [];
     const attendees = report.attendees || [];
@@ -315,7 +356,20 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
       ),
     ];
     const whoLines = [
-      ['gspnId', 'email', 'productLine', 'course', 'result', 'attempts', 'dwellSec', 'clicks', 'updatedAt'].join(','),
+      [
+        'gspnId',
+        'email',
+        'productLine',
+        'course',
+        'result',
+        'attempts',
+        'dwellSec',
+        'clicks',
+        'quizPassed',
+        'quizSummary',
+        'answersJson',
+        'updatedAt',
+      ].join(','),
       ...attendees.map((a) =>
         [
           JSON.stringify(a.gspnId || ''),
@@ -326,6 +380,9 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
           a.attempts || 0,
           a.totalDwellSeconds || 0,
           a.totalClicks || 0,
+          a.quizPassed == null ? '' : a.quizPassed ? 'yes' : 'no',
+          JSON.stringify(a.quizSummary || ''),
+          JSON.stringify(JSON.stringify(a.quizAnswers || [])),
           a.updatedAt || '',
         ].join(','),
       ),
@@ -471,6 +528,212 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
               />
               Must complete (mandatory for target employees)
             </label>
+
+            <div className="md:col-span-2 rounded-2xl border border-cyan-500/20 bg-zinc-900/40 p-4 space-y-3">
+              <label className="flex items-center gap-2 text-xs text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={!!form.quizEnabled}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setForm((f) => ({
+                      ...f,
+                      quizEnabled: on,
+                      questions:
+                        on && (!f.questions || f.questions.length === 0)
+                          ? [createEmptyTipQuestion({ timeLimitSec: DEFAULT_QUESTION_TIME_LIMIT_SEC })]
+                          : f.questions,
+                    }));
+                  }}
+                />
+                Quiz after timer (confirm engineer read the tip)
+              </label>
+              {form.quizEnabled && (
+                <div className="space-y-4">
+                  {(form.questions || []).map((q, qi) => (
+                    <div
+                      key={q.id || qi}
+                      className="rounded-xl border border-white/10 bg-zinc-950/60 p-3 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">
+                          Question {qi + 1}
+                        </span>
+                        <select
+                          value={q.type || TIP_QUESTION_TYPE.CHOICE}
+                          onChange={(e) => {
+                            const type = e.target.value;
+                            setForm((f) => {
+                              const questions = [...(f.questions || [])];
+                              const prev = questions[qi] || createEmptyTipQuestion();
+                              questions[qi] = {
+                                ...prev,
+                                type,
+                                options_en:
+                                  type === TIP_QUESTION_TYPE.CHOICE
+                                    ? prev.options_en?.length
+                                      ? prev.options_en
+                                      : ['', '', '', '']
+                                    : [],
+                                options_ar:
+                                  type === TIP_QUESTION_TYPE.CHOICE
+                                    ? prev.options_ar?.length
+                                      ? prev.options_ar
+                                      : ['', '', '', '']
+                                    : [],
+                              };
+                              return { ...f, questions };
+                            });
+                          }}
+                          className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-white"
+                        >
+                          <option value={TIP_QUESTION_TYPE.CHOICE}>Choice (must be correct)</option>
+                          <option value={TIP_QUESTION_TYPE.TEXT}>Written (manual review)</option>
+                        </select>
+                        <label className="text-[10px] text-zinc-500 flex items-center gap-1 ml-auto">
+                          Timer (sec)
+                          <input
+                            type="number"
+                            min={0}
+                            value={q.timeLimitSec ?? DEFAULT_QUESTION_TIME_LIMIT_SEC}
+                            onChange={(e) => {
+                              const timeLimitSec = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                              setForm((f) => {
+                                const questions = [...(f.questions || [])];
+                                questions[qi] = { ...questions[qi], timeLimitSec };
+                                return { ...f, questions };
+                              });
+                            }}
+                            className="w-20 bg-zinc-900 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white"
+                            title="0 = no timer"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              questions: (f.questions || []).filter((_, i) => i !== qi),
+                            }))
+                          }
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-red-300"
+                          title="Remove question"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <input
+                        value={q.prompt_en || ''}
+                        onChange={(e) => {
+                          const prompt_en = e.target.value;
+                          setForm((f) => {
+                            const questions = [...(f.questions || [])];
+                            questions[qi] = { ...questions[qi], prompt_en };
+                            return { ...f, questions };
+                          });
+                        }}
+                        placeholder="Prompt (EN)"
+                        className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                      />
+                      <input
+                        value={q.prompt_ar || ''}
+                        onChange={(e) => {
+                          const prompt_ar = e.target.value;
+                          setForm((f) => {
+                            const questions = [...(f.questions || [])];
+                            questions[qi] = { ...questions[qi], prompt_ar };
+                            return { ...f, questions };
+                          });
+                        }}
+                        placeholder="Prompt (AR)"
+                        dir="rtl"
+                        className="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                      />
+                      {q.type !== TIP_QUESTION_TYPE.TEXT && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {(q.options_en || ['', '', '', '']).map((opt, oi) => (
+                            <div key={oi} className="flex items-start gap-2">
+                              <input
+                                type="radio"
+                                name={`correct-${q.id || qi}`}
+                                checked={Number(q.correctIndex) === oi}
+                                onChange={() =>
+                                  setForm((f) => {
+                                    const questions = [...(f.questions || [])];
+                                    questions[qi] = { ...questions[qi], correctIndex: oi };
+                                    return { ...f, questions };
+                                  })
+                                }
+                                className="mt-2.5"
+                                title="Correct answer"
+                              />
+                              <div className="flex-1 space-y-1">
+                                <input
+                                  value={opt}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setForm((f) => {
+                                      const questions = [...(f.questions || [])];
+                                      const options_en = [...(questions[qi].options_en || ['', '', '', ''])];
+                                      options_en[oi] = val;
+                                      questions[qi] = { ...questions[qi], options_en };
+                                      return { ...f, questions };
+                                    });
+                                  }}
+                                  placeholder={`Option ${oi + 1} (EN)`}
+                                  className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2 py-1.5 text-[12px] text-white"
+                                />
+                                <input
+                                  value={(q.options_ar || [])[oi] || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setForm((f) => {
+                                      const questions = [...(f.questions || [])];
+                                      const options_ar = [...(questions[qi].options_ar || ['', '', '', ''])];
+                                      while (options_ar.length < 4) options_ar.push('');
+                                      options_ar[oi] = val;
+                                      questions[qi] = { ...questions[qi], options_ar };
+                                      return { ...f, questions };
+                                    });
+                                  }}
+                                  placeholder={`Option ${oi + 1} (AR)`}
+                                  dir="rtl"
+                                  className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2 py-1.5 text-[12px] text-white"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          <p className="sm:col-span-2 text-[10px] text-zinc-500">
+                            Select the radio for the correct option. Engineers get 3 tries; then they must re-attend.
+                          </p>
+                        </div>
+                      )}
+                      {q.type === TIP_QUESTION_TYPE.TEXT && (
+                        <p className="text-[10px] text-zinc-500">
+                          Written answers pass on submit. Review them in Attendance report.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        questions: [
+                          ...(f.questions || []),
+                          createEmptyTipQuestion({ timeLimitSec: DEFAULT_QUESTION_TIME_LIMIT_SEC }),
+                        ],
+                      }))
+                    }
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-300"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add question
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="md:col-span-2 flex flex-wrap gap-2">
               <button
                 type="submit"
@@ -554,6 +817,7 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
                     <p className="text-[10px] text-zinc-600 mt-2">
                       Min dwell {fmtSec(c.minDwellSeconds)} · {(c.assets || []).length} file(s) · extract{' '}
                       {c.extractStatus || '—'}
+                      {c.quizEnabled ? ` · quiz ${(c.questions || []).length} Q` : ''}
                     </p>
                   </div>
                 </div>
@@ -690,6 +954,15 @@ export default function TechnicalConsultantsPanel({ actor = 'admin' }) {
                     Enable
                   </button>
                 )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteEmployee(emp)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-zinc-900 text-red-300 border border-red-500/30 hover:bg-red-500/10 disabled:opacity-40"
+                  title="Permanently delete Auth user + profile"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <input

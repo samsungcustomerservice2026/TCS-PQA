@@ -12,7 +12,8 @@
     "test:pqa-map": "node scripts/verify-pqa-partner-map.mjs",
     "ingest:gsmarena": "node scripts/ingest-gsmarena-samsung.mjs",
     "deploy:storage": "firebase deploy --only storage --project tcs-for-engineers",
-    "deploy:firestore-rules": "firebase deploy --only firestore:rules --project tcs-for-engineers"
+    "deploy:firestore-rules": "firebase deploy --only firestore:rules --project tcs-for-engineers",
+    "build:training-pptx": "node scripts/build-training-pptx.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -135,15 +135,39 @@ async function askGoGoDisabled(lang) {
   };
 }
 
+const MX_TIP_POPUP_KEY = 'gogo_mx_tip_popup_v1';
+
+const MX_TIP_POPUP_COPY = {
+  en: 'Check new technical consultant in your profile right now',
+  ar: 'تحقق من الاستشارة الفنية الجديدة في ملفك الآن',
+};
+
+/** Call after employee login so GoGo shows the MX tip nudge again on profile. */
+export function resetGoGoMxTipPopup() {
+  try {
+    sessionStorage.removeItem(MX_TIP_POPUP_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Click-to-chat guided assistant + voice I/O.
  * Smart Gemini chat is disabled (security / cost hardening).
  */
-export default function GoGoAssistant({ onNavigate, currentView = '', hidden = false, onOpenChange }) {
+export default function GoGoAssistant({
+  onNavigate,
+  currentView = '',
+  hidden = false,
+  onOpenChange,
+  employeeLoggedIn = false,
+  employeeProductLine = '',
+}) {
   const [lang, setLang] = useState('en');
   const [open, setOpen] = useState(false);
   const [entered, setEntered] = useState(false);
   const [showBubble, setShowBubble] = useState(false);
+  const [mxTipPopup, setMxTipPopup] = useState(false);
   const [pose, setPose] = useState('walk');
   const [dock, setDock] = useState('left');
   const [input, setInput] = useState('');
@@ -358,7 +382,6 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     const t2 = setTimeout(() => setPose('welcome'), 750);
     const t3 = setTimeout(() => {
       setPose('idle');
-      setShowBubble(false);
     }, 2400);
     return () => {
       clearTimeout(t1);
@@ -372,6 +395,72 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
     setPose('idle');
     return undefined;
   }, [hidden, open]);
+
+  /** Popup for signed-in MX engineers: nudge to open My Knowledge / new tip. */
+  useEffect(() => {
+    if (hidden || !ready || !employeeLoggedIn) {
+      setMxTipPopup(false);
+      setShowBubble(false);
+      return undefined;
+    }
+    const line = String(employeeProductLine || '').toLowerCase();
+    if (line !== 'mx') {
+      setMxTipPopup(false);
+      setShowBubble(false);
+      return undefined;
+    }
+
+    let dismissed = false;
+    try {
+      dismissed = sessionStorage.getItem(MX_TIP_POPUP_KEY) === '1';
+    } catch {
+      /* ignore */
+    }
+    if (dismissed) return undefined;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        let hasMxTip = true;
+        try {
+          const anns = await listAnnouncements({ activeOnly: true, max: 10 });
+          const mxAnns = (anns || []).filter((a) => {
+            const aud = String(a?.audience || 'all').toLowerCase();
+            return aud === 'mx' || aud === 'all';
+          });
+          if (mxAnns.length) {
+            pendingConsultantIdRef.current = mxAnns[0].consultantId || null;
+          } else {
+            // Still show the nudge for MX sign-ins even if announcements are empty.
+            hasMxTip = true;
+          }
+        } catch {
+          hasMxTip = true;
+        }
+        if (cancelled || !hasMxTip) return;
+        setMxTipPopup(true);
+        setShowBubble(true);
+        setPose('wave');
+        schedule(() => setPose('point'), 900);
+        schedule(() => setPose('idle'), 2800);
+      })();
+    }, 1600);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [hidden, ready, employeeLoggedIn, employeeProductLine]);
+
+  const dismissMxTipPopup = useCallback(() => {
+    setMxTipPopup(false);
+    setShowBubble(false);
+    try {
+      sessionStorage.setItem(MX_TIP_POPUP_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     onOpenChangeRef.current?.(open);
@@ -1484,6 +1573,39 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
         )}
 
         <div className={`relative flex shrink-0 items-end justify-start ${open ? 'gogo-dock-full' : 'gogo-dock-fullbody-avatar'}`}>
+          {!open && showBubble && mxTipPopup && (
+            <div
+              className="gogo-mx-tip-popup absolute bottom-full mb-2 left-2 sm:left-3 z-[2] w-[min(16.5rem,calc(100vw-2rem))]"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="relative rounded-2xl border border-cyan-400/30 bg-zinc-950/95 backdrop-blur-md px-3.5 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.55)]">
+                <p className="text-[12px] leading-snug text-zinc-100 font-semibold">
+                  {lang === 'ar' ? MX_TIP_POPUP_COPY.ar : MX_TIP_POPUP_COPY.en}
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dismissMxTipPopup();
+                      onNavigate?.('goto_knowledge');
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider"
+                  >
+                    {lang === 'ar' ? GOGO_CHIP_LABELS.ar.goto_knowledge : GOGO_CHIP_LABELS.en.goto_knowledge}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={dismissMxTipPopup}
+                    className="px-2.5 py-1.5 rounded-lg border border-white/15 text-zinc-400 text-[10px] font-bold uppercase tracking-wider hover:text-white"
+                  >
+                    {lang === 'ar' ? 'لاحقاً' : 'Later'}
+                  </button>
+                </div>
+                <span className="gogo-mx-tip-popup-tail" aria-hidden />
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -1497,6 +1619,7 @@ export default function GoGoAssistant({ onNavigate, currentView = '', hidden = f
                   setPose('wave');
                 }, 900);
               } else {
+                if (mxTipPopup) dismissMxTipPopup();
                 startChatSession();
               }
             }}

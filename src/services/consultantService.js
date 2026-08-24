@@ -26,7 +26,10 @@ import {
   createAnnouncementFromConsultant,
   createEmptyConsultant,
   createEmptyProgress,
+  evaluateTipQuiz,
   finalizeAttempt,
+  formatQuizSummary,
+  normalizeTipQuestions,
   progressDocId,
   startAttempt,
   validateConsultant,
@@ -143,10 +146,14 @@ export async function upsertConsultant(record, { actor = 'admin' } = {}) {
   const base = record?.id
     ? { ...record }
     : createEmptyConsultant({ ...record, actor });
+  const questions = normalizeTipQuestions(record?.questions ?? base.questions ?? []);
+  const quizEnabled = !!(record?.quizEnabled ?? base.quizEnabled) && questions.length > 0;
   const next = {
     ...base,
     ...record,
     id: base.id,
+    questions,
+    quizEnabled,
     updatedAt: now,
     updatedBy: actor,
     createdAt: base.createdAt || now,
@@ -509,7 +516,7 @@ export async function heartbeatConsultantAttempt(
 export async function completeConsultantAttempt(
   uid,
   consultant,
-  { dwellSeconds, clickCount, forceFail = false } = {},
+  { dwellSeconds, clickCount, forceFail = false, quizAnswers = null, quizFail = false } = {},
 ) {
   let progress = await getProgress(uid, consultant.id);
   if (!progress) {
@@ -527,15 +534,54 @@ export async function completeConsultantAttempt(
   const minDwell = Number(consultant.minDwellSeconds) || Number(progress.currentAttempt.minDwellSeconds) || 300;
   const dwell = Math.max(0, Math.floor(Number(dwellSeconds) || 0));
   const clicks = Math.max(0, Math.floor(Number(clickCount) || 0));
-  const passed = !forceFail && dwell >= minDwell;
+  const dwellOk = !forceFail && dwell >= minDwell;
+
+  let quizEval = evaluateTipQuiz(consultant, quizAnswers || []);
+  if (!quizEval.quizRequired) {
+    quizEval = {
+      quizRequired: false,
+      quizPassed: true,
+      quizAnswers: [],
+      quizScore: { correct: 0, totalChoice: 0, textSubmitted: 0 },
+    };
+  }
+
+  // forceFail / early exit: no quiz credit
+  if (forceFail) {
+    quizEval = {
+      ...quizEval,
+      quizPassed: false,
+      quizAnswers: quizEval.quizAnswers?.length ? quizEval.quizAnswers : [],
+    };
+  } else if (quizFail || (quizEval.quizRequired && quizAnswers == null)) {
+    // Quiz required but not completed, or explicit quiz failure (timeout / 3 wrong)
+    quizEval = {
+      ...quizEval,
+      quizPassed: false,
+      quizAnswers: Array.isArray(quizAnswers) ? quizEval.quizAnswers : quizEval.quizAnswers || [],
+    };
+  }
+
+  const passed = dwellOk && (!quizEval.quizRequired || quizEval.quizPassed);
   const result = passed ? 'passed' : 'failed';
-  const next = finalizeAttempt(progress, { dwellSeconds: dwell, clickCount: clicks, result });
+  const next = finalizeAttempt(progress, {
+    dwellSeconds: dwell,
+    clickCount: clicks,
+    result,
+    quizAnswers: quizEval.quizAnswers,
+    quizScore: quizEval.quizScore,
+    quizPassed: quizEval.quizPassed,
+  });
   await setDoc(doc(db, PROGRESS, next.id), next, { merge: true });
   return {
     progress: next,
     passed,
     remainingSeconds: Math.max(0, minDwell - dwell),
     minDwellSeconds: minDwell,
+    quizRequired: quizEval.quizRequired,
+    quizPassed: quizEval.quizPassed,
+    quizScore: quizEval.quizScore,
+    quizAnswers: quizEval.quizAnswers,
   };
 }
 
@@ -592,6 +638,15 @@ export async function buildAttendanceReport() {
       ? p.attempts[p.attempts.length - 1]
       : null;
 
+    const quizAnswers = lastAttempt?.quizAnswers || [];
+    const quizScore = lastAttempt?.quizScore || p.lastQuizScore || null;
+    const quizPassed =
+      lastAttempt?.quizPassed != null
+        ? !!lastAttempt.quizPassed
+        : p.lastQuizPassed != null
+          ? !!p.lastQuizPassed
+          : null;
+
     const attendee = {
       uid: p.uid,
       gspnId: emp.gspnId || '',
@@ -611,6 +666,10 @@ export async function buildAttendanceReport() {
       lastClicks: Number(lastAttempt?.clickCount) || 0,
       updatedAt: p.updatedAt || lastAttempt?.endedAt || '',
       startedAt: lastAttempt?.startedAt || p.createdAt || '',
+      quizScore,
+      quizPassed,
+      quizAnswers,
+      quizSummary: formatQuizSummary(quizScore, quizPassed),
     };
     attendees.push(attendee);
 

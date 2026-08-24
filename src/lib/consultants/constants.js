@@ -93,6 +93,14 @@ export const DEFAULT_MIN_DWELL_SECONDS = 300;
 
 export const PROGRESS_HEARTBEAT_MS = 12_000;
 
+export const TIP_QUESTION_TYPE = Object.freeze({
+  CHOICE: 'choice',
+  TEXT: 'text',
+});
+
+export const DEFAULT_QUESTION_TIME_LIMIT_SEC = 60;
+export const DEFAULT_MAX_CHOICE_ATTEMPTS = 3;
+
 export const GOGO_CONSULTANT_UNAVAILABLE = Object.freeze({
   en: 'These product data are currently unavailable. Stay tuned for new updates.',
   ar: 'بيانات المنتج دي غير متاحة حالياً. خليك متابع للتحديثات الجديدة.',

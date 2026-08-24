@@ -405,6 +405,25 @@
     50% { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
   }
 
+  .gogo-mx-tip-popup {
+    animation: gogoMxTipIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes gogoMxTipIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .gogo-mx-tip-popup-tail {
+    position: absolute;
+    left: 1.35rem;
+    bottom: -0.4rem;
+    width: 0.7rem;
+    height: 0.7rem;
+    background: rgba(9, 9, 11, 0.95);
+    border-right: 1px solid rgba(34, 211, 238, 0.3);
+    border-bottom: 1px solid rgba(34, 211, 238, 0.3);
+    transform: rotate(45deg);
+  }
+
   .gogo-gesture-cue {
     pointer-events: none;
     position: absolute;

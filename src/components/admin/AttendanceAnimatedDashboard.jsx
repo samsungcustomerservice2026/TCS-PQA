@@ -197,32 +197,76 @@ export default function AttendanceAnimatedDashboard({
                   <th className="px-2 py-2">Email</th>
                   <th className="px-2 py-2">Line</th>
                   <th className="px-2 py-2">Result</th>
+                  <th className="px-2 py-2">Quiz</th>
                   <th className="px-2 py-2">Attempts</th>
                   <th className="px-2 py-2">Dwell</th>
                   <th className="px-2 py-2">Clicks</th>
+                  <th className="px-2 py-2">Answers</th>
                 </tr>
               </thead>
               <tbody>
                 {(courses.find((c) => c.consultantId === expandedCourse)?.attendees || []).map((a) => (
-                  <tr key={`${a.uid}_${a.consultantId}`} className="border-t border-white/5 text-zinc-300">
-                    <td className="px-2 py-2 font-semibold text-white">{a.gspnId || a.displayName}</td>
-                    <td className="px-2 py-2">{a.email || '—'}</td>
-                    <td className="px-2 py-2 uppercase">{a.productLine || '—'}</td>
-                    <td
-                      className={`px-2 py-2 font-bold uppercase ${
-                        a.result === 'passed'
-                          ? 'text-emerald-400'
-                          : a.result === 'failed'
-                            ? 'text-red-400'
-                            : 'text-amber-300'
-                      }`}
-                    >
-                      {a.result}
-                    </td>
-                    <td className="px-2 py-2">{a.attempts}</td>
-                    <td className="px-2 py-2">{fmtSec(a.totalDwellSeconds)}</td>
-                    <td className="px-2 py-2">{a.totalClicks}</td>
-                  </tr>
+                  <React.Fragment key={`${a.uid}_${a.consultantId}`}>
+                    <tr className="border-t border-white/5 text-zinc-300">
+                      <td className="px-2 py-2 font-semibold text-white">{a.gspnId || a.displayName}</td>
+                      <td className="px-2 py-2">{a.email || '—'}</td>
+                      <td className="px-2 py-2 uppercase">{a.productLine || '—'}</td>
+                      <td
+                        className={`px-2 py-2 font-bold uppercase ${
+                          a.result === 'passed'
+                            ? 'text-emerald-400'
+                            : a.result === 'failed'
+                              ? 'text-red-400'
+                              : 'text-amber-300'
+                        }`}
+                      >
+                        {a.result}
+                      </td>
+                      <td className="px-2 py-2 text-[11px]">
+                        {a.quizSummary || (a.quizPassed == null ? '—' : a.quizPassed ? 'passed' : 'failed')}
+                      </td>
+                      <td className="px-2 py-2">{a.attempts}</td>
+                      <td className="px-2 py-2">{fmtSec(a.totalDwellSeconds)}</td>
+                      <td className="px-2 py-2">{a.totalClicks}</td>
+                      <td className="px-2 py-2">
+                        {(a.quizAnswers || []).length ? (
+                          <details>
+                            <summary className="cursor-pointer text-cyan-400 text-[10px] font-black uppercase tracking-widest">
+                              View {(a.quizAnswers || []).length}
+                            </summary>
+                            <ul className="mt-2 space-y-2 max-w-md">
+                              {(a.quizAnswers || []).map((ans, i) => (
+                                <li
+                                  key={ans.questionId || i}
+                                  className="rounded-lg border border-white/10 bg-zinc-900/80 px-2 py-1.5 text-[11px] text-zinc-300"
+                                >
+                                  <p className="text-zinc-500 uppercase text-[9px] tracking-widest mb-0.5">
+                                    {ans.type || 'q'} · {ans.correct ? 'ok' : ans.timedOut ? 'timeout' : 'fail'}
+                                  </p>
+                                  <p className="text-white/90">{ans.prompt_en || ans.prompt_ar || ans.questionId}</p>
+                                  {ans.type === 'text' ? (
+                                    <p className="mt-1 text-amber-200/90 whitespace-pre-wrap">
+                                      Answer: {ans.textAnswer || '—'}
+                                    </p>
+                                  ) : (
+                                    <p className="mt-1">
+                                      Selected: {ans.selectedIndex == null ? '—' : `#${ans.selectedIndex + 1}`}
+                                      {ans.correctIndex != null ? ` · Correct: #${ans.correctIndex + 1}` : ''}
+                                      {Array.isArray(ans.options_en) && ans.selectedIndex != null
+                                        ? ` (${ans.options_en[ans.selectedIndex] || ''})`
+                                        : ''}
+                                    </p>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -243,6 +287,7 @@ export default function AttendanceAnimatedDashboard({
                 <th className="px-3 py-3">Product</th>
                 <th className="px-3 py-3">Course</th>
                 <th className="px-3 py-3">Result</th>
+                <th className="px-3 py-3">Quiz</th>
                 <th className="px-3 py-3">Attempts</th>
                 <th className="px-3 py-3">Dwell</th>
                 <th className="px-3 py-3">Clicks</th>
@@ -267,6 +312,23 @@ export default function AttendanceAnimatedDashboard({
                   >
                     {a.result}
                   </td>
+                  <td className="px-3 py-3 text-[11px] max-w-[10rem]">
+                    {a.quizSummary || '—'}
+                    {(a.quizAnswers || []).some((x) => x.type === 'text' && x.textAnswer) && (
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-cyan-400 text-[9px] font-black uppercase">
+                          Text
+                        </summary>
+                        <div className="mt-1 space-y-1 text-[10px] text-amber-200/90 whitespace-pre-wrap">
+                          {(a.quizAnswers || [])
+                            .filter((x) => x.type === 'text')
+                            .map((x, i) => (
+                              <p key={x.questionId || i}>{x.textAnswer || '—'}</p>
+                            ))}
+                        </div>
+                      </details>
+                    )}
+                  </td>
                   <td className="px-3 py-3">{a.attempts}</td>
                   <td className="px-3 py-3">{fmtSec(a.totalDwellSeconds)}</td>
                   <td className="px-3 py-3">{a.totalClicks}</td>
@@ -277,7 +339,7 @@ export default function AttendanceAnimatedDashboard({
               ))}
               {attendees.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-zinc-500">
+                  <td colSpan={10} className="px-3 py-6 text-zinc-500">
                     No employees have opened a tip yet.
                   </td>
                 </tr>

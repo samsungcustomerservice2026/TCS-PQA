@@ -10630,10 +10630,11 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       {!isAdminPortal && !showPhotoAuth && !showRankReveal && (
         <GoGoAssistant
           currentView={view}
+          employeeLoggedIn={employeeLoggedIn}
+          employeeProductLine={employeeProfile?.productLine || ''}
           hidden={
             view === 'EXTERNAL_LOGS'
             || view === 'ADMIN_DASHBOARD'
-            || view === 'EMPLOYEE_DASHBOARD'
             || view === 'CONSULTANT_VIEWER'
           }
           onOpenChange={setGogoOpen}
@@ -10697,6 +10698,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         open={showEmployeeAuth}
         onClose={() => setShowEmployeeAuth(false)}
         onSuccess={() => {
+          try {
+            sessionStorage.removeItem('gogo_mx_tip_popup_v1');
+          } catch { /* ignore */ }
           setShowEmployeeAuth(false);
           navigateTo('EMPLOYEE_DASHBOARD');
         }}
