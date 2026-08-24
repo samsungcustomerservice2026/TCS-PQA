@@ -163,7 +163,7 @@ export function resolveGoGoTraditionalTurn(text, lang = 'en') {
   }
 
   const matched = matchFreeTextToFlow(raw, L);
-  if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_|george_|cs_org)/.test(matched)) {
+  if (matched && /^(what_|tcs_|mx_|da_|av_|pqa_|how_|goto_|main_|feedback|survey|who_|nice_|george_|cs_org|knowledge_)/.test(matched)) {
     const looksOpen =
       raw.split(/\s+/).length > 8 ||
       /why|how come|explain|compare|difference|ليه|ازاي|اشرح|فرق/i.test(raw);

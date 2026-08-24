@@ -44,6 +44,10 @@ export const GOGO_CHIP_LABELS = {
     open_consultant: 'Open consultant',
     goto_knowledge: 'My Knowledge',
     new_consultant: 'New technical tip',
+    how_tip: 'How to finish a tip',
+    knowledge_coach: 'Knowledge tips help',
+    goto_feedback: 'Open Feedback',
+    goto_survey: 'Open survey',
   },
   ar: {
     lang_toggle: 'English',
@@ -79,10 +83,36 @@ export const GOGO_CHIP_LABELS = {
     open_consultant: 'افتح الاستشارة',
     goto_knowledge: 'لوحة المعرفة',
     new_consultant: 'نصيحة فنية جديدة',
+    how_tip: 'إزاي تخلّص النصيحة',
+    knowledge_coach: 'مساعدة المعرفة',
+    goto_feedback: 'افتح الملاحظات',
+    goto_survey: 'افتح الاستبيان',
   },
 };
 
 const MAIN_CHIPS = ['what_scora', 'what_tcs', 'what_pqa', 'how_search'];
+const EMPLOYEE_ONLY_CHIPS = ['new_consultant'];
+const EMPLOYEE_MAIN_CHIPS = ['goto_knowledge', 'how_tip', 'what_scora', 'how_search'];
+
+export function mainMenuChips(employeeLoggedIn = false) {
+  return employeeLoggedIn ? [...EMPLOYEE_MAIN_CHIPS] : [...MAIN_CHIPS];
+}
+
+export function decorateGoGoChips(chips, { employeeLoggedIn = false } = {}) {
+  const list = Array.isArray(chips) ? chips.filter(Boolean) : [];
+  if (!list.length) return list;
+  if (!employeeLoggedIn) {
+    return list.filter((id) => !EMPLOYEE_ONLY_CHIPS.includes(id));
+  }
+  const looksLikeMain = list.some((id) => (
+    id === 'what_scora' || id === 'what_tcs' || id === 'what_pqa' || id === 'how_search'
+  ));
+  if (!looksLikeMain) return list;
+  const rest = list.filter((id) => !EMPLOYEE_ONLY_CHIPS.includes(id) && id !== 'main_menu');
+  const next = ['goto_knowledge', 'how_tip', ...rest];
+  if (list.includes('main_menu')) next.push('main_menu');
+  return [...new Set(next)];
+}
 
 /** @type {Record<string, { replies: Record<GoGoLang, string>, chips: string[], action?: string }>} */
 export const GOGO_FLOW = {
@@ -109,6 +139,10 @@ export const GOGO_FLOW = {
         'SCORA ده بيت أداء خدمة سامسونج مصر.\n\n' +
         'هتلاقي فيه TCS للمهندسين، وPQA للشركاء والمراكز، والبحث، والملاحظات، واستبيان الأكاديمية، واختبارات Scora Challenge.',
     },
+    spoken: {
+      en: 'SCORA is Samsung Egypt’s home for service performance: TCS, PQA, Search, Feedback, the Academy survey, and Scora Challenge.',
+      ar: 'سكورا بيت أداء خدمة سامسونج مصر: تي سي اس، وبي كيو اي، والبحث، والملاحظات، واستبيان الأكاديمية، واختبارات سكورا تشالنج.',
+    },
     chips: ['what_tcs', 'what_pqa', 'scora_more', 'main_menu'],
   },
   scora_more: {
@@ -117,16 +151,22 @@ export const GOGO_FLOW = {
         'Quick paths:\n' +
         '1) Open TCS or PQA from the home cards\n' +
         '2) Use Search (bottom tab) with an engineer or center code\n' +
-        '3) Feedback for suggestions · Academy Survey when enabled\n\n' +
+        '3) Feedback or Academy Survey when you want to share your voice\n' +
+        '4) My Knowledge for technical tips after you sign in\n\n' +
         'Want me to open something for you?',
       ar:
         'طرق سريعة كده:\n' +
         '1) افتح TCS أو PQA من كروت الصفحة الرئيسية\n' +
         '2) استخدم البحث (التبويب اللي تحت) بكود مهندس أو مركز\n' +
-        '3) الملاحظات للاقتراحات · استبيان الأكاديمية لما يكون شغال\n\n' +
+        '3) الملاحظات أو استبيان الأكاديمية لما تحب تقول رأيك\n' +
+        '4) لوحة المعرفة للنصائح الفنية بعد ما تسجّل\n\n' +
         'تحب أفتح لك حاجة؟',
     },
-    chips: ['goto_tcs', 'goto_pqa', 'goto_search', 'main_menu'],
+    spoken: {
+      en: 'You can open TCS or PQA from home, Search with a code, Feedback or the Academy survey, and My Knowledge for technical tips after you sign in. Want me to open something?',
+      ar: 'تقدر تفتح تي سي اس أو بي كيو اي من الرئيسية، والبحث بالكود، والملاحظات أو الاستبيان، ولوحة المعرفة للنصائح بعد التسجيل. تحب أفتح لك حاجة؟',
+    },
+    chips: ['goto_tcs', 'goto_pqa', 'goto_search', 'goto_knowledge', 'main_menu'],
   },
   what_tcs: {
     replies: {
@@ -146,6 +186,10 @@ export const GOGO_FLOW = {
         '• الشاشات\n\n' +
         'لوحة الترتيب بتظهر الفائزين. والبحث بيفتح ملف المهندس بالكود.\n\n' +
         'تحب نشوف أنهي قسم؟',
+    },
+    spoken: {
+      en: 'TCS is Technical Capability Score for engineers in MX mobile, DA appliances, and AV screens. Dashboard shows winners. Search opens a dossier by code. Which division do you want?',
+      ar: 'تي سي اس درجة القدرة التقنية للمهندسين في الموبايل والأجهزة المنزلية والشاشات. اللوحة بتظهر الفائزين، والبحث بيفتح الملف بالكود. تحب نشوف أنهي قسم؟',
     },
     chips: ['tcs_mx', 'tcs_da', 'tcs_av', 'goto_tcs', 'main_menu'],
   },
@@ -181,6 +225,10 @@ export const GOGO_FLOW = {
         '• التدريب · DRNPS · الامتحان · وضع الصيانة · OQC · النتيجة النهائية\n\n' +
         'اسأل عن أي اختصار وهوضحهولك أحسن. الدرجات الحية في اللوحة أو البحث.',
     },
+    spoken: {
+      en: 'Common MX KPIs include SSR, RRR 90, RRR 30, IQC skip, core parts, training, DRNPS, exam, and Final Result. Ask any acronym and I will define it. Live scores are in Search.',
+      ar: 'أشهر مؤشرات الموبايل: إس إس آر، آر آر آر، تخطي آي كيو سي، القطع الأساسية، التدريب، دي آر إن بي إس، الامتحان، والنتيجة النهائية. اسأل عن أي اختصار. الدرجات الحية في البحث.',
+    },
     chips: ['mx_calc', 'tcs_mx', 'tcs_da', 'main_menu'],
   },
   mx_calc: {
@@ -197,6 +245,10 @@ export const GOGO_FLOW = {
         '2) الترتيب غالباً بيبقى متوسط نتائج الأرباع المتاحة.\n' +
         '3) مزيج قديم شائع: حوالي 50% مؤشرات تشغيل + 30% DRNPS + 20% امتحان.\n\n' +
         'افتح البحث بكود المهندس عشان تشوف الملف الحي.',
+    },
+    spoken: {
+      en: 'MX Final Result comes from period KPIs. Ranking often averages available quarter finals. Open Search with an engineer code for live numbers.',
+      ar: 'نتيجة الموبايل النهائية من مؤشرات الفترة. الترتيب غالباً متوسط نتائج الأرباع. افتح البحث بكود المهندس للأرقام الحية.',
     },
     chips: ['mx_kpis', 'goto_tcs', 'what_tcs', 'main_menu'],
   },
@@ -231,6 +283,10 @@ export const GOGO_FLOW = {
         '• ST · MJ % · إكمال الإصلاح · Kahoot · حجم الإصلاح · النتيجة النهائية\n\n' +
         'ملاحظة: الأجهزة المنزلية والشاشات ممكن يشتركوا في قالب واحد لمهندسي CE، بس HASS موجود في الأجهزة المنزلية ومش في الشاشات.\n' +
         'قول اسم المؤشر وهشرحهولك.',
+    },
+    spoken: {
+      en: 'DA KPIs include SSR, REDO, chatbot, HASS, core parts, training, RNPS, and Final Result. HASS is DA only, not AV. Ask a KPI name and I will define it.',
+      ar: 'مؤشرات الأجهزة المنزلية تشمل إس إس آر، ري دو، الشات بوت، هاس، القطع الأساسية، التدريب، آر إن بي إس، والنتيجة النهائية. هاس للأجهزة المنزلية مش الشاشات. قول اسم المؤشر.',
     },
     chips: ['da_calc', 'tcs_da', 'av_kpis', 'main_menu'],
   },
@@ -276,6 +332,10 @@ export const GOGO_FLOW = {
         '• RNPS · ST · MJ · إكمال الإصلاح · Kahoot · حجم الإصلاح · النتيجة النهائية\n\n' +
         'مهم: الشاشات مش بتستخدم HASS في مؤشراتها (HASS بتاع الأجهزة المنزلية).\n' +
         'اسأل عن أي اسم وهعرّفهولك.',
+    },
+    spoken: {
+      en: 'AV KPIs include SSR, REDO, chatbot, core parts, training, RNPS, and Final Result. AV does not use HASS. Ask any name and I will define it.',
+      ar: 'مؤشرات الشاشات تشمل إس إس آر، ري دو، الشات بوت، القطع الأساسية، التدريب، آر إن بي إس، والنتيجة النهائية. الشاشات مش بتستخدم هاس. اسأل عن أي اسم.',
     },
     chips: ['av_calc', 'tcs_av', 'da_kpis', 'main_menu'],
   },
@@ -335,6 +395,10 @@ export const GOGO_FLOW = {
         '• Audit (لحد −5)\n' +
         '• PR — مراجعة السياسة (لحد −5)',
     },
+    spoken: {
+      en: 'PQA KPIs include LTP, Ex-LTP, REDO, SSR, customer satisfaction, parts accuracy, customer experience, and same-day repair, with Audit and policy review as deductions. I can explain how the score is calculated.',
+      ar: 'مؤشرات بي كيو اي تشمل الأداء طويل الأمد، وإعادة الإصلاح، وإس إس آر، ورضا العميل، ودقة القطع، وتجربة العميل، وإصلاح نفس اليوم، مع خصومات التدقيق ومراجعة السياسة.',
+    },
     chips: ['pqa_calc', 'what_pqa', 'goto_pqa', 'main_menu'],
   },
   pqa_calc: {
@@ -355,6 +419,10 @@ export const GOGO_FLOW = {
         '4) النتيجة بين 0 و100\n\n' +
         'لو فيه درجة جاهزة (0–100) للفترة، SCORA ممكن يعرضها مباشرة.\n' +
         'الشركاء بيترتبوا شهرياً حسب النتائج دي.',
+    },
+    spoken: {
+      en: 'PQA adds KPI points then subtracts Audit and PR, clamped from 0 to 100. Partners are ranked monthly. Open PQA for live results.',
+      ar: 'بي كيو اي بيجمع نقاط المؤشرات ويطرح التدقيق ومراجعة السياسة، والنتيجة من صفر لـ مية. الشركاء بيترتبوا شهرياً. افتح بي كيو اي للنتائج.',
     },
     chips: ['pqa_kpis', 'goto_pqa', 'what_pqa', 'main_menu'],
   },
@@ -393,6 +461,10 @@ export const GOGO_FLOW = {
         '٥) دعم العملاء — أحمد عبدالهادي\n\n' +
         'اسأل عن أي حد بالاسم، أو اسأل: مين قائد فريق فلان؟ مين قائد قطاع فلان؟',
     },
+    spoken: {
+      en: 'Samsung Egypt Customer Service is led by Bishoy Adib, with Donald Jung in senior business management, then five parts: Service Operation, Parts Operation, Operation Support, Customer Experience, and Customer Support. Ask a name and I will tell you their role.',
+      ar: 'مكتب خدمة العملاء بقيادة بيشوي أديب، ومعاه دونالد جونغ في إدارة الأعمال، وبعدين خمسة قطاعات: عمليات الخدمة، وقطع الغيار، ودعم العمليات، وتجربة العملاء، ودعم العملاء. اسأل بالاسم وأقولك دوره.',
+    },
     chips: ['what_scora', 'who_are_you', 'main_menu'],
   },
   how_search: {
@@ -402,20 +474,91 @@ export const GOGO_FLOW = {
     },
     chips: ['goto_search', 'what_tcs', 'what_pqa', 'main_menu'],
   },
+  how_tip: {
+    replies: {
+      en:
+        'To finish a technical tip:\n' +
+        '1) Open My Knowledge\n' +
+        '2) Pick the tip and stay until the timer ends\n' +
+        '3) Answer the questions if they appear\n' +
+        '4) Tap Complete\n\n' +
+        'Want me to open My Knowledge now?',
+      ar:
+        'عشان تخلّص النصيحة الفنية:\n' +
+        '1) افتح لوحة المعرفة\n' +
+        '2) اختار النصيحة واستنى لحد ما التايمر يخلّص\n' +
+        '3) جاوب الأسئلة لو ظهرت\n' +
+        '4) اضغط إكمال\n\n' +
+        'تحب أفتح لوحة المعرفة دلوقتي؟',
+    },
+    spoken: {
+      en: 'Open My Knowledge, pick a tip, stay until the timer ends, answer the questions, then tap Complete. Want me to open My Knowledge now?',
+      ar: 'افتح لوحة المعرفة، اختار النصيحة، استنى التايمر، جاوب الأسئلة، وبعدين اضغط إكمال. تحب أفتحها دلوقتي؟',
+    },
+    chips: ['goto_knowledge', 'new_consultant', 'main_menu'],
+  },
+  knowledge_coach: {
+    replies: {
+      en:
+        'Technical tips live in My Knowledge.\n\n' +
+        'I only answer from the tip library (or what I already learned). I can open My Knowledge, or show you how to finish a tip.\n\n' +
+        'What do you need?',
+      ar:
+        'النصائح الفنية موجودة في لوحة المعرفة.\n\n' +
+        'بجاوب من مكتبة النصائح فقط (أو اللي اتعلّمته قبل كده). أقدر أفتح لوحة المعرفة، أو أشرحلك إزاي تخلّص النصيحة.\n\n' +
+        'تحب أساعدك بإيه؟',
+    },
+    spoken: {
+      en: 'Technical tips live in My Knowledge. I can open it, or show you how to finish a tip. What do you need?',
+      ar: 'النصائح في لوحة المعرفة. أقدر أفتحها، أو أشرحلك إزاي تخلّص النصيحة. تحب أساعدك بإيه؟',
+    },
+    chips: ['goto_knowledge', 'how_tip', 'open_consultant', 'main_menu'],
+  },
+  goto_knowledge: {
+    replies: {
+      en: 'Opening My Knowledge…',
+      ar: 'بفتح لوحة المعرفة دلوقتي…',
+    },
+    chips: ['how_tip', 'main_menu'],
+    action: 'goto_employee_dashboard',
+  },
+  new_consultant: {
+    replies: {
+      en: 'Opening My Knowledge for the new technical tip…',
+      ar: 'بفتح لوحة المعرفة للنصيحة الفنية الجديدة…',
+    },
+    chips: ['how_tip', 'main_menu'],
+    action: 'goto_employee_dashboard',
+  },
   feedback: {
     replies: {
-      en: 'Arabic Feedback collects visitor suggestions — no login required.',
-      ar: 'الملاحظات بتجمع اقتراحات الزوار بالعربي — من غير تسجيل دخول.',
+      en: 'Arabic Feedback collects visitor suggestions — no login required. I can open it for you.',
+      ar: 'الملاحظات بتجمع اقتراحات الزوار بالعربي — من غير تسجيل دخول. أقدر أفتحهالك.',
     },
-    chips: ['main_menu', 'survey'],
-    action: undefined,
+    chips: ['goto_feedback', 'survey', 'main_menu'],
+  },
+  goto_feedback: {
+    replies: {
+      en: 'Opening Feedback…',
+      ar: 'بفتح الملاحظات دلوقتي…',
+    },
+    chips: ['survey', 'main_menu'],
+    action: 'goto_feedback',
   },
   survey: {
     replies: {
-      en: 'Samsung Academy Survey is a short form on the TCS portal (floating button when enabled).',
-      ar: 'استبيان الأكاديمية فورم قصير على بوابة TCS (الزر الأزرق العائم لما يكون شغال).',
+      en: 'The Samsung Academy Survey is a short form in SCORA. I can open it for you.',
+      ar: 'استبيان الأكاديمية فورم قصير في سكورا. أقدر أفتحهالك.',
     },
-    chips: ['main_menu', 'feedback'],
+    chips: ['goto_survey', 'feedback', 'main_menu'],
+  },
+  goto_survey: {
+    replies: {
+      en: 'Opening the Academy survey…',
+      ar: 'بفتح استبيان الأكاديمية دلوقتي…',
+    },
+    chips: ['feedback', 'main_menu'],
+    action: 'goto_survey',
   },
   goto_tcs: {
     replies: {
@@ -443,8 +586,8 @@ export const GOGO_FLOW = {
   },
   who_are_you: {
     replies: {
-      en: "I am GOGO, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, and Academy tools. What would you like to know?",
-      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية. تحب تعرف إيه؟',
+      en: "I am GOGO, your AI assistant. I help you around SCORA — TCS, PQA, Search, Feedback, Academy tools, and My Knowledge. What would you like to know?",
+      ar: 'أنا اسمي جوجو، مساعدك الذكي. بساعدك في SCORA — TCS وPQA والبحث والملاحظات وأدوات الأكاديمية ولوحة المعرفة. تحب تعرف إيه؟',
     },
     chips: MAIN_CHIPS,
   },
@@ -457,10 +600,10 @@ export const GOGO_FLOW = {
   },
   what_can_you_do: {
     replies: {
-      en: "I can explain SCORA, walk you to TCS or PQA, show how Search works, and point you to Feedback or the Academy survey. Just ask in plain words!",
-      ar: 'أقدر أشرحلك SCORA، وأودّيك لـ TCS أو PQA، وأوضحلك البحث، وأفتحلك الملاحظات أو استبيان الأكاديمية. قولّي اللي محتاجه بكلام بسيط!',
+      en: "I can explain SCORA, walk you to TCS or PQA, show how Search works, open Feedback or the Academy survey, and take you to My Knowledge for technical tips.",
+      ar: 'أقدر أشرحلك SCORA، وأودّيك لـ TCS أو PQA، وأوضحلك البحث، وأفتحلك الملاحظات أو استبيان الأكاديمية، وأودّيك للوحة المعرفة للنصائح الفنية.',
     },
-    chips: ['what_scora', 'goto_tcs', 'goto_pqa', 'how_search', 'main_menu'],
+    chips: ['what_scora', 'goto_tcs', 'goto_pqa', 'how_search', 'goto_knowledge', 'main_menu'],
   },
   nice_to_meet: {
     replies: {
@@ -528,25 +671,34 @@ export function getFlowNode(id) {
   return GOGO_FLOW[id] || null;
 }
 
-export function resolveFlowReply(nodeId, lang = 'en', name = '') {
+export function resolveFlowReply(nodeId, lang = 'en', name = '', opts = {}) {
   const L = lang === 'ar' ? 'ar' : 'en';
+  const employeeLoggedIn = !!opts.employeeLoggedIn;
   const node = getFlowNode(nodeId);
-  if (!node) return { reply: '', chips: MAIN_CHIPS };
-  // Always serve the canonical org tree (same on local + live once code is deployed).
+  if (!node) return { reply: '', chips: mainMenuChips(employeeLoggedIn) };
+  const friend = name || (L === 'ar' ? 'صاحبنا' : 'friend');
+  const spokenRaw = node.spoken?.[L];
+  const spoken = typeof spokenRaw === 'function' ? spokenRaw(friend) : (spokenRaw || null);
+
   if (nodeId === 'cs_org') {
     return {
       reply: buildGoGoOrgPlainText(L),
-      chips: node.chips || MAIN_CHIPS,
+      spoken,
+      chips: decorateGoGoChips(node.chips || MAIN_CHIPS, { employeeLoggedIn }),
       action: node.action,
       nodeId,
       expression: node.expression || null,
     };
   }
   const raw = node.replies[L];
-  const reply = typeof raw === 'function' ? raw(name || (L === 'ar' ? 'صاحبنا' : 'friend')) : raw;
+  const reply = typeof raw === 'function' ? raw(friend) : raw;
+  const chips = nodeId === 'main_menu'
+    ? mainMenuChips(employeeLoggedIn)
+    : decorateGoGoChips(node.chips || MAIN_CHIPS, { employeeLoggedIn });
   return {
     reply,
-    chips: node.chips || MAIN_CHIPS,
+    spoken,
+    chips,
     action: node.action,
     nodeId,
     expression: node.expression || null,
@@ -629,7 +781,18 @@ export function matchFreeTextToFlow(text, lang = 'en') {
   if (/\bda\b/i.test(lower)) return /calc|final|حسب|نتيجة/i.test(raw) ? 'da_calc' : 'da_kpis';
   if (/\bav\b/i.test(lower)) return /calc|final|حسب|نتيجة/i.test(raw) ? 'av_calc' : 'av_kpis';
   if (/search|بحث|كود/i.test(raw)) return 'how_search';
+  if (/how\s*(to\s*)?(finish|complete|do)\s*(a\s*)?(tip|consultant)|إزاي\s*(أخلّص|اخلص|أكمل)|طريقة\s*(النصيحة|الاستشارة)/i.test(raw)) {
+    return 'how_tip';
+  }
+  if (/^(consultants?|tips?|technical\s+consultants?|technical\s+tips?|knowledge|my\s+knowledge|استشارة|استشارات|نصيحة|نصائح|معرفة)[.!؟?]*$/i.test(raw.trim())) {
+    return 'knowledge_coach';
+  }
+  if (/my\s*knowledge|technical\s*tip|new\s*consultant|لوحة\s*المعرفة|نصيحة\s*فنية|استشار/i.test(raw)) {
+    return 'knowledge_coach';
+  }
+  if (/open\s*feedback|وديني\s*(على\s*)?الملاحظات/i.test(raw)) return 'goto_feedback';
   if (/feedback|ملاحظات/i.test(raw)) return 'feedback';
+  if (/open\s*survey|وديني\s*(على\s*)?الاستبيان/i.test(raw)) return 'goto_survey';
   if (/survey|استبيان|أكاديم/i.test(raw)) return 'survey';
   if (/menu|قائمة|رجوع|back/i.test(raw)) return 'main_menu';
   return null;

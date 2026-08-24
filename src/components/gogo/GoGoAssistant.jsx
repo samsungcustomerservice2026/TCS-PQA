@@ -11,6 +11,7 @@ import {
   loadGoGoVisitorName,
   saveGoGoVisitorName,
   getFlowNode,
+  decorateGoGoChips,
 } from '../../lib/gogoGuideFlow';
 import { GOGO_SMART_CHIPS } from '../../lib/gogoGeminiContext';
 import { prepareGoGoReplyPair } from '../../lib/gogoSpeechText';
@@ -55,6 +56,8 @@ import { findGoGoProduct, getGsmArenaConfirmReply, isGsmArenaSourceQuestion } fr
 import { assistantDisplayName } from '../../lib/gogoIdentity';
 import {
   listAnnouncements,
+  listProgressForUser,
+  listPublishedConsultants,
   retrieveConsultantAnswer,
 } from '../../services/consultantService';
 import { formatGoGoAnnouncement } from '../../lib/consultants/retrieval';
@@ -105,12 +108,20 @@ const GUIDE_LINES = {
     ar: { think: 'أفتح البحث…', point: 'هنا — تبويب البحث.' },
   },
   goto_employee_dashboard: {
-    en: { think: 'Opening your knowledge dashboard…', point: 'Open My Knowledge to complete the course.' },
-    ar: { think: 'أفتح لوحة المعرفة…', point: 'افتح لوحة المعرفة لإكمال الدورة.' },
+    en: { think: 'Opening My Knowledge…', point: 'Here — My Knowledge and your tips.' },
+    ar: { think: 'أفتح لوحة المعرفة…', point: 'هنا — لوحة المعرفة والنصائح.' },
   },
   goto_knowledge: {
-    en: { think: 'Opening your knowledge dashboard…', point: 'Open My Knowledge to complete the course.' },
-    ar: { think: 'أفتح لوحة المعرفة…', point: 'افتح لوحة المعرفة لإكمال الدورة.' },
+    en: { think: 'Opening My Knowledge…', point: 'Here — My Knowledge and your tips.' },
+    ar: { think: 'أفتح لوحة المعرفة…', point: 'هنا — لوحة المعرفة والنصائح.' },
+  },
+  goto_feedback: {
+    en: { think: 'Opening Feedback…', point: 'Point here — Feedback.' },
+    ar: { think: 'أفتح الملاحظات…', point: 'هنا — الملاحظات.' },
+  },
+  goto_survey: {
+    en: { think: 'Opening the Academy survey…', point: 'Point here — Academy survey.' },
+    ar: { think: 'أفتح استبيان الأكاديمية…', point: 'هنا — استبيان الأكاديمية.' },
   },
 };
 
@@ -136,18 +147,50 @@ async function askGoGoDisabled(lang) {
 }
 
 const MX_TIP_POPUP_KEY = 'gogo_mx_tip_popup_v1';
+const INCOMPLETE_TIP_KEY = 'gogo_incomplete_tip_v1';
 
-const MX_TIP_POPUP_COPY = {
-  en: 'Check new technical consultant in your profile right now',
-  ar: 'تحقق من الاستشارة الفنية الجديدة في ملفك الآن',
+const DOCK_NUDGE_COPY = {
+  mx_new: {
+    en: 'Check new technical consultant in your profile right now',
+    ar: 'تحقق من الاستشارة الفنية الجديدة في ملفك الآن',
+  },
+  incomplete: {
+    en: 'You still have a tip to finish in My Knowledge',
+    ar: 'لسه عندك نصيحة فنية محتاج تخلّصها في المعرفة',
+  },
+  complete: {
+    en: 'Great work — your tip is recorded',
+    ar: 'شغل ممتاز — النصيحة اتسجّلت',
+  },
 };
 
-/** Call after employee login so GoGo shows the MX tip nudge again on profile. */
+/** Call after employee login so GoGo can nudge again on profile. */
 export function resetGoGoMxTipPopup() {
   try {
     sessionStorage.removeItem(MX_TIP_POPUP_KEY);
+    sessionStorage.removeItem(INCOMPLETE_TIP_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+async function findIncompleteConsultantId(uid, productLine) {
+  if (!uid) return null;
+  try {
+    const [pubs, prog, anns] = await Promise.all([
+      listPublishedConsultants({ productLine: productLine || null }),
+      listProgressForUser(uid),
+      listAnnouncements({ activeOnly: true, max: 10 }),
+    ]);
+    const passed = new Set(
+      (prog || []).filter((p) => p?.bestResult === 'passed').map((p) => p.consultantId),
+    );
+    const pendingAnn = (anns || []).find((a) => a?.mustComplete && a.consultantId && !passed.has(a.consultantId));
+    if (pendingAnn?.consultantId) return pendingAnn.consultantId;
+    const pendingPub = (pubs || []).find((c) => c?.id && !passed.has(c.id));
+    return pendingPub?.id || null;
+  } catch {
+    return null;
   }
 }
 
@@ -162,12 +205,14 @@ export default function GoGoAssistant({
   onOpenChange,
   employeeLoggedIn = false,
   employeeProductLine = '',
+  employeeUid = '',
+  tipCompleteNonce = 0,
 }) {
   const [lang, setLang] = useState('en');
   const [open, setOpen] = useState(false);
   const [entered, setEntered] = useState(false);
   const [showBubble, setShowBubble] = useState(false);
-  const [mxTipPopup, setMxTipPopup] = useState(false);
+  const [dockNudge, setDockNudge] = useState(null);
   const [pose, setPose] = useState('walk');
   const [dock, setDock] = useState('left');
   const [input, setInput] = useState('');
@@ -200,10 +245,28 @@ export default function GoGoAssistant({
   const langRef = useRef(lang);
   const nameRef = useRef('');
   const mountedRef = useRef(false);
+  const employeeLoggedInRef = useRef(employeeLoggedIn);
+  const lastCompleteNonceRef = useRef(0);
 
   messagesRef.current = messages;
   langRef.current = lang;
   nameRef.current = visitorName;
+  employeeLoggedInRef.current = employeeLoggedIn;
+
+  const flowOpts = () => ({ employeeLoggedIn: employeeLoggedInRef.current });
+
+  const applyChips = (raw) => {
+    setChips(decorateGoGoChips(raw || [], flowOpts()));
+  };
+
+  const flowReply = (nodeId, langOverride, nameOverride) => (
+    resolveFlowReply(
+      nodeId,
+      langOverride || langRef.current,
+      nameOverride != null ? nameOverride : nameRef.current,
+      flowOpts(),
+    )
+  );
 
   const clearGuideTimers = () => {
     guideTimersRef.current.forEach((id) => clearTimeout(id));
@@ -362,8 +425,8 @@ export default function GoGoAssistant({
       );
       if (localChat.lang === 'ar' || localChat.lang === 'en') setLang(localChat.lang);
       setPhase('chatting');
-      const menu = resolveFlowReply('main_menu', localChat.lang === 'ar' ? 'ar' : 'en', savedName || localChat.visitorName);
-      setChips(menu.chips);
+      const menu = flowReply('main_menu', localChat.lang === 'ar' ? 'ar' : 'en', savedName || localChat.visitorName);
+      applyChips(menu.chips);
     }
 
     void getGoGoLearnedEntries().then((rows) => {
@@ -396,49 +459,63 @@ export default function GoGoAssistant({
     return undefined;
   }, [hidden, open]);
 
-  /** Popup for signed-in MX engineers: nudge to open My Knowledge / new tip. */
+  /** One dock nudge at a time: tip complete → unfinished tip → MX new tip. */
   useEffect(() => {
-    if (hidden || !ready || !employeeLoggedIn) {
-      setMxTipPopup(false);
-      setShowBubble(false);
-      return undefined;
-    }
-    const line = String(employeeProductLine || '').toLowerCase();
-    if (line !== 'mx') {
-      setMxTipPopup(false);
-      setShowBubble(false);
-      return undefined;
-    }
-
-    let dismissed = false;
-    try {
-      dismissed = sessionStorage.getItem(MX_TIP_POPUP_KEY) === '1';
-    } catch {
-      /* ignore */
-    }
-    if (dismissed) return undefined;
+    if (hidden || !ready || open) return undefined;
 
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
-        let hasMxTip = true;
+        if (cancelled) return;
+
+        if (tipCompleteNonce && tipCompleteNonce !== lastCompleteNonceRef.current) {
+          lastCompleteNonceRef.current = tipCompleteNonce;
+          setDockNudge({ kind: 'complete' });
+          setShowBubble(true);
+          setPose('celebrate');
+          schedule(() => setPose('wave'), 1400);
+          schedule(() => setPose('idle'), 3000);
+          return;
+        }
+
+        if (!employeeLoggedIn || !employeeUid) return;
+
+        let incompleteDismissed = false;
+        let mxDismissed = false;
+        try {
+          incompleteDismissed = sessionStorage.getItem(INCOMPLETE_TIP_KEY) === '1';
+          mxDismissed = sessionStorage.getItem(MX_TIP_POPUP_KEY) === '1';
+        } catch {
+          /* ignore */
+        }
+
+        const incompleteId = await findIncompleteConsultantId(employeeUid, employeeProductLine);
+        if (cancelled) return;
+        if (incompleteId && !incompleteDismissed) {
+          pendingConsultantIdRef.current = incompleteId;
+          setDockNudge({ kind: 'incomplete' });
+          setShowBubble(true);
+          setPose('wave');
+          schedule(() => setPose('point'), 900);
+          schedule(() => setPose('idle'), 2800);
+          return;
+        }
+
+        const line = String(employeeProductLine || '').toLowerCase();
+        if (line !== 'mx' || mxDismissed) return;
+
         try {
           const anns = await listAnnouncements({ activeOnly: true, max: 10 });
           const mxAnns = (anns || []).filter((a) => {
             const aud = String(a?.audience || 'all').toLowerCase();
             return aud === 'mx' || aud === 'all';
           });
-          if (mxAnns.length) {
-            pendingConsultantIdRef.current = mxAnns[0].consultantId || null;
-          } else {
-            // Still show the nudge for MX sign-ins even if announcements are empty.
-            hasMxTip = true;
-          }
+          if (mxAnns.length) pendingConsultantIdRef.current = mxAnns[0].consultantId || null;
         } catch {
-          hasMxTip = true;
+          /* still show MX nudge */
         }
-        if (cancelled || !hasMxTip) return;
-        setMxTipPopup(true);
+        if (cancelled) return;
+        setDockNudge({ kind: 'mx_new' });
         setShowBubble(true);
         setPose('wave');
         schedule(() => setPose('point'), 900);
@@ -450,17 +527,24 @@ export default function GoGoAssistant({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [hidden, ready, employeeLoggedIn, employeeProductLine]);
+  }, [hidden, ready, open, employeeLoggedIn, employeeUid, employeeProductLine, tipCompleteNonce]);
 
-  const dismissMxTipPopup = useCallback(() => {
-    setMxTipPopup(false);
+  const dismissDockNudge = useCallback(() => {
+    setDockNudge((prev) => {
+      try {
+        if (prev?.kind === 'incomplete') sessionStorage.setItem(INCOMPLETE_TIP_KEY, '1');
+        if (prev?.kind === 'mx_new') sessionStorage.setItem(MX_TIP_POPUP_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      return null;
+    });
     setShowBubble(false);
-    try {
-      sessionStorage.setItem(MX_TIP_POPUP_KEY, '1');
-    } catch {
-      /* ignore */
-    }
   }, []);
+
+  useEffect(() => {
+    setChips((prev) => decorateGoGoChips(prev, { employeeLoggedIn }));
+  }, [employeeLoggedIn]);
 
   useEffect(() => {
     onOpenChangeRef.current?.(open);
@@ -636,10 +720,13 @@ export default function GoGoAssistant({
   const appendFlow = (nodeId, userLabel) => {
     const L = langRef.current;
     const name = nameRef.current;
-    const result = resolveFlowReply(nodeId, L, name);
+    const result = flowReply(nodeId, L, name);
     const expression = result.expression || null;
     const isGeorge = nodeId === 'george_samir';
     const pair = prepareGoGoReplyPair(result.reply, L);
+    const spoken = result.spoken
+      ? prepareGoGoReplyPair(result.spoken, L).spoken
+      : pair.spoken;
     setMessages((prev) => {
       const next = [
         ...prev,
@@ -648,7 +735,7 @@ export default function GoGoAssistant({
           expression: expression || undefined,
           learnable: !isGeorge,
           question: userLabel || null,
-          spoken: pair.spoken,
+          spoken,
           source: 'guide',
           mode: 'traditional',
         }),
@@ -656,17 +743,17 @@ export default function GoGoAssistant({
       persistChat(next, L, name);
       return next;
     });
-    setChips(result.chips || []);
+    applyChips(result.chips || []);
     setPhase(nodeId === 'ask_name' ? 'ask_name' : 'chatting');
     if (expression) {
       setPose(poseFromGoGoState(expression) || 'speak');
       void speakReply(pair.display, {
         gesture: expression === 'wave' ? 'wave' : 'speak',
-        spoken: pair.spoken,
+        spoken,
         initialState: expression,
       });
     } else {
-      void speakReply(pair.display, { spoken: pair.spoken });
+      void speakReply(pair.display, { spoken });
     }
     if (result.action) runGuidedAction(result.action);
   };
@@ -710,7 +797,7 @@ export default function GoGoAssistant({
         persistChat(next, lang, nameRef.current);
         return next;
       });
-      setChips(traditional.chips || GOGO_SMART_CHIPS);
+      applyChips(traditional.chips || GOGO_SMART_CHIPS);
       if (traditional.expression) setPose(poseFromGoGoState(traditional.expression) || 'idle');
       void speakReply(traditional.reply, {
         force: fromVoice,
@@ -721,6 +808,44 @@ export default function GoGoAssistant({
           : null,
       });
       return;
+    }
+
+    try {
+      setBusy(true);
+      setPose('think');
+      // Learned memory before any predictive / library guess.
+      const learnedEarly = resolveGoGoLearnedTurn(text, lang, learnedEntries);
+      if (learnedEarly.mode === 'learned') {
+        const pair = prepareGoGoReplyPair(learnedEarly.reply, lang);
+        setMessages((prev) => {
+          const next = [
+            ...prev,
+            stamp('user', text),
+            stamp('gogo', pair.display, {
+              source: 'learned',
+              mode: 'traditional_learned',
+              learnable: true,
+              question: text,
+              expression: learnedEarly.expression,
+              spoken: learnedEarly.spoken || pair.spoken,
+            }),
+          ];
+          persistChat(next, lang, nameRef.current);
+          return next;
+        });
+        applyChips(learnedEarly.chips || GOGO_SMART_CHIPS);
+        setPose(poseFromGoGoState(learnedEarly.expression) || 'success');
+        void speakReply(pair.display, {
+          force: fromVoice,
+          initialState: learnedEarly.expression,
+          spoken: learnedEarly.spoken || pair.spoken,
+        });
+        return;
+      }
+    } catch {
+      /* fall through */
+    } finally {
+      setBusy(false);
     }
 
     try {
@@ -748,7 +873,7 @@ export default function GoGoAssistant({
           persistChat(next, lang, nameRef.current);
           return next;
         });
-        setChips(GOGO_SMART_CHIPS);
+        applyChips(GOGO_SMART_CHIPS);
         setPose('explaining');
         schedule(() => setPose('success'), 900);
         void speakReply(pair.display, {
@@ -776,7 +901,7 @@ export default function GoGoAssistant({
           persistChat(next, lang, nameRef.current);
           return next;
         });
-        setChips(GOGO_SMART_CHIPS);
+        applyChips(GOGO_SMART_CHIPS);
         setPose('think');
         void speakReply(pair.display, { force: fromVoice, initialState: 'thinking', spoken: pair.spoken });
         return;
@@ -797,16 +922,16 @@ export default function GoGoAssistant({
       ) {
         const hit = await retrieveConsultantAnswer(text, lang);
         if (hit?.found && hit.reply) {
-          pendingConsultantIdRef.current = hit.consultant?.id || null;
+          if (hit.consultant?.id) pendingConsultantIdRef.current = hit.consultant.id;
           const pair = prepareGoGoReplyPair(hit.reply, lang);
           setMessages((prev) => {
             const next = [
               ...prev,
               stamp('user', text),
               stamp('gogo', pair.display, {
-                source: 'consultant_library',
+                source: hit.guideOnly ? 'knowledge_coach' : 'consultant_library',
                 mode: 'traditional',
-                learnable: true,
+                learnable: !hit.guideOnly,
                 question: text,
                 expression: 'explaining',
                 spoken: pair.spoken,
@@ -815,11 +940,38 @@ export default function GoGoAssistant({
             persistChat(next, lang, nameRef.current);
             return next;
           });
-          setChips(['open_consultant', 'goto_knowledge', 'main_menu']);
+          applyChips(hit.chips || ['open_consultant', 'goto_knowledge', 'how_tip', 'main_menu']);
           setPose('explaining');
           void speakReply(pair.display, {
             force: fromVoice,
             initialState: 'explaining',
+            spoken: pair.spoken,
+          });
+          return;
+        }
+        if (hit && hit.found === false && hit.reply) {
+          const pair = prepareGoGoReplyPair(hit.reply, lang);
+          setMessages((prev) => {
+            const next = [
+              ...prev,
+              stamp('user', text),
+              stamp('gogo', pair.display, {
+                source: 'consultant_library_miss',
+                mode: 'traditional',
+                learnable: false,
+                question: text,
+                expression: 'thinking',
+                spoken: pair.spoken,
+              }),
+            ];
+            persistChat(next, lang, nameRef.current);
+            return next;
+          });
+          applyChips(hit.chips || ['goto_knowledge', 'how_tip', 'main_menu']);
+          setPose('think');
+          void speakReply(pair.display, {
+            force: fromVoice,
+            initialState: 'thinking',
             spoken: pair.spoken,
           });
           return;
@@ -856,7 +1008,7 @@ export default function GoGoAssistant({
           persistChat(next, lang, nameRef.current);
           return next;
         });
-        setChips(GOGO_SMART_CHIPS);
+        applyChips(GOGO_SMART_CHIPS);
         setPose(productHit.unknown ? 'think' : 'explaining');
         if (!productHit.unknown) schedule(() => setPose('success'), 900);
         void speakReply(pair.display, {
@@ -881,33 +1033,6 @@ export default function GoGoAssistant({
     });
 
     try {
-      const learnedTurn = resolveGoGoLearnedTurn(text, lang, learnedEntries);
-      if (learnedTurn.mode === 'learned') {
-        setMessages((prev) => {
-          const next = [
-            ...prev,
-            stamp('gogo', learnedTurn.reply, {
-              source: 'learned',
-              mode: 'traditional_learned',
-              learnable: true,
-              question: text,
-              expression: learnedTurn.expression,
-              spoken: learnedTurn.spoken,
-            }),
-          ];
-          persistChat(next, lang, nameRef.current);
-          return next;
-        });
-        setChips(GOGO_SMART_CHIPS);
-        setPose(poseFromGoGoState(learnedTurn.expression) || 'success');
-        void speakReply(learnedTurn.reply, {
-          force: fromVoice,
-          initialState: learnedTurn.expression,
-          spoken: learnedTurn.spoken,
-        });
-        return;
-      }
-
       // Smart AI (Gemini) disabled — guided / learned / safe fallback only.
       const disabledAi = await askGoGoDisabled(lang);
       const fallback = resolveGoGoSafeFallback(text, lang, nameRef.current);
@@ -934,7 +1059,7 @@ export default function GoGoAssistant({
         persistChat(next, lang, nameRef.current);
         return next;
       });
-      setChips(fallback?.chips || GOGO_SMART_CHIPS);
+      applyChips(fallback?.chips || GOGO_SMART_CHIPS);
       void speakReply(reply, { force: fromVoice, spoken });
       if (fallback?.action) runGuidedAction(fallback.action);
       setPose('idle');
@@ -967,7 +1092,7 @@ export default function GoGoAssistant({
           return next;
         });
       }
-      setChips(fallback.chips || GOGO_SMART_CHIPS);
+      applyChips(fallback.chips || GOGO_SMART_CHIPS);
       void speakReply(fallback.reply, { force: fromVoice, spoken: fallback.spoken });
       if (fallback.action) runGuidedAction(fallback.action);
       setPose('idle');
@@ -1038,15 +1163,15 @@ export default function GoGoAssistant({
       nameRef.current = name;
       setPhase('chatting');
       if (!messagesRef.current.length) {
-        const menu = resolveFlowReply('main_menu', langRef.current, name);
+        const menu = flowReply('main_menu', langRef.current, name);
         const next = [stamp('gogo', menu.reply)];
         setMessages(next);
-        setChips(menu.chips);
+        applyChips(menu.chips);
         persistChat(next, langRef.current, name);
-        void speakReply(menu.reply, { gesture: 'speak' });
+        void speakReply(menu.reply, { gesture: 'speak', spoken: menu.spoken ? prepareGoGoReplyPair(menu.spoken, langRef.current).spoken : undefined });
       } else {
-        const menu = resolveFlowReply('main_menu', langRef.current, name);
-        setChips(menu.chips);
+        const menu = flowReply('main_menu', langRef.current, name);
+        applyChips(menu.chips);
       }
       void (async () => {
         try {
@@ -1069,7 +1194,7 @@ export default function GoGoAssistant({
             persistChat(next, L, nameRef.current);
             return next;
           });
-          setChips(['open_consultant', 'goto_knowledge', 'main_menu']);
+          applyChips(['open_consultant', 'goto_knowledge', 'how_tip', 'main_menu']);
         } catch {
           /* optional */
         }
@@ -1078,23 +1203,23 @@ export default function GoGoAssistant({
     }
 
     setPhase('ask_name');
-    const ask = resolveFlowReply('ask_name', langRef.current);
+    const ask = flowReply('ask_name', langRef.current);
     const next = [stamp('gogo', ask.reply)];
     setMessages(next);
-    setChips(ask.chips);
+    applyChips(ask.chips);
     persistChat(next, langRef.current, '');
     void speakReply(ask.reply, { gesture: 'wave' });
   };
 
   const acceptName = (rawName) => {
     if (!isValidGoGoName(rawName)) {
-      const bad = resolveFlowReply('name_invalid', lang);
+      const bad = flowReply('name_invalid', lang);
       setMessages((prev) => {
         const next = [...prev, stamp('user', rawName), stamp('gogo', bad.reply)];
         persistChat(next, lang, '');
         return next;
       });
-      setChips(bad.chips);
+      applyChips(bad.chips);
       void speakReply(bad.reply);
       return;
     }
@@ -1103,17 +1228,17 @@ export default function GoGoAssistant({
     setVisitorName(name);
     nameRef.current = name;
     setPhase('chatting');
-    const menu = resolveFlowReply('main_menu', lang, name);
+    const menu = flowReply('main_menu', lang, name);
     setMessages((prev) => {
       const next = [...prev, stamp('user', name), stamp('gogo', menu.reply)];
       persistChat(next, lang, name);
       return next;
     });
-    setChips(menu.chips);
+    applyChips(menu.chips);
     setPose('nod');
     schedule(() => setPose('welcome'), 700);
     schedule(() => setPose('idle'), 2200);
-    void speakReply(menu.reply, { gesture: 'welcome' });
+    void speakReply(menu.reply, { gesture: 'welcome', spoken: menu.spoken ? prepareGoGoReplyPair(menu.spoken, lang).spoken : undefined });
   };
 
   const switchLanguage = () => {
@@ -1131,36 +1256,36 @@ export default function GoGoAssistant({
 
     // Name gate: swap the welcome message — don't stack EN + AR
     if (phase === 'ask_name' || !nameRef.current) {
-      const ask = resolveFlowReply('ask_name', nextLang);
+      const ask = flowReply('ask_name', nextLang);
       const next = [stamp('gogo', ask.reply)];
       setMessages(next);
-      setChips([]);
+      applyChips([]);
       persistChat(next, nextLang, '');
       void speakReply(ask.reply, { lang: nextLang });
       return;
     }
 
-    const menu = resolveFlowReply('main_menu', nextLang, nameRef.current);
+    const menu = flowReply('main_menu', nextLang, nameRef.current);
     setMessages((prev) => {
       const next = [...prev, stamp('gogo', menu.reply)];
       persistChat(next, nextLang, nameRef.current);
       return next;
     });
-    setChips((menu.chips || []).filter((id) => id !== 'lang_toggle'));
-    void speakReply(menu.reply, { lang: nextLang });
+    applyChips((menu.chips || []).filter((id) => id !== 'lang_toggle'));
+    void speakReply(menu.reply, { lang: nextLang, spoken: menu.spoken ? prepareGoGoReplyPair(menu.spoken, nextLang).spoken : undefined });
   };
 
   const handleChip = (id) => {
     if (busy || id === 'lang_toggle') return;
 
     if (phase === 'ask_name' || !nameRef.current) {
-      const need = resolveFlowReply('need_name', lang);
+      const need = flowReply('need_name', lang);
       setMessages((prev) => {
         const next = [...prev, stamp('gogo', need.reply)];
         persistChat(next, lang, '');
         return next;
       });
-      setChips([]);
+      applyChips([]);
       void speakReply(need.reply);
       return;
     }
@@ -1177,8 +1302,13 @@ export default function GoGoAssistant({
       return;
     }
 
-    if (id === 'goto_knowledge' || id === 'new_consultant') {
+    if (id === 'goto_knowledge' || id === 'new_consultant' || id === 'goto_employee_dashboard') {
       runGuidedAction('goto_employee_dashboard');
+      return;
+    }
+
+    if (id === 'how_tip') {
+      appendFlow('how_tip', labels.how_tip);
       return;
     }
 
@@ -1573,7 +1703,7 @@ export default function GoGoAssistant({
         )}
 
         <div className={`relative flex shrink-0 items-end justify-start ${open ? 'gogo-dock-full' : 'gogo-dock-fullbody-avatar'}`}>
-          {!open && showBubble && mxTipPopup && (
+          {!open && showBubble && dockNudge && (
             <div
               className="gogo-mx-tip-popup absolute bottom-full mb-2 left-2 sm:left-3 z-[2] w-[min(16.5rem,calc(100vw-2rem))]"
               role="status"
@@ -1581,26 +1711,44 @@ export default function GoGoAssistant({
             >
               <div className="relative rounded-2xl border border-cyan-400/30 bg-zinc-950/95 backdrop-blur-md px-3.5 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.55)]">
                 <p className="text-[12px] leading-snug text-zinc-100 font-semibold">
-                  {lang === 'ar' ? MX_TIP_POPUP_COPY.ar : MX_TIP_POPUP_COPY.en}
+                  {(DOCK_NUDGE_COPY[dockNudge.kind] || DOCK_NUDGE_COPY.mx_new)[lang === 'ar' ? 'ar' : 'en']}
                 </p>
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      dismissMxTipPopup();
-                      onNavigate?.('goto_knowledge');
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg bg-cyan-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider"
-                  >
-                    {lang === 'ar' ? GOGO_CHIP_LABELS.ar.goto_knowledge : GOGO_CHIP_LABELS.en.goto_knowledge}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={dismissMxTipPopup}
-                    className="px-2.5 py-1.5 rounded-lg border border-white/15 text-zinc-400 text-[10px] font-bold uppercase tracking-wider hover:text-white"
-                  >
-                    {lang === 'ar' ? 'لاحقاً' : 'Later'}
-                  </button>
+                  {dockNudge.kind === 'complete' ? (
+                    <button
+                      type="button"
+                      onClick={dismissDockNudge}
+                      className="px-2.5 py-1.5 rounded-lg bg-cyan-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider"
+                    >
+                      {lang === 'ar' ? 'تمام' : 'OK'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cid = pendingConsultantIdRef.current;
+                          const kind = dockNudge.kind;
+                          dismissDockNudge();
+                          if (cid && kind === 'incomplete') {
+                            onNavigate?.(`goto_consultant:${cid}`);
+                          } else {
+                            onNavigate?.('goto_knowledge');
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-cyan-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider"
+                      >
+                        {lang === 'ar' ? GOGO_CHIP_LABELS.ar.goto_knowledge : GOGO_CHIP_LABELS.en.goto_knowledge}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={dismissDockNudge}
+                        className="px-2.5 py-1.5 rounded-lg border border-white/15 text-zinc-400 text-[10px] font-bold uppercase tracking-wider hover:text-white"
+                      >
+                        {lang === 'ar' ? 'لاحقاً' : 'Later'}
+                      </button>
+                    </>
+                  )}
                 </div>
                 <span className="gogo-mx-tip-popup-tail" aria-hidden />
               </div>
@@ -1619,7 +1767,7 @@ export default function GoGoAssistant({
                   setPose('wave');
                 }, 900);
               } else {
-                if (mxTipPopup) dismissMxTipPopup();
+                if (dockNudge) dismissDockNudge();
                 startChatSession();
               }
             }}

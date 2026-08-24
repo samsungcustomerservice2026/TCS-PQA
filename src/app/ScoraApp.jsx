@@ -2611,6 +2611,7 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
   } = useEmployeeAuth();
   const [showEmployeeAuth, setShowEmployeeAuth] = useState(false);
   const [activeConsultantId, setActiveConsultantId] = useState(null);
+  const [gogoTipCompleteNonce, setGogoTipCompleteNonce] = useState(0);
 
   const dismissSurveyShortcut = React.useCallback(() => {
     try {
@@ -6020,7 +6021,9 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
               consultantId={activeConsultantId}
               uid={employeeProfile.uid}
               onBack={() => navigateTo('EMPLOYEE_DASHBOARD')}
-              onFinished={() => {}}
+              onFinished={(result) => {
+                if (result?.passed) setGogoTipCompleteNonce((n) => n + 1);
+              }}
             />
             ) : (
               <div className="text-center space-y-4 py-16">
@@ -10632,6 +10635,8 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
           currentView={view}
           employeeLoggedIn={employeeLoggedIn}
           employeeProductLine={employeeProfile?.productLine || ''}
+          employeeUid={employeeProfile?.uid || ''}
+          tipCompleteNonce={gogoTipCompleteNonce}
           hidden={
             view === 'EXTERNAL_LOGS'
             || view === 'ADMIN_DASHBOARD'
@@ -10700,6 +10705,7 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
         onSuccess={() => {
           try {
             sessionStorage.removeItem('gogo_mx_tip_popup_v1');
+            sessionStorage.removeItem('gogo_incomplete_tip_v1');
           } catch { /* ignore */ }
           setShowEmployeeAuth(false);
           navigateTo('EMPLOYEE_DASHBOARD');

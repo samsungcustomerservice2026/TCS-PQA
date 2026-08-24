@@ -207,9 +207,9 @@ export const GOGO_SEED_QA = [
     question_en: 'What about Feedback and Survey?',
     question_ar: 'والملاحظات والاستبيان؟',
     answer_en:
-      'Feedback collects Arabic suggestions. Samsung Academy Survey is a short form on the TCS portal (floating button when enabled).',
+      'Feedback collects Arabic suggestions. The Samsung Academy Survey is a short form in SCORA.',
     answer_ar:
-      'الملاحظات بتجمع اقتراحات الزوار بالعربي. استبيان الأكاديمية فورم قصير على بوابة TCS (الزر الأزرق العائم لما يكون شغال).',
+      'الملاحظات بتجمع اقتراحات الزوار بالعربي. استبيان الأكاديمية فورم قصير في سكورا.',
     category: 'howto',
   },
 ];

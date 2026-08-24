@@ -108,6 +108,6 @@ export const GOGO_CONSULTANT_UNAVAILABLE = Object.freeze({
 
 /** Prefer consultant-specific wording for knowledge misses. */
 export const GOGO_CONSULTANT_MISS = Object.freeze({
-  en: 'This technical consultant detail is currently unavailable. Stay tuned for new updates.',
-  ar: 'تفاصيل الاستشارة الفنية دي غير متاحة حالياً. خليك متابع للتحديثات الجديدة.',
+  en: 'I could not find that tip in the My Knowledge library. Open My Knowledge to browse tips, or ask me how to finish a technical tip.',
+  ar: 'ملقتش النصيحة دي في مكتبة المعرفة. افتح لوحة المعرفة عشان تشوف النصائح، أو اسألني إزاي تخلّص النصيحة الفنية.',
 });
