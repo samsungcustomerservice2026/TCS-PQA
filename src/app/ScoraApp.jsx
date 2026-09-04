@@ -65,6 +65,8 @@ import TechnicalConsultantsPanel from '../components/admin/TechnicalConsultantsP
 import EmployeeAuthModal from '../components/employee/EmployeeAuthModal';
 import EmployeeDashboard from '../components/employee/EmployeeDashboard';
 import ConsultantViewer from '../components/employee/ConsultantViewer';
+import AddToHomeScreenSheet from '../components/pwa/AddToHomeScreenSheet';
+import NotifyAlertsBanner from '../components/pwa/NotifyAlertsBanner';
 import { useVisitorEngagement } from '../hooks/useVisitorEngagement';
 import { useEmployeeAuth } from '../hooks/useEmployeeAuth';
 import { recordFunnelStep } from '../services/visitorEngagementService';
@@ -2125,6 +2127,9 @@ const PageContent = ({ initialView = null, initialAdminPortal = false } = {}) =>
 
   // Rank reveal state
   const [showRankReveal, setShowRankReveal] = useState(false);
+
+  // PWA: one-time install sheet (install popup wins over notify banner)
+  const [pwaInstallSheetOpen, setPwaInstallSheetOpen] = useState(false);
 
   const resetAcademySurvey = () => {
     setAcademySurvey({
@@ -6122,6 +6127,20 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
       </div>
     );
   }
+
+  const pwaReady =
+    !isLoading &&
+    !isAdminPortal &&
+    view !== 'ADMIN_LOGIN' &&
+    view !== 'ADMIN_DASHBOARD' &&
+    view !== 'EXTERNAL_LOGS';
+  const pwaBlockedByCriticalUi =
+    !!showRankReveal ||
+    !!showPhotoAuth ||
+    !!portalLaunchBusy ||
+    !!showEmployeeAuth ||
+    view === 'SAMSUNG_ACADEMY_SURVEY' ||
+    view === 'FEEDBACK';
 
   return (
     <div className="mobile-page-shell relative z-[1] min-h-screen bg-transparent text-white flex flex-col pb-24 selection:bg-blue-600 selection:text-white">
@@ -10804,6 +10823,24 @@ Do you want to UPDATE the existing record? Click OK to update, or Cancel to abor
             </button>
           </div>
         )}
+
+      {/* PWA: Add to Home Screen (once) + notification allow banner */}
+      {!isAdminPortal && (
+        <>
+          <AddToHomeScreenSheet
+            ready={pwaReady}
+            blocked={pwaBlockedByCriticalUi}
+            onVisibleChange={setPwaInstallSheetOpen}
+            onToast={(text) => message.info(text)}
+          />
+          <NotifyAlertsBanner
+            ready={pwaReady && !pwaInstallSheetOpen}
+            blocked={pwaBlockedByCriticalUi || pwaInstallSheetOpen}
+            userId={employeeProfile?.uid || currentUser?.uid || null}
+            onToast={(text) => message.info(text)}
+          />
+        </>
+      )}
 
       {/* Floating Samsung Academy Survey Link */}
       {!isAdminPortal && !gogoOpen && portalRealm === 'TCS' && academySurveyPopupEnabled && showSurveyShortcut && view !== 'APP_SELECTION' && view !== 'PQA_DIVISION_SELECTION' && (
